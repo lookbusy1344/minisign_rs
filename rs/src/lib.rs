@@ -7,6 +7,7 @@ pub mod crypto;
 pub mod errors;
 pub mod formats;
 pub mod keys;
+pub mod signature;
 
 // Re-export commonly used types
 pub use errors::Error;
