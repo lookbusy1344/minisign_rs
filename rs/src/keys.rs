@@ -170,6 +170,16 @@ impl PubkeyStruct {
         Self::from_bytes(&data)
     }
 
+    /// Parse from base64-encoded string (without comment)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if base64 decoding fails or the data is invalid
+    pub fn from_base64(base64_str: &str) -> Result<Self> {
+        let data = decode_base64(base64_str)?;
+        Self::from_bytes(&data)
+    }
+
     /// Serialize to file format (comment + base64)
     #[must_use]
     pub fn to_file_contents(&self, comment: &str) -> String {

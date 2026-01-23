@@ -7,6 +7,7 @@ pub mod crypto;
 pub mod errors;
 pub mod formats;
 pub mod keys;
+pub mod ops;
 pub mod signature;
 
 // Re-export commonly used types
