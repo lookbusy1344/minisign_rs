@@ -116,10 +116,12 @@ mod tests {
    - No exceptions - code must be formatted
    - Run automatically before every commit
 
-2. **Run clippy with strict lints:** `cargo clippy -- -D clippy::all -D clippy::pedantic`
-   - All warnings are errors
-   - Pedantic mode catches subtle issues
-   - Must pass with zero warnings
+2. **Run clippy with EXACT CI flags:** `cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic`
+   - **CRITICAL:** Running just `cargo clippy` is NOT sufficient - you MUST include ALL flags
+   - This exact command matches the CI workflow (.github/workflows/rust.yml:56)
+   - All warnings are errors in pedantic mode
+   - Pedantic mode catches subtle issues (ignore_without_reason, unreadable_literal, uninlined_format_args, etc.)
+   - Must pass with zero warnings before committing
 
 3. **Run full test suite:** `gtimeout 60 cargo test`
    - All tests must pass
@@ -134,6 +136,14 @@ mod tests {
    - No panics in production code paths
 
 ## Development Workflow
+
+**⚠️ Before EVERY commit, you MUST run:**
+```bash
+cargo fmt
+cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
+gtimeout 60 cargo test
+```
+These commands match the CI workflow exactly. Running just `cargo clippy` is insufficient.
 
 ### Adding New Features
 
@@ -158,9 +168,9 @@ gtimeout 60 cargo test test_name
 # Run with coverage (if tarpaulin installed)
 cargo tarpaulin --out Html
 
-# Check for issues (REQUIRED before commit)
+# Check for issues (REQUIRED before commit - must match CI exactly)
 cargo fmt
-cargo clippy -- -D clippy::all -D clippy::pedantic
+cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 
 # Run slow security tests (full scrypt parameters)
 cargo test -- --ignored --nocapture

@@ -538,7 +538,7 @@ mod tests {
 
     /// Test with full production parameters (marked ignore for normal test runs)
     #[test]
-    #[ignore]
+    #[ignore = "slow test with full scrypt parameters"]
     fn test_derive_key_full_params() {
         let password = b"test password";
         let salt = [0u8; 32];

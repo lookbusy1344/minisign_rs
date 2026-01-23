@@ -88,7 +88,7 @@ mod tests {
 
         for input in invalid_inputs {
             let result = decode_base64(input);
-            assert!(result.is_err(), "should fail for input: {}", input);
+            assert!(result.is_err(), "should fail for input: {input}");
         }
     }
 
@@ -102,14 +102,14 @@ mod tests {
             65535,
             65536,
             u64::MAX,
-            0x0123456789ABCDEF,
+            0x0123_4567_89AB_CDEF,
         ];
 
         for value in test_values {
             let mut buf = [0u8; 8];
             write_u64_le(&mut buf, value);
             let read_value = read_u64_le(&buf);
-            assert_eq!(value, read_value, "u64 roundtrip failed for {:#x}", value);
+            assert_eq!(value, read_value, "u64 roundtrip failed for {value:#x}");
         }
     }
 
@@ -118,15 +118,15 @@ mod tests {
         // Test specific byte patterns to ensure correct endianness
         let test_cases = vec![
             (
-                0x0102030405060708u64,
+                0x0102_0304_0506_0708_u64,
                 [0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01],
             ),
             (
-                0x0000000000000001u64,
+                0x0000_0000_0000_0001_u64,
                 [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
             ),
             (
-                0x0100000000000000u64,
+                0x0100_0000_0000_0000_u64,
                 [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01],
             ),
         ];
@@ -136,8 +136,7 @@ mod tests {
             write_u64_le(&mut buf, value);
             assert_eq!(
                 buf, expected_bytes,
-                "write_u64_le produced wrong bytes for {:#x}",
-                value
+                "write_u64_le produced wrong bytes for {value:#x}"
             );
 
             let read_value = read_u64_le(&expected_bytes);
@@ -153,7 +152,7 @@ mod tests {
             let mut buf = [0u8; 2];
             write_u16_le(&mut buf, value);
             let read_value = read_u16_le(&buf);
-            assert_eq!(value, read_value, "u16 roundtrip failed for {:#x}", value);
+            assert_eq!(value, read_value, "u16 roundtrip failed for {value:#x}");
         }
     }
 
@@ -171,8 +170,7 @@ mod tests {
             write_u16_le(&mut buf, value);
             assert_eq!(
                 buf, expected_bytes,
-                "write_u16_le produced wrong bytes for {:#x}",
-                value
+                "write_u16_le produced wrong bytes for {value:#x}"
             );
 
             let read_value = read_u16_le(&expected_bytes);

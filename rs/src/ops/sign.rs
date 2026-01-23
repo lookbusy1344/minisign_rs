@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Slow test due to scrypt SENSITIVE parameters (N=2^20, ~1-5 seconds)
+    #[ignore = "slow test due to scrypt SENSITIVE parameters (N=2^20, ~1-5 seconds)"]
     fn test_sign_encrypted_key() {
         let temp_dir = TempDir::new().unwrap();
         let message_path = temp_dir.path().join("message.txt");

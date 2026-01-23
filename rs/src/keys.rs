@@ -881,7 +881,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Expensive test with log_n=20, run with --ignored
+    #[ignore = "expensive test with log_n=20, run with --ignored"]
     fn test_decrypt_c_generated_encrypted_key() {
         // Load the C-generated encrypted secret key
         let contents = fs::read_to_string("tests/fixtures/keys/test.key")
@@ -906,7 +906,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Expensive test with log_n=20, run with --ignored
+    #[ignore = "expensive test with log_n=20, run with --ignored"]
     fn test_decrypt_c_generated_encrypted_key_wrong_password() {
         // Load the C-generated encrypted secret key
         let contents = fs::read_to_string("tests/fixtures/keys/test.key")
