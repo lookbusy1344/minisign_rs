@@ -145,6 +145,11 @@ cargo clippy -- -D clippy::all -D clippy::pedantic
 
 ### Compatibility Testing
 
+**Prerequisites:**
+- The C implementation of minisign must be installed as a binary package on the development machine
+- Verify installation: `minisign -v`
+- This is used for cross-compatibility testing to ensure Rust behavior matches C exactly
+
 After implementing any cryptographic operation:
 
 1. Generate test vectors with C minisign
