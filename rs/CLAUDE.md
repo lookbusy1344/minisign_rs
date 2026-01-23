@@ -4,6 +4,25 @@
 
 This is a **security-critical** pure Rust rewrite of minisign. The implementation must maintain byte-level compatibility with the C version while adhering to the highest standards of Rust development and cryptographic engineering.
 
+### Current Status (2026-01-23)
+
+**Phase 5 Complete** - All core operations implemented and tested:
+
+- ✅ **Crypto Layer**: Ed25519, Blake2b, Scrypt with pure Rust implementations
+- ✅ **Data Structures**: Key files, signature files, all binary formats
+- ✅ **Operations Module**: All 5 operations fully functional
+  - `generate`: Create new keypairs with/without passwords
+  - `sign`: Sign files with encrypted/unencrypted keys
+  - `verify`: Verify signatures with C-generated compatibility
+  - `recreate`: Recover public keys from secret keys
+  - `change`: Add/remove/change passwords on keys
+- ✅ **Test Suite**: 94 unit tests + 5 compatibility tests, all passing
+- ✅ **Code Quality**: Zero clippy pedantic warnings, ~4,464 lines
+
+**Next Steps**: Phase 6 (CLI integration) and Phase 7 (polish & release)
+
+**Test Results**: `gtimeout 60 cargo test` - 99 tests pass in 5.99s
+
 ## Core Principles
 
 ### 1. Pure Rust - Zero Unsafe Code
