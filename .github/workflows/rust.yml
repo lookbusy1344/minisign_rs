@@ -1,0 +1,60 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ master, lb_rust ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable]
+
+    defaults:
+      run:
+        working-directory: rs
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('rs/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('rs/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: rs/target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('rs/Cargo.lock') }}
+
+    - name: Build
+      run: cargo build --verbose
+
+    - name: Run Clippy (pedantic)
+      run: cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
+
+    - name: Run tests (fast)
+      run: cargo test --verbose
+      timeout-minutes: 5
