@@ -3,6 +3,7 @@
 //! This is a pure Rust implementation of minisign, maintaining byte-level
 //! compatibility with the original C implementation.
 
+pub mod crypto;
 pub mod errors;
 pub mod formats;
 
