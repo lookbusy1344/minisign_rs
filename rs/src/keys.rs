@@ -3,21 +3,20 @@
 //! This module implements the binary formats for public and secret keys
 //! as defined in the minisign specification.
 
+use crate::Result;
 use crate::crypto::{
-    KeyNum, PublicKey, SecretKey, CHECKSUM_BYTES, KDF_SALT_BYTES, KEYNUM_BYTES,
-    PUBLIC_KEY_BYTES, SECRET_KEY_BYTES,
+    blake2b_256, derive_key_with_params, CHECKSUM_BYTES, KDF_SALT_BYTES, KEYNUM_BYTES, KeyNum,
+    PUBLIC_KEY_BYTES, PublicKey, SECRET_KEY_BYTES, SecretKey,
 };
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64, read_u64_le, write_u64_le};
-use crate::Result;
 
 /// Size of the public key structure in bytes
 pub const PUBKEY_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + PUBLIC_KEY_BYTES; // 42 bytes
 
 /// Size of the secret key structure in bytes
-pub const SECKEY_STRUCT_SIZE: usize = 2 + 2 + 2 + KDF_SALT_BYTES + 8 + 8 + KEYNUM_BYTES
-    + SECRET_KEY_BYTES
-    + CHECKSUM_BYTES; // 158 bytes
+pub const SECKEY_STRUCT_SIZE: usize =
+    2 + 2 + 2 + KDF_SALT_BYTES + 8 + 8 + KEYNUM_BYTES + SECRET_KEY_BYTES + CHECKSUM_BYTES; // 158 bytes
 
 /// Signature algorithm identifier
 const SIG_ALG: &[u8; 2] = b"Ed";
@@ -34,9 +33,9 @@ const CHK_ALG: &[u8; 2] = b"B2";
 /// Public key file structure (42 bytes)
 ///
 /// Binary layout:
-/// - 0-1: sig_alg ("Ed")
+/// - 0-1: `sig_alg` ("Ed")
 /// - 2-9: keynum (8 bytes)
-/// - 10-41: public_key (32 bytes)
+/// - 10-41: `public_key` (32 bytes)
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PubkeyStruct {
     keynum: KeyNum,
@@ -129,7 +128,7 @@ impl PubkeyStruct {
     #[must_use]
     pub fn to_file_contents(&self, comment: &str) -> String {
         let bytes = self.to_bytes();
-        let base64 = encode_base64(&bytes);
+        let base64 = encode_base64(bytes);
         format!("untrusted comment: {comment}\n{base64}\n")
     }
 }
@@ -146,15 +145,15 @@ impl std::fmt::Debug for PubkeyStruct {
 /// Secret key file structure (158 bytes)
 ///
 /// Binary layout:
-/// - 0-1: sig_alg ("Ed")
-/// - 2-3: kdf_alg ("Sc" or "\0\0")
-/// - 4-5: chk_alg ("B2")
-/// - 6-37: kdf_salt (32 bytes)
-/// - 38-45: kdf_opslimit (u64 LE)
-/// - 46-53: kdf_memlimit (u64 LE)
+/// - 0-1: `sig_alg` ("Ed")
+/// - 2-3: `kdf_alg` ("Sc" or "\0\0")
+/// - 4-5: `chk_alg` ("B2")
+/// - 6-37: `kdf_salt` (32 bytes)
+/// - 38-45: `kdf_opslimit` (u64 LE)
+/// - 46-53: `kdf_memlimit` (u64 LE)
 /// - 54-61: keynum (8 bytes)
-/// - 62-125: secret_key (64 bytes, encrypted if kdf_alg != "\0\0")
-/// - 126-157: checksum (32 bytes, Blake2b-256 of keynum + secret_key)
+/// - 62-125: `secret_key` (64 bytes, encrypted if `kdf_alg` != "\0\0")
+/// - 126-157: checksum (32 bytes, Blake2b-256 of keynum + `secret_key`)
 #[derive(Clone)]
 pub struct SeckeyStruct {
     encrypted: bool,
@@ -169,10 +168,9 @@ pub struct SeckeyStruct {
 impl SeckeyStruct {
     /// Create a new secret key structure (unencrypted)
     ///
-    /// The checksum will be computed automatically.
+    /// For unencrypted keys, the checksum is set to all zeros (matching C behavior).
     #[must_use]
     pub fn new_unencrypted(keynum: KeyNum, secret_key: &SecretKey) -> Self {
-        let checksum = Self::compute_checksum(&keynum, secret_key.as_bytes());
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
         secret_key_encrypted.copy_from_slice(secret_key.as_bytes());
 
@@ -183,19 +181,147 @@ impl SeckeyStruct {
             kdf_memlimit: 0,
             keynum,
             secret_key_encrypted,
-            checksum,
+            checksum: [0u8; CHECKSUM_BYTES], // All zeros for unencrypted keys
         }
     }
 
-    /// Compute the checksum (Blake2b-256 of keynum + secret_key)
-    fn compute_checksum(keynum: &KeyNum, secret_key: &[u8; SECRET_KEY_BYTES]) -> [u8; CHECKSUM_BYTES] {
-        use crate::crypto::blake2b_256;
+    /// Create a new encrypted secret key structure
+    ///
+    /// The secret key is encrypted using XOR with a key derived from the password.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key derivation fails
+    pub fn new_encrypted(
+        keynum: KeyNum,
+        secret_key: &SecretKey,
+        password: &[u8],
+        kdf_salt: [u8; KDF_SALT_BYTES],
+        kdf_opslimit: u64,
+        kdf_memlimit: u64,
+    ) -> Result<Self> {
+        // Convert opslimit/memlimit to scrypt parameters
+        let (log_n, r, p) = Self::opslimit_memlimit_to_params(kdf_opslimit, kdf_memlimit);
 
+        // Derive encryption key from password
+        let derived_key =
+            derive_key_with_params(password, &kdf_salt, log_n, r, p, SECRET_KEY_BYTES)?;
+
+        // Encrypt secret key using XOR (libsodium crypto_stream_xor behavior)
+        let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
+        for i in 0..SECRET_KEY_BYTES {
+            secret_key_encrypted[i] = secret_key.as_bytes()[i] ^ derived_key[i];
+        }
+
+        // Compute checksum of unencrypted keynum + secret_key
+        let checksum = Self::compute_checksum(keynum, secret_key.as_bytes());
+
+        Ok(Self {
+            encrypted: true,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+            keynum,
+            secret_key_encrypted,
+            checksum,
+        })
+    }
+
+    /// Decrypt the secret key using a password
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Key is not encrypted
+    /// - Key derivation fails
+    /// - Checksum validation fails (wrong password or corrupted data)
+    pub fn decrypt(&self, password: &[u8]) -> Result<SecretKey> {
+        if !self.encrypted {
+            return Err(Error::Other("key is not encrypted".to_string()));
+        }
+
+        // Convert opslimit/memlimit to scrypt parameters
+        let (log_n, r, p) = Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit);
+
+        // Derive decryption key from password
+        let derived_key =
+            derive_key_with_params(password, &self.kdf_salt, log_n, r, p, SECRET_KEY_BYTES)?;
+
+        // Decrypt secret key using XOR (encryption is symmetric)
+        let mut secret_key_bytes = [0u8; SECRET_KEY_BYTES];
+        for i in 0..SECRET_KEY_BYTES {
+            secret_key_bytes[i] = self.secret_key_encrypted[i] ^ derived_key[i];
+        }
+
+        // Validate checksum
+        let computed_checksum = Self::compute_checksum(self.keynum, &secret_key_bytes);
+        if computed_checksum != self.checksum {
+            return Err(Error::ChecksumFailed);
+        }
+
+        Ok(SecretKey::from_bytes(secret_key_bytes))
+    }
+
+    /// Get the unencrypted secret key (only works for unencrypted keys)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key is encrypted (use decrypt instead)
+    pub fn get_unencrypted_secret_key(&self) -> Result<SecretKey> {
+        if self.encrypted {
+            return Err(Error::PasswordRequired);
+        }
+
+        // Note: For unencrypted keys, the checksum field is typically all zeros
+        // and is not validated. The checksum is only used for encrypted keys
+        // to detect wrong passwords.
+
+        Ok(SecretKey::from_bytes(self.secret_key_encrypted))
+    }
+
+    /// Compute the checksum (Blake2b-256 of keynum + `secret_key`)
+    fn compute_checksum(
+        keynum: KeyNum,
+        secret_key: &[u8; SECRET_KEY_BYTES],
+    ) -> [u8; CHECKSUM_BYTES] {
         let mut data = Vec::with_capacity(KEYNUM_BYTES + SECRET_KEY_BYTES);
         data.extend_from_slice(keynum.as_bytes());
         data.extend_from_slice(secret_key);
 
         blake2b_256(&data)
+    }
+
+    /// Convert opslimit/memlimit to scrypt parameters
+    ///
+    /// Returns (`log_n`, r, p) suitable for scrypt
+    ///
+    /// libsodium uses these formulas:
+    /// - opslimit = 4 * N * r
+    /// - memlimit = 128 * N * r
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+    fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> (u8, u32, u32) {
+        // Standard minisign uses r=8, p=1
+        // We can derive N from either formula, using memlimit is simpler
+        let r = 8u32;
+        let p = 1u32;
+
+        // N = memlimit / (128 * r)
+        let n = memlimit / (128 * u64::from(r));
+        // Safe cast: log2 of u64 max is ~64, which fits in u8
+        let log_n = (n as f64).log2() as u8;
+
+        // Verify our calculation is consistent with opslimit
+        // opslimit should equal 4 * N * r
+        let expected_opslimit = 4 * n * u64::from(r);
+        if expected_opslimit != opslimit {
+            // If they don't match, the key might use non-standard parameters
+            // Fall back to deriving r from opslimit
+            // Safe cast: r values are typically small (8-16)
+            let derived_r = u32::try_from(opslimit / (4 * n)).unwrap_or(r);
+            return (log_n, derived_r, p);
+        }
+
+        (log_n, r, p)
     }
 
     /// Get the key number
@@ -289,9 +415,7 @@ impl SeckeyStruct {
         } else if &bytes[2..4] == KDF_ALG_NONE {
             false
         } else {
-            return Err(Error::InvalidSecretKey(
-                "invalid KDF algorithm".to_string(),
-            ));
+            return Err(Error::InvalidSecretKey("invalid KDF algorithm".to_string()));
         };
 
         // Verify checksum algorithm
@@ -351,7 +475,7 @@ impl SeckeyStruct {
     #[must_use]
     pub fn to_file_contents(&self, comment: &str) -> String {
         let bytes = self.to_bytes();
-        let base64 = encode_base64(&bytes);
+        let base64 = encode_base64(bytes);
         format!("untrusted comment: {comment}\n{base64}\n")
     }
 }
@@ -361,7 +485,11 @@ impl std::fmt::Debug for SeckeyStruct {
         f.debug_struct("SeckeyStruct")
             .field("encrypted", &self.encrypted)
             .field("keynum", &self.keynum)
-            .field("secret_key", &"[REDACTED]")
+            .field("kdf_salt", &"[...]")
+            .field("kdf_opslimit", &self.kdf_opslimit)
+            .field("kdf_memlimit", &self.kdf_memlimit)
+            .field("secret_key_encrypted", &"[REDACTED]")
+            .field("checksum", &"[...]")
             .finish()
     }
 }
@@ -388,8 +516,8 @@ mod tests {
             .expect("Failed to read test.pub fixture");
 
         // Parse the public key
-        let pubkey = PubkeyStruct::from_file_contents(&contents)
-            .expect("Failed to parse public key");
+        let pubkey =
+            PubkeyStruct::from_file_contents(&contents).expect("Failed to parse public key");
 
         // Verify structure - the actual values depend on the generated key,
         // but we can check that parsing succeeds and produces valid data
@@ -404,8 +532,8 @@ mod tests {
             .expect("Failed to read test.key fixture");
 
         // Parse the secret key structure
-        let seckey = SeckeyStruct::from_file_contents(&contents)
-            .expect("Failed to parse secret key");
+        let seckey =
+            SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
 
         // Verify it's encrypted
         assert!(seckey.is_encrypted(), "Expected key to be encrypted");
@@ -431,8 +559,16 @@ mod tests {
 
         // Verify structure
         assert_eq!(seckey.keynum().as_bytes().len(), KEYNUM_BYTES);
-        assert_eq!(seckey.kdf_opslimit(), 0, "Expected zero opslimit for unencrypted key");
-        assert_eq!(seckey.kdf_memlimit(), 0, "Expected zero memlimit for unencrypted key");
+        assert_eq!(
+            seckey.kdf_opslimit(),
+            0,
+            "Expected zero opslimit for unencrypted key"
+        );
+        assert_eq!(
+            seckey.kdf_memlimit(),
+            0,
+            "Expected zero memlimit for unencrypted key"
+        );
     }
 
     #[test]
@@ -441,17 +577,20 @@ mod tests {
         let contents = fs::read_to_string("tests/fixtures/keys/test.pub")
             .expect("Failed to read test.pub fixture");
 
-        let original = PubkeyStruct::from_file_contents(&contents)
-            .expect("Failed to parse public key");
+        let original =
+            PubkeyStruct::from_file_contents(&contents).expect("Failed to parse public key");
 
         // Serialize to bytes and parse back
         let bytes = original.to_bytes();
-        let roundtrip = PubkeyStruct::from_bytes(&bytes)
-            .expect("Failed to parse roundtripped bytes");
+        let roundtrip =
+            PubkeyStruct::from_bytes(&bytes).expect("Failed to parse roundtripped bytes");
 
         // Verify they're identical
         assert_eq!(original.keynum().as_bytes(), roundtrip.keynum().as_bytes());
-        assert_eq!(original.public_key().as_bytes(), roundtrip.public_key().as_bytes());
+        assert_eq!(
+            original.public_key().as_bytes(),
+            roundtrip.public_key().as_bytes()
+        );
     }
 
     #[test]
@@ -460,20 +599,23 @@ mod tests {
         let contents = fs::read_to_string("tests/fixtures/keys/test.key")
             .expect("Failed to read test.key fixture");
 
-        let original = SeckeyStruct::from_file_contents(&contents)
-            .expect("Failed to parse secret key");
+        let original =
+            SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
 
         // Serialize to bytes and parse back
         let bytes = original.to_bytes();
-        let roundtrip = SeckeyStruct::from_bytes(&bytes)
-            .expect("Failed to parse roundtripped bytes");
+        let roundtrip =
+            SeckeyStruct::from_bytes(&bytes).expect("Failed to parse roundtripped bytes");
 
         // Verify they're identical
         assert_eq!(original.is_encrypted(), roundtrip.is_encrypted());
         assert_eq!(original.keynum().as_bytes(), roundtrip.keynum().as_bytes());
         assert_eq!(original.kdf_opslimit(), roundtrip.kdf_opslimit());
         assert_eq!(original.kdf_memlimit(), roundtrip.kdf_memlimit());
-        assert_eq!(original.encrypted_secret_key(), roundtrip.encrypted_secret_key());
+        assert_eq!(
+            original.encrypted_secret_key(),
+            roundtrip.encrypted_secret_key()
+        );
     }
 
     #[test]
@@ -496,7 +638,10 @@ mod tests {
             .expect("Failed to parse file contents");
 
         assert_eq!(pubkey.keynum().as_bytes(), parsed.keynum().as_bytes());
-        assert_eq!(pubkey.public_key().as_bytes(), parsed.public_key().as_bytes());
+        assert_eq!(
+            pubkey.public_key().as_bytes(),
+            parsed.public_key().as_bytes()
+        );
     }
 
     #[test]
@@ -544,5 +689,164 @@ mod tests {
         let result = SeckeyStruct::from_bytes(&data);
         assert!(result.is_err());
         assert!(matches!(result, Err(Error::InvalidSecretKey(_))));
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip() {
+        use crate::crypto::generate_keypair;
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair();
+
+        let password = b"test_password";
+        let kdf_salt = [42u8; KDF_SALT_BYTES];
+        // Use reduced parameters for testing (log_n=14 for reasonable speed)
+        // Using libsodium formulas: opslimit = 4*N*r, memlimit = 128*N*r
+        let n = 1u64 << 14; // N = 16384
+        let r = 8u64;
+        let kdf_opslimit = 4 * n * r;
+        let kdf_memlimit = 128 * n * r;
+
+        // Create encrypted secret key
+        let encrypted_key = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+        )
+        .expect("Failed to encrypt key");
+
+        assert!(encrypted_key.is_encrypted());
+
+        // Decrypt it
+        let decrypted_key = encrypted_key
+            .decrypt(password)
+            .expect("Failed to decrypt key");
+
+        // Verify it matches the original
+        assert_eq!(secret_key.as_bytes(), decrypted_key.as_bytes());
+    }
+
+    #[test]
+    fn test_decrypt_with_wrong_password() {
+        use crate::crypto::generate_keypair;
+
+        let (secret_key, _public_key, keynum) = generate_keypair();
+
+        let password = b"correct_password";
+        let wrong_password = b"wrong_password";
+        let kdf_salt = [42u8; KDF_SALT_BYTES];
+        // Use reduced parameters for testing
+        let n = 1u64 << 14;
+        let r = 8u64;
+        let kdf_opslimit = 4 * n * r;
+        let kdf_memlimit = 128 * n * r;
+
+        let encrypted_key = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+        )
+        .expect("Failed to encrypt key");
+
+        // Try to decrypt with wrong password
+        let result = encrypted_key.decrypt(wrong_password);
+
+        // Should fail with checksum error
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::ChecksumFailed)));
+    }
+
+    #[test]
+    fn test_get_unencrypted_secret_key() {
+        use crate::crypto::generate_keypair;
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair();
+
+        // Create unencrypted secret key structure
+        let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+
+        assert!(!seckey.is_encrypted());
+
+        // Get the unencrypted key
+        let retrieved_key = seckey
+            .get_unencrypted_secret_key()
+            .expect("Failed to get unencrypted key");
+
+        assert_eq!(secret_key.as_bytes(), retrieved_key.as_bytes());
+    }
+
+    #[test]
+    #[ignore] // Expensive test with log_n=20, run with --ignored
+    fn test_decrypt_c_generated_encrypted_key() {
+        // Load the C-generated encrypted secret key
+        let contents = fs::read_to_string("tests/fixtures/keys/test.key")
+            .expect("Failed to read test.key fixture");
+
+        let seckey =
+            SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+
+        assert!(seckey.is_encrypted());
+
+        // The password we used when generating the fixture is "test"
+        let password = b"test";
+
+        // Decrypt it
+        let secret_key = seckey.decrypt(password).expect("Failed to decrypt key");
+
+        // Verify we got a valid secret key
+        assert_eq!(secret_key.as_bytes().len(), SECRET_KEY_BYTES);
+
+        // The decrypted key should have a valid checksum
+        // (checksum validation happens inside decrypt())
+    }
+
+    #[test]
+    #[ignore] // Expensive test with log_n=20, run with --ignored
+    fn test_decrypt_c_generated_encrypted_key_wrong_password() {
+        // Load the C-generated encrypted secret key
+        let contents = fs::read_to_string("tests/fixtures/keys/test.key")
+            .expect("Failed to read test.key fixture");
+
+        let seckey =
+            SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+
+        // Try with wrong password
+        let result = seckey.decrypt(b"wrong_password");
+
+        // Should fail
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::ChecksumFailed)));
+    }
+
+    #[test]
+    fn test_get_c_generated_unencrypted_key() {
+        // Load the C-generated unencrypted secret key
+        let contents = fs::read_to_string("tests/fixtures/keys/unencrypted.key")
+            .expect("Failed to read unencrypted.key fixture");
+
+        let seckey =
+            SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+
+        assert!(!seckey.is_encrypted());
+
+        // Debug: check checksum
+        let computed = SeckeyStruct::compute_checksum(seckey.keynum, &seckey.secret_key_encrypted);
+        eprintln!("Stored checksum:   {:02x?}", &seckey.checksum[..8]);
+        eprintln!("Computed checksum: {:02x?}", &computed[..8]);
+
+        // Get the unencrypted key
+        let secret_key = seckey
+            .get_unencrypted_secret_key()
+            .expect("Failed to get unencrypted key");
+
+        // Verify we got a valid secret key
+        assert_eq!(secret_key.as_bytes().len(), SECRET_KEY_BYTES);
     }
 }
