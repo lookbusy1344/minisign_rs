@@ -96,12 +96,12 @@ mod tests {
    - No exceptions - code must be formatted
    - Run automatically before every commit
 
-2. **Run clippy with strict lints:** `cargo clippy --color=always -- -D clippy::all -D clippy::pedantic`
+2. **Run clippy with strict lints:** `cargo clippy -- -D clippy::all -D clippy::pedantic`
    - All warnings are errors
    - Pedantic mode catches subtle issues
    - Must pass with zero warnings
 
-3. **Run full test suite:** `gtimeout 120 cargo test`
+3. **Run full test suite:** `gtimeout 60 cargo test`
    - All tests must pass
    - No skipped tests
 
@@ -127,20 +127,20 @@ mod tests {
 
 ```bash
 # Run all tests
-gtimeout 120 cargo test
+gtimeout 60 cargo test
 
 # Run tests with output
-gtimeout 120 cargo test -- --nocapture
+gtimeout 60 cargo test -- --nocapture
 
 # Run specific test
-gtimeout 120 cargo test test_name
+gtimeout 60 cargo test test_name
 
 # Run with coverage (if tarpaulin installed)
 cargo tarpaulin --out Html
 
 # Check for issues (REQUIRED before commit)
 cargo fmt
-cargo clippy --color=always -- -D clippy::all -D clippy::pedantic
+cargo clippy -- -D clippy::all -D clippy::pedantic
 ```
 
 ### Compatibility Testing
