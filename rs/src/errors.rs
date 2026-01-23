@@ -30,6 +30,12 @@ pub enum Error {
     #[error("invalid key format: {0}")]
     InvalidKeyFormat(String),
 
+    #[error("invalid public key: {0}")]
+    InvalidPublicKey(String),
+
+    #[error("invalid secret key: {0}")]
+    InvalidSecretKey(String),
+
     #[error("invalid signature format: {0}")]
     InvalidSignatureFormat(String),
 
