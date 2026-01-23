@@ -12,16 +12,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     // I/O errors
     #[error("failed to read file {path:?}: {source}")]
-    FileRead {
-        path: PathBuf,
-        source: io::Error,
-    },
+    FileRead { path: PathBuf, source: io::Error },
 
     #[error("failed to write file {path:?}: {source}")]
-    FileWrite {
-        path: PathBuf,
-        source: io::Error,
-    },
+    FileWrite { path: PathBuf, source: io::Error },
 
     #[error("file not found: {0:?}")]
     FileNotFound(PathBuf),
@@ -40,10 +34,7 @@ pub enum Error {
     InvalidSignatureFormat(String),
 
     #[error("invalid file format: expected {expected}, found {found}")]
-    InvalidFileFormat {
-        expected: String,
-        found: String,
-    },
+    InvalidFileFormat { expected: String, found: String },
 
     #[error("missing field: {0}")]
     MissingField(String),
@@ -61,7 +52,9 @@ pub enum Error {
     #[error("invalid signature")]
     InvalidSignature,
 
-    #[error("key mismatch: signature keynum {sig_keynum} doesn't match public key keynum {pub_keynum}")]
+    #[error(
+        "key mismatch: signature keynum {sig_keynum} doesn't match public key keynum {pub_keynum}"
+    )]
     KeyMismatch {
         sig_keynum: String,
         pub_keynum: String,
@@ -164,11 +157,10 @@ mod tests {
 
     #[test]
     fn test_base64_error_conversion() {
-        use base64::{engine::general_purpose::STANDARD, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD};
 
         // Test that base64::DecodeError converts to our Error type
-        let result: Result<Vec<u8>> = STANDARD.decode("!invalid base64!")
-            .map_err(Error::from);
+        let result: Result<Vec<u8>> = STANDARD.decode("!invalid base64!").map_err(Error::from);
 
         assert!(matches!(result, Err(Error::InvalidBase64(_))));
     }

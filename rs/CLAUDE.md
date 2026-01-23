@@ -88,14 +88,30 @@ mod tests {
 - Errors must be actionable and informative (but not leak secrets)
 - Use `thiserror` for library errors, `anyhow` for application errors
 
-#### Code Review Requirements
+#### Pre-Commit Requirements
 
-Before any commit:
-1. Run full test suite: `gtimeout 120 cargo test`
-2. Check for warnings: `cargo clippy -- -D warnings`
-3. Format code: `cargo fmt`
-4. Security audit: `cargo audit` (if available)
-5. Verify no `unsafe`, no panics in production paths
+**ESSENTIAL - These steps are MANDATORY before committing any Rust code:**
+
+1. **Format code:** `cargo fmt`
+   - No exceptions - code must be formatted
+   - Run automatically before every commit
+
+2. **Run clippy with strict lints:** `cargo clippy --color=always -- -D clippy::all -D clippy::pedantic`
+   - All warnings are errors
+   - Pedantic mode catches subtle issues
+   - Must pass with zero warnings
+
+3. **Run full test suite:** `gtimeout 120 cargo test`
+   - All tests must pass
+   - No skipped tests
+
+4. **Security audit:** `cargo audit` (if available)
+   - Check for known vulnerabilities
+
+5. **Manual verification:**
+   - No `unsafe` blocks
+   - No `.unwrap()` or `.expect()` in production code paths
+   - No panics in production code paths
 
 ## Development Workflow
 
@@ -122,8 +138,9 @@ gtimeout 120 cargo test test_name
 # Run with coverage (if tarpaulin installed)
 cargo tarpaulin --out Html
 
-# Check for issues
-cargo clippy -- -D warnings
+# Check for issues (REQUIRED before commit)
+cargo fmt
+cargo clippy --color=always -- -D clippy::all -D clippy::pedantic
 ```
 
 ### Compatibility Testing

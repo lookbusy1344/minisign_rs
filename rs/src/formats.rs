@@ -1,7 +1,7 @@
 //! Base64 encoding and binary format helpers
 
 use crate::errors::{Error, Result};
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD};
 
 /// Encode bytes to base64 string (standard encoding)
 pub fn encode_base64(data: impl AsRef<[u8]>) -> String {
@@ -9,6 +9,10 @@ pub fn encode_base64(data: impl AsRef<[u8]>) -> String {
 }
 
 /// Decode base64 string to bytes
+///
+/// # Errors
+///
+/// Returns `Error::InvalidBase64` if the input is not valid base64
 pub fn decode_base64(data: impl AsRef<[u8]>) -> Result<Vec<u8>> {
     STANDARD.decode(data).map_err(Error::from)
 }
@@ -18,6 +22,7 @@ pub fn decode_base64(data: impl AsRef<[u8]>) -> Result<Vec<u8>> {
 /// # Panics
 ///
 /// Panics if the slice is shorter than 8 bytes
+#[must_use]
 pub fn read_u64_le(bytes: &[u8]) -> u64 {
     let mut buf = [0u8; 8];
     buf.copy_from_slice(&bytes[..8]);
@@ -38,6 +43,7 @@ pub fn write_u64_le(bytes: &mut [u8], value: u64) {
 /// # Panics
 ///
 /// Panics if the slice is shorter than 2 bytes
+#[must_use]
 pub fn read_u16_le(bytes: &[u8]) -> u16 {
     let mut buf = [0u8; 2];
     buf.copy_from_slice(&bytes[..2]);
@@ -72,21 +78,13 @@ mod tests {
         for data in test_data {
             let encoded = encode_base64(data);
             let decoded = decode_base64(&encoded).expect("decode failed");
-            assert_eq!(
-                data, decoded,
-                "roundtrip failed for {} bytes",
-                data.len()
-            );
+            assert_eq!(data, decoded, "roundtrip failed for {} bytes", data.len());
         }
     }
 
     #[test]
     fn test_base64_invalid() {
-        let invalid_inputs = vec![
-            "!@#$%^&*()",
-            "invalid base64",
-            "====",
-        ];
+        let invalid_inputs = vec!["!@#$%^&*()", "invalid base64", "===="];
 
         for input in invalid_inputs {
             let result = decode_base64(input);
@@ -119,9 +117,18 @@ mod tests {
     fn test_u64_le_known_values() {
         // Test specific byte patterns to ensure correct endianness
         let test_cases = vec![
-            (0x0102030405060708u64, [0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01]),
-            (0x0000000000000001u64, [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-            (0x0100000000000000u64, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            (
+                0x0102030405060708u64,
+                [0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01],
+            ),
+            (
+                0x0000000000000001u64,
+                [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            ),
+            (
+                0x0100000000000000u64,
+                [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01],
+            ),
         ];
 
         for (value, expected_bytes) in test_cases {
@@ -134,10 +141,7 @@ mod tests {
             );
 
             let read_value = read_u64_le(&expected_bytes);
-            assert_eq!(
-                read_value, value,
-                "read_u64_le read wrong value from bytes"
-            );
+            assert_eq!(read_value, value, "read_u64_le read wrong value from bytes");
         }
     }
 
@@ -172,10 +176,7 @@ mod tests {
             );
 
             let read_value = read_u16_le(&expected_bytes);
-            assert_eq!(
-                read_value, value,
-                "read_u16_le read wrong value from bytes"
-            );
+            assert_eq!(read_value, value, "read_u16_le read wrong value from bytes");
         }
     }
 
@@ -183,7 +184,7 @@ mod tests {
     #[should_panic(expected = "index")]
     fn test_read_u64_le_short_buffer() {
         let buf = [0u8; 7];
-        read_u64_le(&buf);
+        let _ = read_u64_le(&buf);
     }
 
     #[test]
