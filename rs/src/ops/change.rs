@@ -2,11 +2,7 @@
 //!
 //! This module implements changing or removing the password on a secret key.
 
-use crate::{
-    errors::Error,
-    keys::SeckeyStruct,
-    Result,
-};
+use crate::{Result, errors::Error, keys::SeckeyStruct};
 use rand::RngCore;
 use std::path::PathBuf;
 
@@ -226,8 +222,9 @@ mod tests {
             remove_password: false,
         };
 
-        let result = change_with_custom_params(&options, Some(old_password), Some(new_password), 14)
-            .expect("password change should succeed");
+        let result =
+            change_with_custom_params(&options, Some(old_password), Some(new_password), 14)
+                .expect("password change should succeed");
 
         assert_eq!(result.secret_key_file, sk_path);
         assert!(result.encrypted);
@@ -404,7 +401,8 @@ mod tests {
             remove_password: false,
         };
 
-        let result = change_with_custom_params(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
+        let result =
+            change_with_custom_params(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
         assert!(result.is_err());
     }
 

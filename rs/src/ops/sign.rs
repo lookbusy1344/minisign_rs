@@ -3,11 +3,11 @@
 //! This module implements the core signing logic for minisign.
 
 use crate::{
-    crypto::{blake2b_512, sign as crypto_sign, SecretKey},
+    Result,
+    crypto::{SecretKey, blake2b_512, sign as crypto_sign},
     errors::Error,
     keys::SeckeyStruct,
     signature::{SigStruct, SignatureBox},
-    Result,
 };
 use std::path::Path;
 
@@ -18,7 +18,7 @@ pub struct SignOptions {
     pub secret_key_file: String,
     /// Path to the message file
     pub message_file: String,
-    /// Path to output signature file (optional, defaults to message_file.minisig)
+    /// Path to output signature file (optional, defaults to `message_file.minisig`)
     pub signature_file: Option<String>,
     /// Use prehashed mode (hash the message with Blake2b-512 before signing)
     pub prehashed: bool,
@@ -85,7 +85,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     // Create the signature
     let sig_box = create_signature(
         &secret_key,
-        seckey.keynum(),
+        *seckey.keynum(),
         &message,
         options.prehashed,
         options.trusted_comment.as_deref(),
@@ -105,15 +105,15 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
 
 /// Load a secret key from a file
 fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
-    let contents = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| Error::file_read(path.as_ref(), e))?;
+    let contents =
+        std::fs::read_to_string(path.as_ref()).map_err(|e| Error::file_read(path.as_ref(), e))?;
     SeckeyStruct::from_file_contents(&contents)
 }
 
 /// Create a signature for a message
 fn create_signature(
     secret_key: &SecretKey,
-    keynum: &crate::crypto::KeyNum,
+    keynum: crate::crypto::KeyNum,
     message: &[u8],
     prehashed: bool,
     trusted_comment: Option<&str>,
@@ -130,17 +130,17 @@ fn create_signature(
     let signature = crypto_sign(secret_key, &data_to_sign)?;
 
     // Create the SigStruct
-    let sig_struct = SigStruct::new(*keynum, signature, prehashed);
+    let sig_struct = SigStruct::new(keynum, signature, prehashed);
 
     // Generate trusted comment if not provided
-    let trusted_comment = trusted_comment
-        .map(String::from)
-        .unwrap_or_else(|| generate_default_trusted_comment());
+    let trusted_comment =
+        trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
 
     // Generate untrusted comment if not provided
-    let untrusted_comment = untrusted_comment
-        .map(String::from)
-        .unwrap_or_else(|| "signature from minisign secret key".to_string());
+    let untrusted_comment = untrusted_comment.map_or_else(
+        || "signature from minisign secret key".to_string(),
+        String::from,
+    );
 
     // Create global signature (signs: signature_bytes || trusted_comment)
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
@@ -212,15 +212,18 @@ mod tests {
         let sig_contents = fs::read_to_string(&sig_path).unwrap();
         let sig_box = SignatureBox::from_file_contents(&sig_contents).unwrap();
 
-        let pubkey_contents =
-            fs::read_to_string("tests/fixtures/keys/unencrypted.pub").unwrap();
+        let pubkey_contents = fs::read_to_string("tests/fixtures/keys/unencrypted.pub").unwrap();
         let pubkey = PubkeyStruct::from_file_contents(&pubkey_contents).unwrap();
 
         let message = fs::read(&message_path).unwrap();
         let data_to_verify = blake2b_512(&message);
 
-        crypto_verify(pubkey.public_key(), &data_to_verify, sig_box.sig_struct().signature())
-            .expect("signature should verify");
+        crypto_verify(
+            pubkey.public_key(),
+            &data_to_verify,
+            sig_box.sig_struct().signature(),
+        )
+        .expect("signature should verify");
 
         sig_box
             .verify_global_signature(pubkey.public_key())
@@ -407,8 +410,8 @@ mod tests {
 
     #[test]
     fn test_load_secret_key() {
-        let seckey = load_secret_key("tests/fixtures/keys/unencrypted.key")
-            .expect("should load secret key");
+        let seckey =
+            load_secret_key("tests/fixtures/keys/unencrypted.key").expect("should load secret key");
         assert!(!seckey.is_encrypted());
 
         let seckey =
@@ -429,26 +432,12 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair();
 
         // Create prehashed signature
-        let sig_prehashed = create_signature(
-            &secret_key,
-            &keynum,
-            message,
-            true,
-            Some("test"),
-            None,
-        )
-        .unwrap();
+        let sig_prehashed =
+            create_signature(&secret_key, keynum, message, true, Some("test"), None).unwrap();
 
         // Create normal signature
-        let sig_normal = create_signature(
-            &secret_key,
-            &keynum,
-            message,
-            false,
-            Some("test"),
-            None,
-        )
-        .unwrap();
+        let sig_normal =
+            create_signature(&secret_key, keynum, message, false, Some("test"), None).unwrap();
 
         // They should have different sig_alg indicators
         assert!(sig_prehashed.sig_struct().is_prehashed());

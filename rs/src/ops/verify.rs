@@ -3,11 +3,11 @@
 //! This module implements the core verification logic for minisign signatures.
 
 use crate::{
+    Result,
     crypto::{blake2b_512, verify as crypto_verify},
     errors::Error,
     keys::PubkeyStruct,
     signature::SignatureBox,
-    Result,
 };
 use std::path::Path;
 
@@ -92,8 +92,8 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
 fn load_public_key(source: &PublicKeySource) -> Result<PubkeyStruct> {
     match source {
         PublicKeySource::File(path) => {
-            let contents = std::fs::read_to_string(path)
-                .map_err(|e| Error::file_read(path.clone(), e))?;
+            let contents =
+                std::fs::read_to_string(path).map_err(|e| Error::file_read(path.clone(), e))?;
             PubkeyStruct::from_file_contents(&contents)
         }
         PublicKeySource::Base64(base64_str) => {
@@ -105,8 +105,8 @@ fn load_public_key(source: &PublicKeySource) -> Result<PubkeyStruct> {
 
 /// Load a signature from a file
 fn load_signature(path: impl AsRef<Path>) -> Result<SignatureBox> {
-    let contents = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| Error::file_read(path.as_ref(), e))?;
+    let contents =
+        std::fs::read_to_string(path.as_ref()).map_err(|e| Error::file_read(path.as_ref(), e))?;
     SignatureBox::from_file_contents(&contents)
 }
 
@@ -139,9 +139,7 @@ mod tests {
     #[test]
     fn test_verify_c_generated_signature() {
         let options = VerifyOptions {
-            public_key: PublicKeySource::File(
-                "tests/fixtures/keys/unencrypted.pub".to_string(),
-            ),
+            public_key: PublicKeySource::File("tests/fixtures/keys/unencrypted.pub".to_string()),
             signature_file: "tests/fixtures/signatures/hello.txt.minisig".to_string(),
             message_file: "tests/fixtures/messages/hello.txt".to_string(),
             output: false,
@@ -162,9 +160,7 @@ mod tests {
         fs::write(&wrong_message_path, b"Wrong message").unwrap();
 
         let options = VerifyOptions {
-            public_key: PublicKeySource::File(
-                "tests/fixtures/keys/unencrypted.pub".to_string(),
-            ),
+            public_key: PublicKeySource::File("tests/fixtures/keys/unencrypted.pub".to_string()),
             signature_file: "tests/fixtures/signatures/hello.txt.minisig".to_string(),
             message_file: wrong_message_path.display().to_string(),
             output: false,
@@ -192,9 +188,7 @@ mod tests {
     #[test]
     fn test_verify_nonexistent_file() {
         let options = VerifyOptions {
-            public_key: PublicKeySource::File(
-                "tests/fixtures/keys/unencrypted.pub".to_string(),
-            ),
+            public_key: PublicKeySource::File("tests/fixtures/keys/unencrypted.pub".to_string()),
             signature_file: "tests/fixtures/signatures/hello.txt.minisig".to_string(),
             message_file: "nonexistent.txt".to_string(),
             output: false,
@@ -222,8 +216,7 @@ mod tests {
     #[test]
     fn test_verify_message_signature_prehashed() {
         // Load fixtures
-        let pubkey_contents =
-            fs::read_to_string("tests/fixtures/keys/unencrypted.pub").unwrap();
+        let pubkey_contents = fs::read_to_string("tests/fixtures/keys/unencrypted.pub").unwrap();
         let pubkey = PubkeyStruct::from_file_contents(&pubkey_contents).unwrap();
 
         let sig_contents =

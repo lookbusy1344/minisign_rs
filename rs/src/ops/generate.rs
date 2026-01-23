@@ -3,10 +3,10 @@
 //! This module implements keypair generation for minisign.
 
 use crate::{
+    Result,
     crypto::generate_keypair,
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    Result,
 };
 use rand::RngCore;
 use std::path::{Path, PathBuf};
@@ -50,7 +50,7 @@ pub struct GenerateResult {
 /// # Arguments
 ///
 /// * `options` - Generation options including file paths and encryption settings
-/// * `password` - Password to encrypt the secret key (required unless no_password is true)
+/// * `password` - Password to encrypt the secret key (required unless `no_password` is true)
 ///
 /// # Returns
 ///
@@ -63,6 +63,10 @@ pub struct GenerateResult {
 /// - Password is required but not provided
 /// - File I/O operations fail
 /// - Parent directories cannot be created
+///
+/// # Panics
+///
+/// Will not panic. The function uses `?` operator for all fallible operations.
 pub fn generate(options: &GenerateOptions, password: Option<&[u8]>) -> Result<GenerateResult> {
     // Check if files already exist (unless force is set)
     if !options.force {
@@ -98,7 +102,14 @@ pub fn generate(options: &GenerateOptions, password: Option<&[u8]>) -> Result<Ge
         let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
-        SeckeyStruct::new_encrypted(keynum, &secret_key, pwd, kdf_salt, kdf_opslimit, kdf_memlimit)?
+        SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            pwd,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+        )?
     };
 
     // Create the public key structure
@@ -133,11 +144,8 @@ pub fn generate(options: &GenerateOptions, password: Option<&[u8]>) -> Result<Ge
 
 /// Ensure the parent directory exists
 fn ensure_parent_directory(path: &Path) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| Error::file_write(parent, e))?;
-        }
+    if let Some(parent) = path.parent().filter(|p| !p.exists()) {
+        std::fs::create_dir_all(parent).map_err(|e| Error::file_write(parent, e))?;
     }
     Ok(())
 }
@@ -203,7 +211,14 @@ fn generate_with_custom_params(
         let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
-        SeckeyStruct::new_encrypted(keynum, &secret_key, pwd, kdf_salt, kdf_opslimit, kdf_memlimit)?
+        SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            pwd,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+        )?
     };
 
     // Create the public key structure
@@ -272,7 +287,9 @@ mod tests {
         let sk_contents = fs::read_to_string(&sk_path).unwrap();
         let seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
         assert!(seckey.is_encrypted());
-        seckey.decrypt(password).expect("should decrypt with correct password");
+        seckey
+            .decrypt(password)
+            .expect("should decrypt with correct password");
 
         // Verify wrong password fails
         let wrong_result = seckey.decrypt(b"wrongpassword");
@@ -310,7 +327,9 @@ mod tests {
         let sk_contents = fs::read_to_string(&sk_path).unwrap();
         let seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
         assert!(seckey.is_encrypted());
-        seckey.decrypt(password).expect("should decrypt with correct password");
+        seckey
+            .decrypt(password)
+            .expect("should decrypt with correct password");
 
         // Verify wrong password fails
         let wrong_result = seckey.decrypt(b"wrongpassword");
@@ -463,7 +482,12 @@ mod tests {
     #[test]
     fn test_ensure_parent_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let nested_path = temp_dir.path().join("a").join("b").join("c").join("file.txt");
+        let nested_path = temp_dir
+            .path()
+            .join("a")
+            .join("b")
+            .join("c")
+            .join("file.txt");
 
         ensure_parent_directory(&nested_path).expect("should create parent dirs");
 

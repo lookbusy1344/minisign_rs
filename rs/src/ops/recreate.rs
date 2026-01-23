@@ -3,10 +3,10 @@
 //! This module implements recreating a public key file from a secret key file.
 
 use crate::{
+    Result,
     crypto::PublicKey,
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    Result,
 };
 use std::path::PathBuf;
 
@@ -69,7 +69,7 @@ pub fn recreate(options: &RecreateOptions, password: Option<&[u8]>) -> Result<Re
 
     // Extract public key from secret key
     // Ed25519 secret keys contain the public key in the second half (bytes 32-64)
-    let public_key = extract_public_key_from_secret(&secret_key)?;
+    let public_key = extract_public_key_from_secret(&secret_key);
 
     // Create public key structure
     let pubkey = PubkeyStruct::new(*seckey.keynum(), public_key);
@@ -101,14 +101,14 @@ fn load_secret_key(path: &PathBuf) -> Result<SeckeyStruct> {
 /// Extract the public key from an Ed25519 secret key
 ///
 /// Ed25519 secret keys are 64 bytes: [32-byte scalar || 32-byte public key]
-fn extract_public_key_from_secret(secret_key: &crate::crypto::SecretKey) -> Result<PublicKey> {
+fn extract_public_key_from_secret(secret_key: &crate::crypto::SecretKey) -> PublicKey {
     let secret_bytes = secret_key.as_bytes();
 
     // Ed25519 secret key format: [secret_scalar (32 bytes) || public_key (32 bytes)]
     let mut public_key_bytes = [0u8; 32];
     public_key_bytes.copy_from_slice(&secret_bytes[32..64]);
 
-    Ok(PublicKey::from_bytes(public_key_bytes))
+    PublicKey::from_bytes(public_key_bytes)
 }
 
 #[cfg(test)]
@@ -349,8 +349,7 @@ mod tests {
     fn test_extract_public_key_from_secret() {
         let (secret_key, expected_public_key, _keynum) = generate_keypair();
 
-        let extracted_public = extract_public_key_from_secret(&secret_key)
-            .expect("should extract public key");
+        let extracted_public = extract_public_key_from_secret(&secret_key);
 
         assert_eq!(extracted_public.as_bytes(), expected_public_key.as_bytes());
     }

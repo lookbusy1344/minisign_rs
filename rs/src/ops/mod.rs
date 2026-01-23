@@ -8,8 +8,8 @@ pub mod recreate;
 pub mod sign;
 pub mod verify;
 
-pub use change::{change, ChangeOptions, ChangeResult};
-pub use generate::{generate, GenerateOptions, GenerateResult};
-pub use recreate::{recreate, RecreateOptions, RecreateResult};
-pub use sign::{sign, SignOptions, SignResult};
-pub use verify::{verify, PublicKeySource, VerifyOptions, VerifyResult};
+pub use change::{ChangeOptions, ChangeResult, change};
+pub use generate::{GenerateOptions, GenerateResult, generate};
+pub use recreate::{RecreateOptions, RecreateResult, recreate};
+pub use sign::{SignOptions, SignResult, sign};
+pub use verify::{PublicKeySource, VerifyOptions, VerifyResult, verify};
