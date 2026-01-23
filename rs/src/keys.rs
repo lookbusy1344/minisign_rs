@@ -245,6 +245,15 @@ impl SeckeyStruct {
     ///
     /// The secret key is encrypted using XOR with a key derived from the password.
     ///
+    /// # Arguments
+    ///
+    /// * `keynum` - The key number identifier
+    /// * `secret_key` - The secret key to encrypt
+    /// * `password` - The password for encryption
+    /// * `kdf_salt` - The salt for key derivation
+    /// * `kdf_opslimit` - Operations limit (N * r * OPSLIMIT_MULTIPLIER)
+    /// * `kdf_memlimit` - Memory limit (N * r * MEMLIMIT_MULTIPLIER)
+    ///
     /// # Errors
     ///
     /// Returns an error if key derivation fails

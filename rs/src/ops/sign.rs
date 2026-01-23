@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Slow test due to scrypt SENSITIVE parameters (N=2^20)
+    #[ignore] // Slow test due to scrypt SENSITIVE parameters (N=2^20, ~1-5 seconds)
     fn test_sign_encrypted_key() {
         let temp_dir = TempDir::new().unwrap();
         let message_path = temp_dir.path().join("message.txt");
@@ -250,6 +250,63 @@ mod tests {
         let result = sign(&options, Some(password)).expect("signing should succeed");
         assert!(sig_path.exists());
         assert!(result.trusted_comment.starts_with("timestamp:"));
+    }
+
+    #[test]
+    fn test_sign_encrypted_key_fast() {
+        // Fast variant using a test fixture with N=2^14 instead of N=2^20
+        // First, generate a fast encrypted key for testing
+        use crate::crypto::generate_keypair;
+        use crate::keys::SeckeyStruct;
+        use rand::RngCore;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Generate a test key with weak scrypt parameters
+        let (secret_key, _public_key, keynum) = generate_keypair();
+        let password = b"testpass";
+        let mut kdf_salt = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut kdf_salt);
+
+        // Use N=2^14 for fast testing (~50ms)
+        let n = 1u64 << 14;
+        let r = 8u64;
+        let kdf_opslimit = 4 * n * r;
+        let kdf_memlimit = 128 * n * r;
+
+        let seckey = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+        )
+        .unwrap();
+
+        // Write the test key file
+        let sk_path = temp_dir.path().join("fast_test.key");
+        let sk_contents = seckey.to_file_contents("test key");
+        fs::write(&sk_path, sk_contents).unwrap();
+
+        // Now test signing with it
+        let message_path = temp_dir.path().join("message.txt");
+        let sig_path = temp_dir.path().join("message.txt.minisig");
+        fs::write(&message_path, b"Fast test message").unwrap();
+
+        let options = SignOptions {
+            secret_key_file: sk_path.display().to_string(),
+            message_file: message_path.display().to_string(),
+            signature_file: Some(sig_path.display().to_string()),
+            prehashed: true,
+            trusted_comment: Some("Fast test".to_string()),
+            untrusted_comment: None,
+            force: false,
+        };
+
+        let result = sign(&options, Some(password)).expect("signing should succeed");
+        assert!(sig_path.exists());
+        assert_eq!(result.trusted_comment, "Fast test");
     }
 
     #[test]

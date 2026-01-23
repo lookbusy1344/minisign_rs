@@ -160,6 +160,82 @@ fn write_secret_key_file(path: &Path, contents: &str) -> Result<()> {
     Ok(())
 }
 
+/// Generate a keypair with custom scrypt parameters (for testing)
+///
+/// This is exposed for testing purposes to allow fast tests with weaker parameters.
+#[cfg(test)]
+fn generate_with_custom_params(
+    options: &GenerateOptions,
+    password: Option<&[u8]>,
+    log_n: u8,
+) -> Result<GenerateResult> {
+    // Check if files already exist (unless force is set)
+    if !options.force {
+        if options.secret_key_file.exists() {
+            return Err(Error::FileExists(options.secret_key_file.clone()));
+        }
+        if options.public_key_file.exists() {
+            return Err(Error::FileExists(options.public_key_file.clone()));
+        }
+    }
+
+    // Ensure password is provided if encryption is requested
+    if !options.no_password && password.is_none() {
+        return Err(Error::PasswordRequired);
+    }
+
+    // Generate the keypair
+    let (secret_key, public_key, keynum) = generate_keypair();
+
+    // Create the secret key structure
+    let seckey = if options.no_password {
+        SeckeyStruct::new_unencrypted(keynum, &secret_key)
+    } else {
+        let pwd = password.unwrap();
+
+        // Generate random salt
+        let mut kdf_salt = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut kdf_salt);
+
+        // Calculate KDF parameters using libsodium formula with custom N
+        let n = 1u64 << log_n;
+        let r = u64::from(SCRYPT_R);
+        let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
+        let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
+
+        SeckeyStruct::new_encrypted(keynum, &secret_key, pwd, kdf_salt, kdf_opslimit, kdf_memlimit)?
+    };
+
+    // Create the public key structure
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    // Generate comments
+    let keynum_hex = keynum.to_hex();
+    let comment = options
+        .comment
+        .clone()
+        .unwrap_or_else(|| format!("minisign public key {keynum_hex}"));
+
+    // Ensure parent directories exist
+    ensure_parent_directory(&options.secret_key_file)?;
+    ensure_parent_directory(&options.public_key_file)?;
+
+    // Write the secret key file
+    let seckey_contents = seckey.to_file_contents("minisign encrypted secret key");
+    write_secret_key_file(&options.secret_key_file, &seckey_contents)?;
+
+    // Write the public key file
+    let pubkey_contents = pubkey.to_file_contents(&comment);
+    std::fs::write(&options.public_key_file, pubkey_contents)
+        .map_err(|e| Error::file_write(&options.public_key_file, e))?;
+
+    Ok(GenerateResult {
+        secret_key_file: options.secret_key_file.clone(),
+        public_key_file: options.public_key_file.clone(),
+        keynum_hex,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,7 +244,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    #[ignore] // Slow test due to scrypt SENSITIVE parameters (N=2^20)
+    #[ignore] // Slow test due to scrypt SENSITIVE parameters (N=2^20, ~1-5 seconds)
     fn test_generate_encrypted_key() {
         let temp_dir = TempDir::new().unwrap();
         let sk_path = temp_dir.path().join("test.key");
@@ -191,6 +267,44 @@ mod tests {
 
         // Check keynum format
         assert_eq!(result.keynum_hex.len(), 16); // 8 bytes = 16 hex chars
+
+        // Verify secret key can be loaded and decrypted
+        let sk_contents = fs::read_to_string(&sk_path).unwrap();
+        let seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
+        assert!(seckey.is_encrypted());
+        seckey.decrypt(password).expect("should decrypt with correct password");
+
+        // Verify wrong password fails
+        let wrong_result = seckey.decrypt(b"wrongpassword");
+        assert!(wrong_result.is_err());
+    }
+
+    #[test]
+    fn test_generate_encrypted_key_fast() {
+        // Fast variant using N=2^14 (~50ms) instead of N=2^20 (~1-5s)
+        // Tests the same logic with weaker security parameters
+        let temp_dir = TempDir::new().unwrap();
+        let sk_path = temp_dir.path().join("test_fast.key");
+        let pk_path = temp_dir.path().join("test_fast.pub");
+
+        let options = GenerateOptions {
+            secret_key_file: sk_path.clone(),
+            public_key_file: pk_path.clone(),
+            comment: Some("Fast test key".to_string()),
+            force: false,
+            no_password: false,
+        };
+
+        let password = b"testpassword";
+        let result = generate_with_custom_params(&options, Some(password), 14)
+            .expect("generation should succeed");
+
+        // Check files were created
+        assert!(sk_path.exists());
+        assert!(pk_path.exists());
+
+        // Check keynum format
+        assert_eq!(result.keynum_hex.len(), 16);
 
         // Verify secret key can be loaded and decrypted
         let sk_contents = fs::read_to_string(&sk_path).unwrap();

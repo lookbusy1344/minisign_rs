@@ -142,7 +142,48 @@ cargo tarpaulin --out Html
 # Check for issues (REQUIRED before commit)
 cargo fmt
 cargo clippy -- -D clippy::all -D clippy::pedantic
+
+# Run slow security tests (full scrypt parameters)
+cargo test -- --ignored --nocapture
 ```
+
+### Scrypt Testing Strategy
+
+**Problem:** Scrypt with production parameters (N=2^20) takes 1-5 seconds per operation, making tests slow.
+
+**Solution:** Dual testing approach for encrypted key operations:
+
+1. **Fast Tests (N=2^14, ~50ms)** - Run by default in CI
+   - Test the logic and encryption/decryption flow
+   - Use weaker scrypt parameters for speed
+   - Example: `test_generate_encrypted_key_fast()`
+   - These verify correctness without security overhead
+
+2. **Slow Tests (N=2^20, ~1-5s)** - Marked with `#[ignore]`
+   - Test with production-strength scrypt parameters
+   - Verify full security properties
+   - Example: `test_generate_encrypted_key()`
+   - Run manually or in pre-release validation
+
+**Rationale:**
+- Scrypt is **intentionally slow** as a security feature (memory-hard KDF)
+- N=2^20 uses ~128MB RAM and makes brute-force attacks prohibitive
+- Fast tests give rapid feedback during development
+- Slow tests ensure security parameters work correctly
+
+**When to run slow tests:**
+```bash
+# Before major releases
+cargo test -- --ignored
+
+# With time budget
+gtimeout 120 cargo test -- --ignored
+```
+
+**Test fixture strategy:**
+- C-generated fixtures in `tests/fixtures/keys/test.key` use N=2^20
+- Compatibility tests verify we can decrypt these (marked `#[ignore]`)
+- Fast variants generate their own keys with N=2^14
 
 ### Compatibility Testing
 
