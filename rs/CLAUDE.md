@@ -21,6 +21,7 @@ This is a **security-critical** pure Rust rewrite of minisign. The implementatio
 - Leverage type system for correctness (newtype pattern for keys/signatures)
 - Zero-copy parsing where possible
 - Explicit lifetimes only when necessary
+- **Avoid magic values:** Use named constants or enumerations instead of hardcoded numbers/strings
 
 ### 3. Test-Driven Development (TDD)
 

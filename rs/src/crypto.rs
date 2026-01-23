@@ -418,19 +418,37 @@ mod tests {
     // The production parameters (log_n=20) are tested in integration tests.
     const TEST_LOG_N: u8 = 10; // N=1024 for fast testing
 
+    // Test constants for scrypt parameters
+    const TEST_SCRYPT_R: u32 = 8;
+    const TEST_SCRYPT_P: u32 = 1;
+
     #[test]
     fn test_derive_key_output_length() {
         let password = b"test password";
         let salt = [0u8; 32];
 
         // Test 32-byte output (used for encryption keys)
-        let key_32 = derive_key_with_params(password, &salt, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 32)
-            .expect("derivation failed");
+        let key_32 = derive_key_with_params(
+            password,
+            &salt,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            32,
+        )
+        .expect("derivation failed");
         assert_eq!(key_32.len(), 32);
 
         // Test 64-byte output (if needed for other purposes)
-        let key_64 = derive_key_with_params(password, &salt, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 64)
-            .expect("derivation failed");
+        let key_64 = derive_key_with_params(
+            password,
+            &salt,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            64,
+        )
+        .expect("derivation failed");
         assert_eq!(key_64.len(), 64);
     }
 
@@ -439,10 +457,24 @@ mod tests {
         let password = b"test password";
         let salt = [0u8; 32];
 
-        let key1 = derive_key_with_params(password, &salt, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 32)
-            .expect("derivation failed");
-        let key2 = derive_key_with_params(password, &salt, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 32)
-            .expect("derivation failed");
+        let key1 = derive_key_with_params(
+            password,
+            &salt,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            32,
+        )
+        .expect("derivation failed");
+        let key2 = derive_key_with_params(
+            password,
+            &salt,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            32,
+        )
+        .expect("derivation failed");
 
         assert_eq!(key1, key2);
     }
@@ -453,10 +485,24 @@ mod tests {
         let password2 = b"password2";
         let salt = [0u8; 32];
 
-        let key1 = derive_key_with_params(password1, &salt, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 32)
-            .expect("derivation failed");
-        let key2 = derive_key_with_params(password2, &salt, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 32)
-            .expect("derivation failed");
+        let key1 = derive_key_with_params(
+            password1,
+            &salt,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            32,
+        )
+        .expect("derivation failed");
+        let key2 = derive_key_with_params(
+            password2,
+            &salt,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            32,
+        )
+        .expect("derivation failed");
 
         assert_ne!(key1, key2);
     }
@@ -468,10 +514,24 @@ mod tests {
         let mut salt2 = [0u8; 32];
         salt2[0] = 1;
 
-        let key1 = derive_key_with_params(password, &salt1, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 32)
-            .expect("derivation failed");
-        let key2 = derive_key_with_params(password, &salt2, TEST_LOG_N, SCRYPT_R, SCRYPT_P, 32)
-            .expect("derivation failed");
+        let key1 = derive_key_with_params(
+            password,
+            &salt1,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            32,
+        )
+        .expect("derivation failed");
+        let key2 = derive_key_with_params(
+            password,
+            &salt2,
+            TEST_LOG_N,
+            TEST_SCRYPT_R,
+            TEST_SCRYPT_P,
+            32,
+        )
+        .expect("derivation failed");
 
         assert_ne!(key1, key2);
     }

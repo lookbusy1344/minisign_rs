@@ -5,8 +5,8 @@
 
 use crate::Result;
 use crate::crypto::{
-    blake2b_256, derive_key_with_params, CHECKSUM_BYTES, KDF_SALT_BYTES, KEYNUM_BYTES, KeyNum,
-    PUBLIC_KEY_BYTES, PublicKey, SECRET_KEY_BYTES, SecretKey,
+    CHECKSUM_BYTES, KDF_SALT_BYTES, KEYNUM_BYTES, KeyNum, PUBLIC_KEY_BYTES, PublicKey,
+    SECRET_KEY_BYTES, SecretKey, blake2b_256, derive_key_with_params,
 };
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64, read_u64_le, write_u64_le};
@@ -29,6 +29,44 @@ const KDF_ALG_NONE: &[u8; 2] = b"\0\0";
 
 /// Checksum algorithm identifier
 const CHK_ALG: &[u8; 2] = b"B2";
+
+// Public key structure byte offsets
+const PUBKEY_SIG_ALG_OFFSET: usize = 0;
+const PUBKEY_SIG_ALG_SIZE: usize = 2;
+const PUBKEY_KEYNUM_OFFSET: usize = 2;
+const PUBKEY_KEYNUM_SIZE: usize = KEYNUM_BYTES;
+const PUBKEY_PK_OFFSET: usize = 10;
+const PUBKEY_PK_SIZE: usize = PUBLIC_KEY_BYTES;
+
+// Secret key structure byte offsets
+const SECKEY_SIG_ALG_OFFSET: usize = 0;
+const SECKEY_SIG_ALG_SIZE: usize = 2;
+const SECKEY_KDF_ALG_OFFSET: usize = 2;
+const SECKEY_KDF_ALG_SIZE: usize = 2;
+const SECKEY_CHK_ALG_OFFSET: usize = 4;
+const SECKEY_CHK_ALG_SIZE: usize = 2;
+const SECKEY_KDF_SALT_OFFSET: usize = 6;
+const SECKEY_KDF_SALT_SIZE: usize = KDF_SALT_BYTES;
+const SECKEY_KDF_OPSLIMIT_OFFSET: usize = 38;
+const SECKEY_KDF_OPSLIMIT_SIZE: usize = 8;
+const SECKEY_KDF_MEMLIMIT_OFFSET: usize = 46;
+const SECKEY_KDF_MEMLIMIT_SIZE: usize = 8;
+const SECKEY_KEYNUM_OFFSET: usize = 54;
+const SECKEY_KEYNUM_SIZE: usize = KEYNUM_BYTES;
+const SECKEY_SK_OFFSET: usize = 62;
+const SECKEY_SK_SIZE: usize = SECRET_KEY_BYTES;
+const SECKEY_CHECKSUM_OFFSET: usize = 126;
+const SECKEY_CHECKSUM_SIZE: usize = CHECKSUM_BYTES;
+
+// Libsodium KDF formula constants
+// opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
+// memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r
+const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
+const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
+
+// Standard scrypt parameters used by minisign
+const SCRYPT_R_STANDARD: u32 = 8;
+const SCRYPT_P_STANDARD: u32 = 1;
 
 /// Public key file structure (42 bytes)
 ///
@@ -65,9 +103,13 @@ impl PubkeyStruct {
     #[must_use]
     pub fn to_bytes(&self) -> [u8; PUBKEY_STRUCT_SIZE] {
         let mut bytes = [0u8; PUBKEY_STRUCT_SIZE];
-        bytes[0..2].copy_from_slice(SIG_ALG);
-        bytes[2..10].copy_from_slice(self.keynum.as_bytes());
-        bytes[10..42].copy_from_slice(self.public_key.as_bytes());
+        let sig_end = PUBKEY_SIG_ALG_OFFSET + PUBKEY_SIG_ALG_SIZE;
+        let keynum_end = PUBKEY_KEYNUM_OFFSET + PUBKEY_KEYNUM_SIZE;
+        let pk_end = PUBKEY_PK_OFFSET + PUBKEY_PK_SIZE;
+
+        bytes[PUBKEY_SIG_ALG_OFFSET..sig_end].copy_from_slice(SIG_ALG);
+        bytes[PUBKEY_KEYNUM_OFFSET..keynum_end].copy_from_slice(self.keynum.as_bytes());
+        bytes[PUBKEY_PK_OFFSET..pk_end].copy_from_slice(self.public_key.as_bytes());
         bytes
     }
 
@@ -87,19 +129,23 @@ impl PubkeyStruct {
             )));
         }
 
+        let sig_end = PUBKEY_SIG_ALG_OFFSET + PUBKEY_SIG_ALG_SIZE;
+        let keynum_end = PUBKEY_KEYNUM_OFFSET + PUBKEY_KEYNUM_SIZE;
+        let pk_end = PUBKEY_PK_OFFSET + PUBKEY_PK_SIZE;
+
         // Verify signature algorithm
-        if &bytes[0..2] != SIG_ALG {
+        if &bytes[PUBKEY_SIG_ALG_OFFSET..sig_end] != SIG_ALG {
             return Err(Error::InvalidPublicKey(
                 "invalid signature algorithm".to_string(),
             ));
         }
 
         let mut keynum_bytes = [0u8; KEYNUM_BYTES];
-        keynum_bytes.copy_from_slice(&bytes[2..10]);
+        keynum_bytes.copy_from_slice(&bytes[PUBKEY_KEYNUM_OFFSET..keynum_end]);
         let keynum = KeyNum::from_bytes(keynum_bytes);
 
         let mut pk_bytes = [0u8; PUBLIC_KEY_BYTES];
-        pk_bytes.copy_from_slice(&bytes[10..42]);
+        pk_bytes.copy_from_slice(&bytes[PUBKEY_PK_OFFSET..pk_end]);
         let public_key = PublicKey::from_bytes(pk_bytes);
 
         Ok(Self { keynum, public_key })
@@ -296,28 +342,33 @@ impl SeckeyStruct {
     /// Returns (`log_n`, r, p) suitable for scrypt
     ///
     /// libsodium uses these formulas:
-    /// - opslimit = 4 * N * r
-    /// - memlimit = 128 * N * r
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+    /// - opslimit = `LIBSODIUM_OPSLIMIT_MULTIPLIER` * N * r
+    /// - memlimit = `LIBSODIUM_MEMLIMIT_MULTIPLIER` * N * r
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
     fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> (u8, u32, u32) {
         // Standard minisign uses r=8, p=1
         // We can derive N from either formula, using memlimit is simpler
-        let r = 8u32;
-        let p = 1u32;
+        let r = SCRYPT_R_STANDARD;
+        let p = SCRYPT_P_STANDARD;
 
-        // N = memlimit / (128 * r)
-        let n = memlimit / (128 * u64::from(r));
+        // N = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * r)
+        let n = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * u64::from(r));
         // Safe cast: log2 of u64 max is ~64, which fits in u8
         let log_n = (n as f64).log2() as u8;
 
         // Verify our calculation is consistent with opslimit
-        // opslimit should equal 4 * N * r
-        let expected_opslimit = 4 * n * u64::from(r);
+        // opslimit should equal LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
+        let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * u64::from(r);
         if expected_opslimit != opslimit {
             // If they don't match, the key might use non-standard parameters
             // Fall back to deriving r from opslimit
             // Safe cast: r values are typically small (8-16)
-            let derived_r = u32::try_from(opslimit / (4 * n)).unwrap_or(r);
+            let derived_r =
+                u32::try_from(opslimit / (LIBSODIUM_OPSLIMIT_MULTIPLIER * n)).unwrap_or(r);
             return (log_n, derived_r, p);
         }
 
@@ -365,21 +416,37 @@ impl SeckeyStruct {
     pub fn to_bytes(&self) -> [u8; SECKEY_STRUCT_SIZE] {
         let mut bytes = [0u8; SECKEY_STRUCT_SIZE];
 
-        bytes[0..2].copy_from_slice(SIG_ALG);
+        let sig_end = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE;
+        let kdf_end = SECKEY_KDF_ALG_OFFSET + SECKEY_KDF_ALG_SIZE;
+        let chk_end = SECKEY_CHK_ALG_OFFSET + SECKEY_CHK_ALG_SIZE;
+        let salt_end = SECKEY_KDF_SALT_OFFSET + SECKEY_KDF_SALT_SIZE;
+        let opslimit_end = SECKEY_KDF_OPSLIMIT_OFFSET + SECKEY_KDF_OPSLIMIT_SIZE;
+        let memlimit_end = SECKEY_KDF_MEMLIMIT_OFFSET + SECKEY_KDF_MEMLIMIT_SIZE;
+        let keynum_end = SECKEY_KEYNUM_OFFSET + SECKEY_KEYNUM_SIZE;
+        let sk_end = SECKEY_SK_OFFSET + SECKEY_SK_SIZE;
+        let checksum_end = SECKEY_CHECKSUM_OFFSET + SECKEY_CHECKSUM_SIZE;
+
+        bytes[SECKEY_SIG_ALG_OFFSET..sig_end].copy_from_slice(SIG_ALG);
 
         if self.encrypted {
-            bytes[2..4].copy_from_slice(KDF_ALG_SCRYPT);
+            bytes[SECKEY_KDF_ALG_OFFSET..kdf_end].copy_from_slice(KDF_ALG_SCRYPT);
         } else {
-            bytes[2..4].copy_from_slice(KDF_ALG_NONE);
+            bytes[SECKEY_KDF_ALG_OFFSET..kdf_end].copy_from_slice(KDF_ALG_NONE);
         }
 
-        bytes[4..6].copy_from_slice(CHK_ALG);
-        bytes[6..38].copy_from_slice(&self.kdf_salt);
-        write_u64_le(&mut bytes[38..46], self.kdf_opslimit);
-        write_u64_le(&mut bytes[46..54], self.kdf_memlimit);
-        bytes[54..62].copy_from_slice(self.keynum.as_bytes());
-        bytes[62..126].copy_from_slice(&self.secret_key_encrypted);
-        bytes[126..158].copy_from_slice(&self.checksum);
+        bytes[SECKEY_CHK_ALG_OFFSET..chk_end].copy_from_slice(CHK_ALG);
+        bytes[SECKEY_KDF_SALT_OFFSET..salt_end].copy_from_slice(&self.kdf_salt);
+        write_u64_le(
+            &mut bytes[SECKEY_KDF_OPSLIMIT_OFFSET..opslimit_end],
+            self.kdf_opslimit,
+        );
+        write_u64_le(
+            &mut bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end],
+            self.kdf_memlimit,
+        );
+        bytes[SECKEY_KEYNUM_OFFSET..keynum_end].copy_from_slice(self.keynum.as_bytes());
+        bytes[SECKEY_SK_OFFSET..sk_end].copy_from_slice(&self.secret_key_encrypted);
+        bytes[SECKEY_CHECKSUM_OFFSET..checksum_end].copy_from_slice(&self.checksum);
 
         bytes
     }
@@ -402,44 +469,54 @@ impl SeckeyStruct {
             )));
         }
 
+        let sig_end = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE;
+        let kdf_end = SECKEY_KDF_ALG_OFFSET + SECKEY_KDF_ALG_SIZE;
+        let chk_end = SECKEY_CHK_ALG_OFFSET + SECKEY_CHK_ALG_SIZE;
+        let salt_end = SECKEY_KDF_SALT_OFFSET + SECKEY_KDF_SALT_SIZE;
+        let opslimit_end = SECKEY_KDF_OPSLIMIT_OFFSET + SECKEY_KDF_OPSLIMIT_SIZE;
+        let memlimit_end = SECKEY_KDF_MEMLIMIT_OFFSET + SECKEY_KDF_MEMLIMIT_SIZE;
+        let keynum_end = SECKEY_KEYNUM_OFFSET + SECKEY_KEYNUM_SIZE;
+        let sk_end = SECKEY_SK_OFFSET + SECKEY_SK_SIZE;
+        let checksum_end = SECKEY_CHECKSUM_OFFSET + SECKEY_CHECKSUM_SIZE;
+
         // Verify signature algorithm
-        if &bytes[0..2] != SIG_ALG {
+        if &bytes[SECKEY_SIG_ALG_OFFSET..sig_end] != SIG_ALG {
             return Err(Error::InvalidSecretKey(
                 "invalid signature algorithm".to_string(),
             ));
         }
 
         // Check KDF algorithm
-        let encrypted = if &bytes[2..4] == KDF_ALG_SCRYPT {
+        let encrypted = if &bytes[SECKEY_KDF_ALG_OFFSET..kdf_end] == KDF_ALG_SCRYPT {
             true
-        } else if &bytes[2..4] == KDF_ALG_NONE {
+        } else if &bytes[SECKEY_KDF_ALG_OFFSET..kdf_end] == KDF_ALG_NONE {
             false
         } else {
             return Err(Error::InvalidSecretKey("invalid KDF algorithm".to_string()));
         };
 
         // Verify checksum algorithm
-        if &bytes[4..6] != CHK_ALG {
+        if &bytes[SECKEY_CHK_ALG_OFFSET..chk_end] != CHK_ALG {
             return Err(Error::InvalidSecretKey(
                 "invalid checksum algorithm".to_string(),
             ));
         }
 
         let mut kdf_salt = [0u8; KDF_SALT_BYTES];
-        kdf_salt.copy_from_slice(&bytes[6..38]);
+        kdf_salt.copy_from_slice(&bytes[SECKEY_KDF_SALT_OFFSET..salt_end]);
 
-        let kdf_opslimit = read_u64_le(&bytes[38..46]);
-        let kdf_memlimit = read_u64_le(&bytes[46..54]);
+        let kdf_opslimit = read_u64_le(&bytes[SECKEY_KDF_OPSLIMIT_OFFSET..opslimit_end]);
+        let kdf_memlimit = read_u64_le(&bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end]);
 
         let mut keynum_bytes = [0u8; KEYNUM_BYTES];
-        keynum_bytes.copy_from_slice(&bytes[54..62]);
+        keynum_bytes.copy_from_slice(&bytes[SECKEY_KEYNUM_OFFSET..keynum_end]);
         let keynum = KeyNum::from_bytes(keynum_bytes);
 
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
-        secret_key_encrypted.copy_from_slice(&bytes[62..126]);
+        secret_key_encrypted.copy_from_slice(&bytes[SECKEY_SK_OFFSET..sk_end]);
 
         let mut checksum = [0u8; CHECKSUM_BYTES];
-        checksum.copy_from_slice(&bytes[126..158]);
+        checksum.copy_from_slice(&bytes[SECKEY_CHECKSUM_OFFSET..checksum_end]);
 
         Ok(Self {
             encrypted,
@@ -701,11 +778,13 @@ mod tests {
         let password = b"test_password";
         let kdf_salt = [42u8; KDF_SALT_BYTES];
         // Use reduced parameters for testing (log_n=14 for reasonable speed)
-        // Using libsodium formulas: opslimit = 4*N*r, memlimit = 128*N*r
+        // Using libsodium formulas:
+        // opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
+        // memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r
         let n = 1u64 << 14; // N = 16384
-        let r = 8u64;
-        let kdf_opslimit = 4 * n * r;
-        let kdf_memlimit = 128 * n * r;
+        let r = u64::from(SCRYPT_R_STANDARD);
+        let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
+        let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
         // Create encrypted secret key
         let encrypted_key = SeckeyStruct::new_encrypted(
@@ -740,9 +819,9 @@ mod tests {
         let kdf_salt = [42u8; KDF_SALT_BYTES];
         // Use reduced parameters for testing
         let n = 1u64 << 14;
-        let r = 8u64;
-        let kdf_opslimit = 4 * n * r;
-        let kdf_memlimit = 128 * n * r;
+        let r = u64::from(SCRYPT_R_STANDARD);
+        let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
+        let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
         let encrypted_key = SeckeyStruct::new_encrypted(
             keynum,
