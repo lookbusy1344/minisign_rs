@@ -531,3 +531,47 @@ fn test_sign_with_legacy_mode() {
         "Legacy mode signature should not be prehashed"
     );
 }
+
+#[test]
+fn test_version_includes_commit_hash() {
+    let output = minisign_cmd()
+        .arg("--version")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let version_string = String::from_utf8_lossy(&output);
+
+    // Version should contain the package version
+    assert!(version_string.contains(env!("CARGO_PKG_VERSION")));
+
+    // Version should contain a commit hash in parentheses (e.g., "0.12.0 (abc1234)")
+    // Commit hash should be 7-8 hex characters
+    assert!(
+        version_string.contains('(') && version_string.contains(')'),
+        "Version should contain parentheses with commit hash"
+    );
+
+    // Extract what's in the parentheses and verify it looks like a commit hash
+    let start = version_string.find('(').expect("Should have opening paren");
+    let end = version_string.find(')').expect("Should have closing paren");
+    let in_parens = &version_string[start + 1..end];
+
+    // Commit hash should be 7-8 hex characters (not "Rust")
+    assert!(
+        in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit()),
+        "Expected commit hash in parentheses, got: {}",
+        in_parens
+    );
+}
+
+#[test]
+fn test_help_shows_version() {
+    minisign_cmd()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
+}
