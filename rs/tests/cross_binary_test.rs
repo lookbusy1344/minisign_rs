@@ -78,8 +78,12 @@ fn test_help_output_similarity() {
     assert!(rust_output.status.success());
 
     let rust_help = String::from_utf8_lossy(&rust_output.stdout);
-    // C minisign outputs help to stdout when run with no arguments
-    let c_help = String::from_utf8_lossy(&c_output.stdout);
+    // C minisign outputs help to stdout on Unix, stderr on Windows
+    let c_help = format!(
+        "{}{}",
+        String::from_utf8_lossy(&c_output.stdout),
+        String::from_utf8_lossy(&c_output.stderr)
+    );
 
     // Check that both have the main operation flags
     // C minisign shows these in usage lines, Rust shows in detailed help
