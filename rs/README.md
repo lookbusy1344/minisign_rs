@@ -20,18 +20,19 @@ A pure Rust implementation of [minisign](https://jedisct1.github.io/minisign/), 
 
 ### Test Coverage
 
-- **103 total tests** covering all operations and CLI behavior
-- **94 unit tests** covering all crypto operations, key handling, and file formats
-- **5 compatibility tests** verifying interoperability with C minisign
+- **134 total tests** covering all operations and CLI behavior
+- **99 unit tests** covering all crypto operations, key handling, and file formats
+- **16 CLI integration tests** using assert_cmd for end-to-end validation
+- **7 compatibility tests** verifying interoperability with C minisign
+- **12 cross-binary tests** ensuring full C minisign compatibility
 - **Fast test suite** using optimized scrypt parameters (~6 seconds)
 - **Slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **CLI integration tests** using assert_cmd for end-to-end validation
 
 ### Code Quality
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **~4,464 lines** of well-documented Rust code
+- **~5,100 lines** of well-documented Rust code
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit

@@ -17,14 +17,14 @@ This is a **security-critical** pure Rust rewrite of minisign. The implementatio
   - `recreate`: Recover public keys from secret keys
   - `change`: Add/remove/change passwords on keys
 - ✅ **CLI Integration**: Complete command-line interface matching C minisign
-- ✅ **Test Suite**: 118 total tests (98 unit + 15 CLI + 5 compatibility), all passing
-- ✅ **Code Quality**: Zero clippy pedantic warnings, ~4,993 lines, zero unsafe code
+- ✅ **Test Suite**: 134 total tests (99 unit + 16 CLI + 7 compatibility + 12 cross-binary), all passing
+- ✅ **Code Quality**: Zero clippy pedantic warnings, ~5,100 lines, zero unsafe code
 - ✅ **CI/CD**: Multi-platform releases, memory safety verification, cross-platform testing
 - ✅ **Documentation**: COMPATIBILITY.md proves 100% C minisign compatibility
 
 **Status**: Ready for production use
 
-**Test Results**: `gtimeout 60 cargo test` - 118 tests pass in ~6 seconds
+**Test Results**: `gtimeout 60 cargo test` - 134 tests pass in ~6 seconds
 
 ### Phase 7 Deliverables (Completed 2026-01-24)
 
@@ -38,7 +38,7 @@ All Phase 7 requirements from the design document have been completed:
 3. ✅ **README updates** - Reflects production-ready status
 4. ✅ **COMPATIBILITY.md** - Comprehensive compatibility documentation
 5. ✅ **Memory safety verification** - Miri checks (`.github/workflows/miri.yml`)
-6. ✅ **Full test suite** - 118 tests passing on all platforms
+6. ✅ **Full test suite** - 134 tests passing on all platforms
 
 **Performance**: Comparable to C minisign (scrypt KDF dominates timing in both)
 
@@ -180,7 +180,7 @@ These commands match the CI workflow exactly (.github/workflows/rust.yml). Runni
 ### Testing Strategy
 
 ```bash
-# Run all tests (118 total: 98 unit + 15 CLI + 5 compatibility)
+# Run all tests (134 total: 99 unit + 16 CLI + 7 compatibility + 12 cross-binary)
 gtimeout 60 cargo test
 
 # Run tests with output
