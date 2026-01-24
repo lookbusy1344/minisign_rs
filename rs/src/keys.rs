@@ -414,11 +414,60 @@ impl SeckeyStruct {
 
     /// Convert opslimit/memlimit to scrypt parameters
     ///
-    /// Returns (`log_n`, r, p) suitable for scrypt
+    /// This function converts libsodium-style memory and operations limits into
+    /// scrypt parameters (`log_n`, r, p) suitable for key derivation.
     ///
-    /// libsodium uses these formulas:
+    /// # Background
+    ///
+    /// The C minisign implementation uses libsodium's scrypt interface, which
+    /// expresses work factors as `opslimit` (CPU/time cost) and `memlimit`
+    /// (memory cost). These are derived from scrypt's native parameters:
     /// - opslimit = `LIBSODIUM_OPSLIMIT_MULTIPLIER` * N * r
     /// - memlimit = `LIBSODIUM_MEMLIMIT_MULTIPLIER` * N * r
+    ///
+    /// # Parameters
+    ///
+    /// - `opslimit`: CPU/time cost factor (operations limit)
+    /// - `memlimit`: Memory cost factor in bytes
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (`log_n`, r, p) where:
+    /// - `log_n`: Base-2 logarithm of N (the main work factor)
+    ///   - Typical range: 14-22 (N = 2^14 to 2^22)
+    ///   - Default for minisign: 20 (N = 2^20 = 1,048,576)
+    ///   - Test configurations often use 14 (N = 2^14 = 16,384)
+    /// - `r`: Block size parameter (typically 8)
+    /// - `p`: Parallelization parameter (typically 1)
+    ///
+    /// # Algorithm
+    ///
+    /// 1. Assumes standard minisign values (r=8, p=1)
+    /// 2. Derives N from memlimit: N = memlimit / (128 * r)
+    /// 3. Computes `log_n` using floating-point log2
+    /// 4. Validates against opslimit to detect non-standard parameters
+    /// 5. Falls back to deriving r from opslimit if validation fails
+    ///
+    /// # Floating-Point Behavior
+    ///
+    /// Uses floating-point arithmetic for log2 calculation. This is safe because:
+    /// - N values are always powers of 2 in standard usage
+    /// - The result is immediately cast to u8
+    /// - Any minor floating-point error is eliminated by truncation
+    /// - The max value of log2(2^64) is 64, well within u8 range
+    ///
+    /// # Non-Standard Parameters
+    ///
+    /// If opslimit doesn't match the expected value (indicating non-standard
+    /// r or p), the function attempts to recover by deriving r from opslimit.
+    /// The `unwrap_or(r)` fallback ensures safe behavior even if recovery fails.
+    ///
+    /// # Security Notes
+    ///
+    /// - Higher `log_n` = exponentially more secure but slower
+    /// - `log_n` < 14: Not recommended (too weak for key derivation)
+    /// - `log_n` = 20: Production default (1-5 seconds per operation)
+    /// - `log_n` > 22: May be excessive for most use cases
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
