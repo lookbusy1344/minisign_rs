@@ -90,6 +90,10 @@ pub struct Cli {
     #[arg(short = 'W')]
     pub no_password: bool,
 
+    /// Read password from file (for testing only - insecure for production use)
+    #[arg(long = "password-file", value_name = "FILE")]
+    pub password_file: Option<PathBuf>,
+
     /// Show help
     #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]
     pub help: Option<bool>,
@@ -185,6 +189,7 @@ mod tests {
             untrusted_comment: None,
             signature_file: None,
             no_password: false,
+            password_file: None,
             help: None,
             version: None,
         };
@@ -213,6 +218,7 @@ mod tests {
             untrusted_comment: None,
             signature_file: None,
             no_password: false,
+            password_file: None,
             help: None,
             version: None,
         };

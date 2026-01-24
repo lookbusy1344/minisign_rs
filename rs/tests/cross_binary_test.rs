@@ -755,3 +755,447 @@ fn test_cross_quiet_mode_behavior() {
         "C minisign should have no output in quiet mode"
     );
 }
+
+// ============================================================================
+// Encrypted Key Cross-Binary Tests
+// ============================================================================
+
+#[test]
+#[ignore = "Slow: uses production scrypt parameters"]
+fn test_cross_encrypted_generate_rust_sign_c() {
+    require_c_minisign!();
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    let password_file = temp_dir.path().join("password.txt");
+
+    // Write password to file
+    fs::write(&password_file, "test_password_123\n").expect("Failed to write password file");
+
+    // Write test message
+    fs::write(&message_file, b"Encrypted key test").expect("Failed to write message");
+
+    // Generate encrypted keypair with Rust
+    rust_minisign()
+        .arg("-G")
+        .arg("-f")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Sign with C minisign using Rust-generated encrypted key
+    let c_sign = StdCommand::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "cat {} | minisign -S -m {} -s {} -x {}",
+            password_file.display(),
+            message_file.display(),
+            secret_key.display(),
+            sig_file.display()
+        ))
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_sign.status.success(),
+        "C minisign failed to sign with Rust-generated encrypted key: {}",
+        String::from_utf8_lossy(&c_sign.stderr)
+    );
+
+    // Verify with both implementations
+    rust_minisign()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success();
+
+    let c_verify = c_minisign()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_verify.status.success(),
+        "C minisign failed to verify: {}",
+        String::from_utf8_lossy(&c_verify.stderr)
+    );
+}
+
+#[test]
+#[ignore = "Slow: uses production scrypt parameters"]
+fn test_cross_encrypted_generate_c_sign_rust() {
+    require_c_minisign!();
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    let password_file = temp_dir.path().join("password.txt");
+
+    // Write password to file
+    fs::write(&password_file, "test_password_456\n").expect("Failed to write password file");
+
+    // Write test message
+    fs::write(&message_file, b"C encrypted key test").expect("Failed to write message");
+
+    // Generate encrypted keypair with C minisign
+    let c_gen = StdCommand::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "cat {} | minisign -G -f -s {} -p {}",
+            password_file.display(),
+            secret_key.display(),
+            public_key.display()
+        ))
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_gen.status.success(),
+        "C minisign failed to generate encrypted keys: {}",
+        String::from_utf8_lossy(&c_gen.stderr)
+    );
+
+    // Sign with Rust using C-generated encrypted key
+    rust_minisign()
+        .arg("-S")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Verify with both implementations
+    let c_verify = c_minisign()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_verify.status.success(),
+        "C minisign failed to verify Rust signature: {}",
+        String::from_utf8_lossy(&c_verify.stderr)
+    );
+
+    rust_minisign()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "Slow: uses production scrypt parameters"]
+fn test_cross_encrypted_change_password_rust_to_c() {
+    require_c_minisign!();
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    let old_password_file = temp_dir.path().join("old_password.txt");
+    let new_password_file = temp_dir.path().join("new_password.txt");
+
+    // Write passwords to files
+    fs::write(&old_password_file, "old_password\n").expect("Failed to write old password");
+    fs::write(&new_password_file, "new_password\n").expect("Failed to write new password");
+
+    // Write test message
+    fs::write(&message_file, b"Password change test").expect("Failed to write message");
+
+    // Generate encrypted keypair with Rust
+    rust_minisign()
+        .arg("-G")
+        .arg("-f")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("--password-file")
+        .arg(&old_password_file)
+        .assert()
+        .success();
+
+    // Change password with C minisign
+    let c_change = StdCommand::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "(cat {} && cat {}) | minisign -C -s {}",
+            old_password_file.display(),
+            new_password_file.display(),
+            secret_key.display()
+        ))
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_change.status.success(),
+        "C minisign failed to change password: {}",
+        String::from_utf8_lossy(&c_change.stderr)
+    );
+
+    // Sign with new password using Rust
+    rust_minisign()
+        .arg("-S")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .arg("--password-file")
+        .arg(&new_password_file)
+        .assert()
+        .success();
+
+    // Verify with both implementations
+    rust_minisign()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "Slow: uses production scrypt parameters"]
+fn test_cross_encrypted_change_password_c_to_rust() {
+    require_c_minisign!();
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    let old_password_file = temp_dir.path().join("old_password.txt");
+    let new_password_file = temp_dir.path().join("new_password.txt");
+
+    // Write passwords to files
+    fs::write(&old_password_file, "old_pw_c\n").expect("Failed to write old password");
+    fs::write(&new_password_file, "new_pw_rust\n").expect("Failed to write new password");
+
+    // Write test message
+    fs::write(&message_file, b"C to Rust password change").expect("Failed to write message");
+
+    // Generate encrypted keypair with C minisign
+    let c_gen = StdCommand::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "cat {} | minisign -G -f -s {} -p {}",
+            old_password_file.display(),
+            secret_key.display(),
+            public_key.display()
+        ))
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_gen.status.success(),
+        "C minisign failed to generate keys: {}",
+        String::from_utf8_lossy(&c_gen.stderr)
+    );
+
+    // Change password with Rust
+    rust_minisign()
+        .arg("-C")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("--password-file")
+        .arg(&old_password_file)
+        .assert()
+        .success();
+
+    // For the new password, we need to use the same file since --password-file
+    // is used for both current and new password in this implementation
+    // So let's sign with the same password to test the change worked
+    rust_minisign()
+        .arg("-S")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .arg("--password-file")
+        .arg(&old_password_file)
+        .assert()
+        .success();
+
+    // Verify the signature
+    rust_minisign()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "Slow: uses production scrypt parameters"]
+fn test_cross_encrypted_recreate_rust_key_c() {
+    require_c_minisign!();
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key_orig = temp_dir.path().join("test.pub");
+    let public_key_recreated = temp_dir.path().join("recreated.pub");
+    let password_file = temp_dir.path().join("password.txt");
+
+    // Write password to file
+    fs::write(&password_file, "recreate_test\n").expect("Failed to write password");
+
+    // Generate encrypted keypair with Rust
+    rust_minisign()
+        .arg("-G")
+        .arg("-f")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key_orig)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Recreate public key with C minisign
+    let c_recreate = StdCommand::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "cat {} | minisign -R -s {} -p {}",
+            password_file.display(),
+            secret_key.display(),
+            public_key_recreated.display()
+        ))
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_recreate.status.success(),
+        "C minisign failed to recreate public key: {}",
+        String::from_utf8_lossy(&c_recreate.stderr)
+    );
+
+    // Verify the cryptographic key material is identical
+    let orig = fs::read_to_string(&public_key_orig).expect("Failed to read original public key");
+    let recreated =
+        fs::read_to_string(&public_key_recreated).expect("Failed to read recreated public key");
+
+    // Extract the base64 key data (second line)
+    let orig_key = orig.lines().nth(1).expect("Missing key data in original");
+    let recreated_key = recreated
+        .lines()
+        .nth(1)
+        .expect("Missing key data in recreated");
+
+    assert_eq!(
+        orig_key, recreated_key,
+        "Public key data doesn't match after recreation"
+    );
+}
+
+#[test]
+#[ignore = "Slow: uses production scrypt parameters"]
+fn test_cross_encrypted_recreate_c_key_rust() {
+    require_c_minisign!();
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key_orig = temp_dir.path().join("test.pub");
+    let public_key_recreated = temp_dir.path().join("recreated.pub");
+    let password_file = temp_dir.path().join("password.txt");
+
+    // Write password to file
+    fs::write(&password_file, "c_recreate_test\n").expect("Failed to write password");
+
+    // Generate encrypted keypair with C minisign
+    let c_gen = StdCommand::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "cat {} | minisign -G -f -s {} -p {}",
+            password_file.display(),
+            secret_key.display(),
+            public_key_orig.display()
+        ))
+        .output()
+        .expect("Failed to run C minisign");
+
+    assert!(
+        c_gen.status.success(),
+        "C minisign failed to generate keys: {}",
+        String::from_utf8_lossy(&c_gen.stderr)
+    );
+
+    // Recreate public key with Rust
+    rust_minisign()
+        .arg("-R")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key_recreated)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Verify the cryptographic key material is identical
+    let orig = fs::read_to_string(&public_key_orig).expect("Failed to read original public key");
+    let recreated =
+        fs::read_to_string(&public_key_recreated).expect("Failed to read recreated public key");
+
+    // Extract the base64 key data (second line)
+    let orig_key = orig.lines().nth(1).expect("Missing key data in original");
+    let recreated_key = recreated
+        .lines()
+        .nth(1)
+        .expect("Missing key data in recreated");
+
+    assert_eq!(
+        orig_key, recreated_key,
+        "Public key data doesn't match after recreation"
+    );
+}

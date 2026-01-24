@@ -1,0 +1,42 @@
+name: Slow Tests
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Run nightly to catch C minisign updates
+    - cron: '0 2 * * *'
+
+jobs:
+  slow-tests:
+    name: Slow Tests (C Compatibility)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: rs
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install C minisign
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y minisign
+
+    - name: Verify C minisign version
+      run: minisign -v
+
+    - name: Build Rust minisign
+      run: cargo build --release
+
+    - name: Run slow/ignored tests
+      run: cargo test --release -- --ignored --nocapture
+      timeout-minutes: 30
+
+    - name: Run cross-binary tests
+      run: cargo test --release --test cross_binary_test -- --test-threads=1 --nocapture
+      timeout-minutes: 15

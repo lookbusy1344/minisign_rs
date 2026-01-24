@@ -64,7 +64,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     let password = if cli.no_password {
         None
     } else {
-        Some(prompt_password("Password: ")?)
+        Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
     let options = GenerateOptions {
@@ -118,7 +118,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     let password = if cli.no_password {
         None
     } else {
-        Some(prompt_password("Password: ")?)
+        Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
     let options = SignOptions {
@@ -210,7 +210,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let password = if cli.no_password {
         None
     } else {
-        Some(prompt_password("Password: ")?)
+        Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
     let options = RecreateOptions {
@@ -243,14 +243,20 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let current_password = if cli.no_password {
         None
     } else {
-        Some(prompt_password("Current password: ")?)
+        Some(prompt_password(
+            "Current password: ",
+            cli.password_file.as_deref(),
+        )?)
     };
 
     // Prompt for new password (if we want one)
     let new_password = if cli.no_password {
         None
     } else {
-        Some(prompt_password("New password: ")?)
+        Some(prompt_password(
+            "New password: ",
+            cli.password_file.as_deref(),
+        )?)
     };
 
     let options = ChangeOptions {
@@ -276,12 +282,20 @@ fn is_interactive() -> bool {
     io::stdin().is_terminal()
 }
 
-/// Prompt for password using rpassword
-fn prompt_password(prompt: &str) -> Result<String> {
+/// Prompt for password using rpassword or read from file
+fn prompt_password(prompt: &str, password_file: Option<&std::path::Path>) -> Result<String> {
+    // If password file is provided, read from it
+    if let Some(path) = password_file {
+        let password = std::fs::read_to_string(path)
+            .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
+        // Trim trailing newline if present
+        return Ok(password.trim_end().to_string());
+    }
+
     // Check if we're in an interactive environment
     if !is_interactive() {
         return Err(Error::Usage(
-            "Cannot prompt for password in non-interactive mode. Use -W flag to skip password."
+            "Cannot prompt for password in non-interactive mode. Use -W flag to skip password or --password-file."
                 .into(),
         ));
     }
