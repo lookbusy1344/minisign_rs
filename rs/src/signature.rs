@@ -491,4 +491,49 @@ mod tests {
 
         assert!(parsed.sig_struct().is_prehashed());
     }
+
+    // Property-based tests
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Property test: SigStruct serialization roundtrip for normal mode
+        #[test]
+        fn prop_sig_struct_roundtrip_normal(
+            keynum_data in prop::array::uniform8(any::<u8>()),
+            sig_data in prop::collection::vec(any::<u8>(), 64..=64)
+        ) {
+            let keynum = crate::crypto::KeyNum(keynum_data);
+            let mut sig_array = [0u8; SIGNATURE_BYTES];
+            sig_array.copy_from_slice(&sig_data);
+            let signature = Signature::from_bytes(sig_array);
+            let sig_struct = SigStruct::new(keynum, signature, false);
+
+            let serialized = sig_struct.to_bytes();
+            let deserialized = SigStruct::from_bytes(&serialized).unwrap();
+
+            prop_assert_eq!(sig_struct.keynum().0, deserialized.keynum().0);
+            prop_assert_eq!(sig_struct.signature().as_bytes(), deserialized.signature().as_bytes());
+            prop_assert_eq!(sig_struct.is_prehashed(), deserialized.is_prehashed());
+        }
+
+        /// Property test: SigStruct serialization roundtrip for prehashed mode
+        #[test]
+        fn prop_sig_struct_roundtrip_prehashed(
+            keynum_data in prop::array::uniform8(any::<u8>()),
+            sig_data in prop::collection::vec(any::<u8>(), 64..=64)
+        ) {
+            let keynum = crate::crypto::KeyNum(keynum_data);
+            let mut sig_array = [0u8; SIGNATURE_BYTES];
+            sig_array.copy_from_slice(&sig_data);
+            let signature = Signature::from_bytes(sig_array);
+            let sig_struct = SigStruct::new(keynum, signature, true);
+
+            let serialized = sig_struct.to_bytes();
+            let deserialized = SigStruct::from_bytes(&serialized).unwrap();
+
+            prop_assert_eq!(sig_struct.keynum().0, deserialized.keynum().0);
+            prop_assert_eq!(sig_struct.signature().as_bytes(), deserialized.signature().as_bytes());
+            prop_assert_eq!(sig_struct.is_prehashed(), deserialized.is_prehashed());
+        }
+    }
 }

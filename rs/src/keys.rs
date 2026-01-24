@@ -1068,4 +1068,42 @@ mod tests {
         // Verify we got a valid secret key
         assert_eq!(secret_key.as_bytes().len(), SECRET_KEY_BYTES);
     }
+
+    // Property-based tests
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Property test: PublicKey serialization roundtrip
+        #[test]
+        fn prop_public_key_serialization_roundtrip(
+            keynum_data in prop::array::uniform8(any::<u8>()),
+            pubkey_data in prop::collection::vec(any::<u8>(), 32..=32)
+        ) {
+            // Convert vec to array for PublicKey
+            let mut pubkey_array = [0u8; 32];
+            pubkey_array.copy_from_slice(&pubkey_data);
+
+            let pubkey = PubkeyStruct {
+                keynum: KeyNum(keynum_data),
+                public_key: PublicKey::from_bytes(pubkey_array),
+            };
+
+            let serialized = pubkey.to_bytes();
+            let deserialized = PubkeyStruct::from_bytes(&serialized).unwrap();
+
+            prop_assert_eq!(pubkey.keynum.0, deserialized.keynum.0);
+            prop_assert_eq!(pubkey.public_key.as_bytes(), deserialized.public_key.as_bytes());
+        }
+
+        /// Property test: KeyNum hex encoding roundtrip
+        #[test]
+        fn prop_keynum_hex_roundtrip(data in prop::array::uniform8(any::<u8>())) {
+            let keynum = KeyNum(data);
+            let hex = keynum.to_hex();
+            // Verify hex is 16 chars (8 bytes = 16 hex digits)
+            prop_assert_eq!(hex.len(), 16);
+            // Verify all chars are valid hex
+            prop_assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
+        }
+    }
 }

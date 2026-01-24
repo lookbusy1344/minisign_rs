@@ -191,4 +191,35 @@ mod tests {
         let mut buf = [0u8; 7];
         write_u64_le(&mut buf, 42);
     }
+
+    // Property-based tests
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Property test: base64 encode/decode roundtrip should preserve data
+        #[test]
+        fn prop_base64_roundtrip(data in prop::collection::vec(any::<u8>(), 0..1000)) {
+            let encoded = encode_base64(&data);
+            let decoded = decode_base64(&encoded).unwrap();
+            prop_assert_eq!(data, decoded);
+        }
+
+        /// Property test: u64 little-endian roundtrip
+        #[test]
+        fn prop_u64_le_roundtrip(value: u64) {
+            let mut buf = [0u8; 8];
+            write_u64_le(&mut buf, value);
+            let decoded = read_u64_le(&buf);
+            prop_assert_eq!(value, decoded);
+        }
+
+        /// Property test: u16 little-endian roundtrip
+        #[test]
+        fn prop_u16_le_roundtrip(value: u16) {
+            let mut buf = [0u8; 2];
+            write_u16_le(&mut buf, value);
+            let decoded = read_u16_le(&buf);
+            prop_assert_eq!(value, decoded);
+        }
+    }
 }
