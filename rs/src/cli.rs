@@ -6,11 +6,11 @@ use crate::errors::{Error, Result};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
-/// A dead simple tool to sign files and verify signatures
+/// A dead simple Rust tool to sign files and verify signatures
 #[derive(Debug, Parser)]
 #[command(name = "minisign")]
 #[command(version = concat!(env!("CARGO_PKG_VERSION"), " (Rust)"))]
-#[command(about = "A dead simple tool to sign files and verify signatures", long_about = None)]
+#[command(about = "A dead simple Rust tool to sign files and verify signatures", long_about = None)]
 #[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]
 #[allow(clippy::struct_excessive_bools)]

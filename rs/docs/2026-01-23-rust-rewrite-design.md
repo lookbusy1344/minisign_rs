@@ -6,20 +6,21 @@
 
 ## Overview
 
-Complete rewrite of minisign in 100% Rust with identical CLI interface. The implementation uses pure Rust cryptography (no C dependencies), follows TDD methodology, and maintains byte-level compatibility with the C implementation.
+Complete rewrite of minisign in 100% Rust with identical CLI interface. The implementation uses pure Rust cryptography (no C dependencies), follows
+TDD methodology, and maintains byte-level compatibility with the C implementation.
 
 ---
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Crypto library | RustCrypto ecosystem | Pure Rust, audited, no C dependencies |
-| CLI parsing | clap v4 | Industry standard, derive macros, excellent errors |
-| Error handling | thiserror + anyhow | Clean library/application separation |
-| Project structure | Single crate (lib + bin) | Simple, testable, matches minisign's focus |
-| Test data | Generated from C implementation | Guarantees behavioral compatibility |
-| Implementation order | Bottom-up | Natural TDD progression |
+| Decision             | Choice                          | Rationale                                          |
+|----------------------|---------------------------------|----------------------------------------------------|
+| Crypto library       | RustCrypto ecosystem            | Pure Rust, audited, no C dependencies              |
+| CLI parsing          | clap v4                         | Industry standard, derive macros, excellent errors |
+| Error handling       | thiserror + anyhow              | Clean library/application separation               |
+| Project structure    | Single crate (lib + bin)        | Simple, testable, matches minisign's focus         |
+| Test data            | Generated from C implementation | Guarantees behavioral compatibility                |
+| Implementation order | Bottom-up                       | Natural TDD progression                            |
 
 ---
 
@@ -59,7 +60,7 @@ version = "0.12.0"
 edition = "2024"
 rust-version = "1.90"
 license = "ISC"
-description = "A dead simple tool to sign files and verify signatures"
+description = "A dead simple Rust tool to sign files and verify signatures"
 
 [dependencies]
 ed25519-dalek = { version = "2", features = ["rand_core"] }
@@ -119,18 +120,19 @@ pub struct KeyNum([u8; KEYNUM_BYTES]);
 
 ### Operations
 
-| Function | Description |
-|----------|-------------|
-| `generate_keypair()` | Generate Ed25519 keypair with random keynum |
-| `sign(sk, msg)` | Deterministic Ed25519 signature |
-| `verify(pk, msg, sig)` | Verify Ed25519 signature |
-| `derive_key(password, salt, ops, mem)` | Scrypt key derivation |
-| `blake2b_256(data)` | Blake2b with 256-bit output (checksums) |
-| `blake2b_512(data)` | Blake2b with 512-bit output (global sig) |
+| Function                               | Description                                 |
+|----------------------------------------|---------------------------------------------|
+| `generate_keypair()`                   | Generate Ed25519 keypair with random keynum |
+| `sign(sk, msg)`                        | Deterministic Ed25519 signature             |
+| `verify(pk, msg, sig)`                 | Verify Ed25519 signature                    |
+| `derive_key(password, salt, ops, mem)` | Scrypt key derivation                       |
+| `blake2b_256(data)`                    | Blake2b with 256-bit output (checksums)     |
+| `blake2b_512(data)`                    | Blake2b with 512-bit output (global sig)    |
 
 ### Scrypt Parameters
 
 Matching libsodium SENSITIVE level:
+
 - `log_n = 20` (N = 2^20 = 1,048,576)
 - `r = 8`
 - `p = 1`
@@ -142,37 +144,37 @@ Matching libsodium SENSITIVE level:
 
 ### Secret Key File (SeckeyStruct)
 
-| Offset | Size | Field | Description |
-|--------|------|-------|-------------|
-| 0 | 2 | sig_alg | "Ed" |
-| 2 | 2 | kdf_alg | "Sc" or "\0\0" |
-| 4 | 2 | chk_alg | "B2" |
-| 6 | 32 | kdf_salt | Scrypt salt |
-| 38 | 8 | kdf_opslimit | Little-endian u64 |
-| 46 | 8 | kdf_memlimit | Little-endian u64 |
-| 54 | 8 | keynum | Key identifier |
-| 62 | 64 | secret_key | Ed25519 secret key (encrypted) |
-| 126 | 32 | checksum | Blake2b-256 of keynum + sk |
+| Offset | Size | Field        | Description                    |
+|--------|------|--------------|--------------------------------|
+| 0      | 2    | sig_alg      | "Ed"                           |
+| 2      | 2    | kdf_alg      | "Sc" or "\0\0"                 |
+| 4      | 2    | chk_alg      | "B2"                           |
+| 6      | 32   | kdf_salt     | Scrypt salt                    |
+| 38     | 8    | kdf_opslimit | Little-endian u64              |
+| 46     | 8    | kdf_memlimit | Little-endian u64              |
+| 54     | 8    | keynum       | Key identifier                 |
+| 62     | 64   | secret_key   | Ed25519 secret key (encrypted) |
+| 126    | 32   | checksum     | Blake2b-256 of keynum + sk     |
 
 **Total: 158 bytes**
 
 ### Public Key File (PubkeyStruct)
 
-| Offset | Size | Field | Description |
-|--------|------|-------|-------------|
-| 0 | 2 | sig_alg | "Ed" |
-| 2 | 8 | keynum | Key identifier |
-| 10 | 32 | public_key | Ed25519 public key |
+| Offset | Size | Field      | Description        |
+|--------|------|------------|--------------------|
+| 0      | 2    | sig_alg    | "Ed"               |
+| 2      | 8    | keynum     | Key identifier     |
+| 10     | 32   | public_key | Ed25519 public key |
 
 **Total: 42 bytes**
 
 ### Signature (SigStruct)
 
-| Offset | Size | Field | Description |
-|--------|------|-------|-------------|
-| 0 | 2 | sig_alg | "Ed" or "ED" (prehashed) |
-| 2 | 8 | keynum | Key identifier |
-| 10 | 64 | signature | Ed25519 signature |
+| Offset | Size | Field     | Description              |
+|--------|------|-----------|--------------------------|
+| 0      | 2    | sig_alg   | "Ed" or "ED" (prehashed) |
+| 2      | 8    | keynum    | Key identifier           |
+| 10     | 64   | signature | Ed25519 signature        |
 
 **Total: 74 bytes**
 
@@ -211,42 +213,42 @@ The global signature signs: `SigStruct.signature || trusted_comment_text`
 
 ### Actions (mutually exclusive)
 
-| Flag | Action | Description |
-|------|--------|-------------|
-| `-G` | Generate | Create new keypair |
-| `-S` | Sign | Sign file(s) |
-| `-V` | Verify | Verify signature |
+| Flag | Action   | Description                         |
+|------|----------|-------------------------------------|
+| `-G` | Generate | Create new keypair                  |
+| `-S` | Sign     | Sign file(s)                        |
+| `-V` | Verify   | Verify signature                    |
 | `-R` | Recreate | Recreate public key from secret key |
-| `-C` | Change | Change/remove password |
+| `-C` | Change   | Change/remove password              |
 
 ### Common Options
 
-| Flag | Argument | Description |
-|------|----------|-------------|
-| `-f` | - | Force overwrite |
-| `-H` | - | Prehashed message |
-| `-l` | - | Legacy format (sign only) |
-| `-m` | file | Message file |
-| `-o` | - | Output on verification |
-| `-p` | file | Public key file |
-| `-P` | key | Public key (base64) |
-| `-q` | - | Quiet mode |
-| `-Q` | - | Pretty quiet (trusted comment only) |
-| `-s` | file | Secret key file |
-| `-t` | text | Trusted comment |
-| `-c` | text | Untrusted comment |
-| `-x` | file | Signature file |
-| `-W` | - | No password (generate/change) |
-| `-h` | - | Help |
-| `-v` | - | Version |
+| Flag | Argument | Description                         |
+|------|----------|-------------------------------------|
+| `-f` | -        | Force overwrite                     |
+| `-H` | -        | Prehashed message                   |
+| `-l` | -        | Legacy format (sign only)           |
+| `-m` | file     | Message file                        |
+| `-o` | -        | Output on verification              |
+| `-p` | file     | Public key file                     |
+| `-P` | key      | Public key (base64)                 |
+| `-q` | -        | Quiet mode                          |
+| `-Q` | -        | Pretty quiet (trusted comment only) |
+| `-s` | file     | Secret key file                     |
+| `-t` | text     | Trusted comment                     |
+| `-c` | text     | Untrusted comment                   |
+| `-x` | file     | Signature file                      |
+| `-W` | -        | No password (generate/change)       |
+| `-h` | -        | Help                                |
+| `-v` | -        | Version                             |
 
 ### Default Paths
 
-| Type | Unix | Windows |
-|------|------|---------|
+| Type       | Unix                       | Windows                                |
+|------------|----------------------------|----------------------------------------|
 | Secret key | `~/.minisign/minisign.key` | `%USERPROFILE%\.minisign\minisign.key` |
-| Public key | `./minisign.pub` | `.\minisign.pub` |
-| Signature | `<file>.minisig` | `<file>.minisig` |
+| Public key | `./minisign.pub`           | `.\minisign.pub`                       |
+| Signature  | `<file>.minisig`           | `<file>.minisig`                       |
 
 ---
 
@@ -254,13 +256,13 @@ The global signature signs: `SigStruct.signature || trusted_comment_text`
 
 ### Cross-Platform Considerations
 
-| Concern | Solution |
-|---------|----------|
-| Home directory | `dirs` crate (`dirs::home_dir()`) |
-| Path separators | `std::path::Path` handles this |
-| File permissions | `std::os::unix::fs::PermissionsExt` on Unix, skip on Windows |
-| Terminal password input | `rpassword` crate |
-| Line endings | Read/write in binary mode, handle both |
+| Concern                 | Solution                                                     |
+|-------------------------|--------------------------------------------------------------|
+| Home directory          | `dirs` crate (`dirs::home_dir()`)                            |
+| Path separators         | `std::path::Path` handles this                               |
+| File permissions        | `std::os::unix::fs::PermissionsExt` on Unix, skip on Windows |
+| Terminal password input | `rpassword` crate                                            |
+| Line endings            | Read/write in binary mode, handle both                       |
 
 ### Unix-Specific
 
@@ -291,13 +293,13 @@ Each module has inline `#[cfg(test)]` tests:
 
 Located in `tests/`:
 
-| Test File | Coverage |
-|-----------|----------|
+| Test File          | Coverage                    |
+|--------------------|-----------------------------|
 | `compatibility.rs` | Verify C-generated fixtures |
-| `generate_test.rs` | Key generation all modes |
-| `sign_test.rs` | Signing with all options |
-| `verify_test.rs` | Verification all modes |
-| `cli_test.rs` | End-to-end CLI behavior |
+| `generate_test.rs` | Key generation all modes    |
+| `sign_test.rs`     | Signing with all options    |
+| `verify_test.rs`   | Verification all modes      |
+| `cli_test.rs`      | End-to-end CLI behavior     |
 
 ### Test Fixtures
 
@@ -329,6 +331,7 @@ fixtures/
 ### Property-Based Testing
 
 Using `proptest` for:
+
 - Base64 encode/decode roundtrips
 - Signature file parsing with arbitrary input
 - UTF-8 validation edge cases
@@ -340,11 +343,13 @@ Using `proptest` for:
 ### Phase 1: Foundation (Week 1)
 
 **Deliverables:**
+
 - Cargo project initialized
 - `errors.rs`: All error types defined
 - `formats.rs`: Base64, little-endian helpers
 
 **Tests:**
+
 - Base64 roundtrip (random data)
 - Endianness correctness (known values)
 - Error type coverage
@@ -356,12 +361,14 @@ Using `proptest` for:
 ### Phase 2: Crypto Layer (Week 2)
 
 **Deliverables:**
+
 - `crypto.rs`: Complete crypto wrapper
 - Ed25519 sign/verify
 - Blake2b (256 and 512)
 - Scrypt with fallback
 
 **Tests:**
+
 - Sign/verify roundtrip
 - KDF output matches C libsodium vectors
 - Blake2b matches known test vectors
@@ -373,12 +380,14 @@ Using `proptest` for:
 ### Phase 3: Key Structures (Week 3)
 
 **Deliverables:**
+
 - `keys.rs`: SeckeyStruct, PubkeyStruct
 - Key file parsing and writing
 - Password encryption/decryption
 - Checksum validation
 
 **Tests:**
+
 - Parse C-generated keys
 - Roundtrip serialization
 - Encryption/decryption with known passwords
@@ -390,12 +399,14 @@ Using `proptest` for:
 ### Phase 4: Signature Structures (Week 4)
 
 **Deliverables:**
+
 - `signature.rs`: SigStruct, global signature
 - Signature file parsing
 - Trusted comment handling
 - Prehash mode support
 
 **Tests:**
+
 - Parse C-generated signatures
 - Trusted comment validation
 - Global signature verification
@@ -407,6 +418,7 @@ Using `proptest` for:
 ### Phase 5: Operations (Week 5-6)
 
 **Deliverables:**
+
 - `ops/verify.rs`: Complete verification
 - `ops/sign.rs`: Complete signing
 - `ops/generate.rs`: Key generation
@@ -414,6 +426,7 @@ Using `proptest` for:
 - `ops/change.rs`: Password management
 
 **Tests:**
+
 - Verify C-generated signatures
 - Sign and verify with C minisign (cross-check)
 - Generate keys usable by C minisign
@@ -425,12 +438,14 @@ Using `proptest` for:
 ### Phase 6: CLI Integration (Week 7)
 
 **Deliverables:**
+
 - `cli.rs`: Complete clap interface
 - `main.rs`: Wiring and error handling
 - Output modes (-q, -Q, -o)
 - Exit codes matching C
 
 **Tests:**
+
 - assert_cmd end-to-end tests
 - All flag combinations
 - Error message format matching
@@ -442,12 +457,14 @@ Using `proptest` for:
 ### Phase 7: Polish & Release (Week 8)
 
 **Deliverables:**
+
 - Cross-platform CI (Linux, macOS, Windows)
 - Release binaries
 - README updates
 - COMPATIBILITY.md documenting any differences
 
 **Tests:**
+
 - Full test suite on all platforms
 - Performance comparison with C version
 - Memory safety verification (miri)
@@ -469,6 +486,7 @@ Using `proptest` for:
 ### Documented Differences
 
 If C bugs are found:
+
 - Document in COMPATIBILITY.md
 - Default to matching C behavior
 - Consider `--strict` flag for correct behavior
@@ -505,13 +523,13 @@ If C bugs are found:
 ## Open Questions
 
 1. **Should we support the Zig build's libzodium mode?**
-   - Recommendation: No, pure Rust is sufficient
+    - Recommendation: No, pure Rust is sufficient
 
 2. **MSRV policy?**
-   - Recommendation: 1.90+, update yearly
+    - Recommendation: 1.90+, update yearly
 
 3. **Async support?**
-   - Recommendation: No, minisign operations are inherently blocking
+    - Recommendation: No, minisign operations are inherently blocking
 
 ---
 

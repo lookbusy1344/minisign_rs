@@ -27,7 +27,9 @@ fn test_help_flag() {
         .arg("-h")
         .assert()
         .success()
-        .stdout(predicate::str::contains("A dead simple tool to sign files"));
+        .stdout(predicate::str::contains(
+            "A dead simple Rust tool to sign files",
+        ));
 }
 
 #[test]

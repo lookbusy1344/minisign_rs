@@ -4,7 +4,7 @@ version = "0.12.0"
 edition = "2024"
 rust-version = "1.90"
 license = "ISC"
-description = "A dead simple (Rust) tool to sign files and verify signatures"
+description = "A dead simple Rust tool to sign files and verify signatures"
 
 [dependencies]
 ed25519-dalek = { version = "2", features = ["rand_core"] }
