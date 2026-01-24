@@ -35,3 +35,8 @@ path = "src/main.rs"
 [lib]
 name = "minisign"
 path = "src/lib.rs"
+
+# Optimize scrypt even in debug builds for acceptable test performance
+# Scrypt is CPU-intensive and >30x slower without optimizations
+[profile.dev.package.scrypt]
+opt-level = 3
