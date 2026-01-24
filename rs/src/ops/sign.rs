@@ -60,11 +60,11 @@ pub struct SignResult {
 pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
     // Load and decrypt the secret key
     let seckey = load_secret_key(&options.secret_key_file)?;
-    let secret_key = if seckey.is_encrypted() {
+    let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = password.ok_or(Error::PasswordRequired)?;
-        (seckey.decrypt(pwd)?).0
+        seckey.decrypt(pwd)?
     } else {
-        seckey.get_unencrypted_secret_key()?
+        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
     };
 
     // Load the message
@@ -85,7 +85,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     // Create the signature
     let sig_box = create_signature(
         &secret_key,
-        *seckey.keynum(),
+        keynum,
         &message,
         options.prehashed,
         options.trusted_comment.as_deref(),

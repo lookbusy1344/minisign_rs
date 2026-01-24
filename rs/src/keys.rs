@@ -302,7 +302,8 @@ impl SeckeyStruct {
         encrypted_keynum.copy_from_slice(&encrypted_blob[0..KEYNUM_BYTES]);
 
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
-        secret_key_encrypted.copy_from_slice(&encrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
+        secret_key_encrypted
+            .copy_from_slice(&encrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
 
         let mut checksum = [0u8; CHECKSUM_BYTES];
         checksum.copy_from_slice(&encrypted_blob[(KEYNUM_BYTES + SECRET_KEY_BYTES)..]);
@@ -361,7 +362,8 @@ impl SeckeyStruct {
         let decrypted_keynum = KeyNum::from_bytes(decrypted_keynum_bytes);
 
         let mut secret_key_bytes = [0u8; SECRET_KEY_BYTES];
-        secret_key_bytes.copy_from_slice(&decrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
+        secret_key_bytes
+            .copy_from_slice(&decrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
 
         let mut decrypted_checksum = [0u8; CHECKSUM_BYTES];
         decrypted_checksum.copy_from_slice(&decrypted_blob[(KEYNUM_BYTES + SECRET_KEY_BYTES)..]);
@@ -608,7 +610,7 @@ impl SeckeyStruct {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
-            keynum, // Contains encrypted keynum if encrypted, plaintext if not
+            keynum,           // Contains encrypted keynum if encrypted, plaintext if not
             encrypted_keynum, // Stores encrypted keynum for roundtrip serialization
             secret_key_encrypted,
             checksum,

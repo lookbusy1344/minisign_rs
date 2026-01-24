@@ -60,17 +60,17 @@ pub fn change(
     let seckey = load_secret_key(&options.secret_key_file)?;
 
     // Decrypt the secret key with old password
-    let secret_key = if seckey.is_encrypted() {
+    let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = old_password.ok_or(Error::PasswordRequired)?;
-        (seckey.decrypt(pwd)?).0
+        seckey.decrypt(pwd)?
     } else {
-        seckey.get_unencrypted_secret_key()?
+        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
     };
 
     // Create new secret key structure with new password
     let new_seckey = if options.remove_password {
         // Remove encryption
-        SeckeyStruct::new_unencrypted(*seckey.keynum(), &secret_key)
+        SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
         // Re-encrypt with new password
         let new_pwd = new_password.ok_or(Error::PasswordRequired)?;
@@ -86,7 +86,7 @@ pub fn change(
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
         SeckeyStruct::new_encrypted(
-            *seckey.keynum(),
+            keynum,
             &secret_key,
             new_pwd,
             kdf_salt,
@@ -139,15 +139,15 @@ fn change_with_custom_params(
 ) -> Result<ChangeResult> {
     let seckey = load_secret_key(&options.secret_key_file)?;
 
-    let secret_key = if seckey.is_encrypted() {
+    let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = old_password.ok_or(Error::PasswordRequired)?;
-        (seckey.decrypt(pwd)?).0
+        seckey.decrypt(pwd)?
     } else {
-        seckey.get_unencrypted_secret_key()?
+        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
     };
 
     let new_seckey = if options.remove_password {
-        SeckeyStruct::new_unencrypted(*seckey.keynum(), &secret_key)
+        SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
         let new_pwd = new_password.ok_or(Error::PasswordRequired)?;
 
@@ -160,7 +160,7 @@ fn change_with_custom_params(
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
         SeckeyStruct::new_encrypted(
-            *seckey.keynum(),
+            keynum,
             &secret_key,
             new_pwd,
             kdf_salt,

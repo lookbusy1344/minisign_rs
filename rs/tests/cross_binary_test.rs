@@ -851,9 +851,16 @@ fn test_cross_encrypted_generate_c_sign_rust() {
     let message_file = temp_dir.path().join("message.txt");
     let sig_file = temp_dir.path().join("message.txt.minisig");
     let password_file = temp_dir.path().join("password.txt");
+    let password_file_double = temp_dir.path().join("password_double.txt");
 
-    // Write password to file
+    // Write password to file (once for Rust operations)
     fs::write(&password_file, "test_password_456\n").expect("Failed to write password file");
+    // Write password twice for C minisign -G confirmation
+    fs::write(
+        &password_file_double,
+        "test_password_456\ntest_password_456\n",
+    )
+    .expect("Failed to write double password file");
 
     // Write test message
     fs::write(&message_file, b"C encrypted key test").expect("Failed to write message");
@@ -863,7 +870,7 @@ fn test_cross_encrypted_generate_c_sign_rust() {
         .arg("-c")
         .arg(format!(
             "cat {} | minisign -G -f -s {} -p {}",
-            password_file.display(),
+            password_file_double.display(),
             secret_key.display(),
             public_key.display()
         ))
@@ -932,10 +939,14 @@ fn test_cross_encrypted_change_password_rust_to_c() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
     let old_password_file = temp_dir.path().join("old_password.txt");
     let new_password_file = temp_dir.path().join("new_password.txt");
+    let new_password_file_double = temp_dir.path().join("new_password_double.txt");
 
     // Write passwords to files
     fs::write(&old_password_file, "old_password\n").expect("Failed to write old password");
     fs::write(&new_password_file, "new_password\n").expect("Failed to write new password");
+    // New password needs to be twice for C minisign -C confirmation
+    fs::write(&new_password_file_double, "new_password\nnew_password\n")
+        .expect("Failed to write new password double");
 
     // Write test message
     fs::write(&message_file, b"Password change test").expect("Failed to write message");
@@ -959,7 +970,7 @@ fn test_cross_encrypted_change_password_rust_to_c() {
         .arg(format!(
             "(cat {} && cat {}) | minisign -C -s {}",
             old_password_file.display(),
-            new_password_file.display(),
+            new_password_file_double.display(),
             secret_key.display()
         ))
         .output()
@@ -1009,10 +1020,14 @@ fn test_cross_encrypted_change_password_c_to_rust() {
     let message_file = temp_dir.path().join("message.txt");
     let sig_file = temp_dir.path().join("message.txt.minisig");
     let old_password_file = temp_dir.path().join("old_password.txt");
+    let old_password_file_double = temp_dir.path().join("old_password_double.txt");
     let new_password_file = temp_dir.path().join("new_password.txt");
 
     // Write passwords to files
     fs::write(&old_password_file, "old_pw_c\n").expect("Failed to write old password");
+    // Old password twice for C minisign -G confirmation
+    fs::write(&old_password_file_double, "old_pw_c\nold_pw_c\n")
+        .expect("Failed to write old password double");
     fs::write(&new_password_file, "new_pw_rust\n").expect("Failed to write new password");
 
     // Write test message
@@ -1023,7 +1038,7 @@ fn test_cross_encrypted_change_password_c_to_rust() {
         .arg("-c")
         .arg(format!(
             "cat {} | minisign -G -f -s {} -p {}",
-            old_password_file.display(),
+            old_password_file_double.display(),
             secret_key.display(),
             public_key.display()
         ))
@@ -1148,16 +1163,20 @@ fn test_cross_encrypted_recreate_c_key_rust() {
     let public_key_orig = temp_dir.path().join("test.pub");
     let public_key_recreated = temp_dir.path().join("recreated.pub");
     let password_file = temp_dir.path().join("password.txt");
+    let password_file_double = temp_dir.path().join("password_double.txt");
 
-    // Write password to file
+    // Write password to file (once for Rust operations)
     fs::write(&password_file, "c_recreate_test\n").expect("Failed to write password");
+    // Write password twice for C minisign -G confirmation
+    fs::write(&password_file_double, "c_recreate_test\nc_recreate_test\n")
+        .expect("Failed to write double password");
 
     // Generate encrypted keypair with C minisign
     let c_gen = StdCommand::new("sh")
         .arg("-c")
         .arg(format!(
             "cat {} | minisign -G -f -s {} -p {}",
-            password_file.display(),
+            password_file_double.display(),
             secret_key.display(),
             public_key_orig.display()
         ))
