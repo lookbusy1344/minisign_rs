@@ -40,8 +40,17 @@ cargo test -- --ignored
 - Explicit lifetimes only when necessary
 - Named constants over magic values
 
-### 3. Test-Driven Development
-- Write tests first, watch them fail, implement, refactor
+### 3. Test-Driven Development (TDD Required)
+
+**Use TDD for all changes** - This is non-negotiable for a security project:
+
+1. **Write the test first** - Define expected behavior before implementing
+2. **Watch it fail** - Verify test fails for the right reason
+3. **Implement minimally** - Write just enough code to pass
+4. **Refactor** - Improve code while keeping tests green
+5. **Repeat** - Build incrementally with confidence
+
+Requirements:
 - Every function must have unit tests in `#[cfg(test)]` modules
 - >90% code coverage per module
 - Property-based tests for parsers/serializers (proptest)
