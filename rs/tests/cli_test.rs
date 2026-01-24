@@ -562,8 +562,7 @@ fn test_version_includes_commit_hash() {
     // Commit hash should be 7-8 hex characters (not "Rust")
     assert!(
         in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit()),
-        "Expected commit hash in parentheses, got: {}",
-        in_parens
+        "Expected commit hash in parentheses, got: {in_parens}"
     );
 }
 
