@@ -17,14 +17,16 @@ This is a **security-critical** pure Rust rewrite of minisign. The implementatio
   - `recreate`: Recover public keys from secret keys
   - `change`: Add/remove/change passwords on keys
 - ✅ **CLI Integration**: Complete command-line interface matching C minisign
-- ✅ **Test Suite**: 134 total tests (99 unit + 16 CLI + 7 compatibility + 12 cross-binary), all passing
+- ✅ **Test Suite**: 159 total tests (107 unit + 16 CLI + 7 compatibility + 12 cross-binary + 6 edge cases + 11 slow), all passing
 - ✅ **Code Quality**: Zero clippy pedantic warnings, ~5,100 lines, zero unsafe code
 - ✅ **CI/CD**: Multi-platform releases, memory safety verification, cross-platform testing
 - ✅ **Documentation**: COMPATIBILITY.md proves 100% C minisign compatibility
 
 **Status**: Ready for production use
 
-**Test Results**: `gtimeout 60 cargo test` - 134 tests pass in ~6 seconds
+**Test Results**: 
+- Fast tests: `cargo test` - 148 tests pass in ~9 seconds
+- Slow tests: `cargo test -- --ignored` - 11 tests pass in ~16 seconds
 
 ### Phase 7 Deliverables (Completed 2026-01-24)
 
@@ -80,7 +82,8 @@ All Phase 7 requirements from the design document have been completed:
 - **Property-based tests** for parsers and serializers (using `proptest`)
 - **Integration tests** in `tests/` for end-to-end behavior
 - **Compatibility tests** verifying interoperability with C minisign
-- All tests must run with `gtimeout 120 cargo test`
+- Fast tests must complete in under 15 seconds
+- Slow tests should complete in under 30 seconds
 
 #### Test Categories
 
@@ -142,14 +145,19 @@ mod tests {
    - Pedantic mode catches subtle issues (ignore_without_reason, unreadable_literal, uninlined_format_args, etc.)
    - Must pass with zero warnings before committing
 
-3. **Run full test suite:** `gtimeout 60 cargo test`
-   - All tests must pass
+3. **Run fast test suite:** `cargo test`
+   - All 148 fast tests must pass (~9 seconds)
    - No skipped tests
 
-4. **Security audit:** `cargo audit` (if available)
+4. **Run slow security tests:** `cargo test -- --ignored`
+   - All 11 slow tests must pass (~16 seconds)
+   - With performance improvements, these are now fast enough to run before every commit
+   - Verifies production scrypt parameters work correctly
+
+5. **Security audit:** `cargo audit` (if available)
    - Check for known vulnerabilities
 
-5. **Manual verification:**
+6. **Manual verification:**
    - No `unsafe` blocks
    - No `.unwrap()` or `.expect()` in production code paths
    - No panics in production code paths
@@ -160,9 +168,12 @@ mod tests {
 ```bash
 cargo fmt
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
-gtimeout 60 cargo test
+cargo test                    # 148 fast tests (~9s)
+cargo test -- --ignored       # 11 slow tests (~16s) - performance improved, run before committing
 ```
 These commands match the CI workflow exactly (.github/workflows/rust.yml). Running just `cargo clippy` is insufficient.
+
+**Note:** Slow tests now complete in ~16 seconds thanks to performance improvements. They should be run before every commit to verify production scrypt parameters work correctly.
 
 **CI Workflows:**
 - **rust.yml**: Runs on every push - builds, clippy, tests on Linux/macOS/Windows
@@ -180,14 +191,20 @@ These commands match the CI workflow exactly (.github/workflows/rust.yml). Runni
 ### Testing Strategy
 
 ```bash
-# Run all tests (134 total: 99 unit + 16 CLI + 7 compatibility + 12 cross-binary)
-gtimeout 60 cargo test
+# Run fast tests (148 tests: 107 unit + 16 CLI + 7 compatibility + 12 cross-binary + 6 edge cases)
+cargo test                          # ~9 seconds
+
+# Run slow security tests (11 tests marked #[ignore])
+cargo test -- --ignored             # ~16 seconds
+
+# Run ALL tests (159 total)
+cargo test && cargo test -- --ignored    # ~25 seconds
 
 # Run tests with output
-gtimeout 60 cargo test -- --nocapture
+cargo test -- --nocapture
 
 # Run specific test
-gtimeout 60 cargo test test_name
+cargo test test_name
 
 # Run only unit tests
 cargo test --lib
@@ -205,9 +222,6 @@ cargo tarpaulin --out Html
 cargo fmt
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 
-# Run slow security tests (full scrypt parameters - 5 tests marked #[ignore])
-cargo test -- --ignored --nocapture
-
 # Memory safety check (requires nightly Rust)
 cargo +nightly miri test --lib
 ```
@@ -218,17 +232,19 @@ cargo +nightly miri test --lib
 
 **Solution:** Dual testing approach for encrypted key operations:
 
-1. **Fast Tests (N=2^14, ~50ms)** - Run by default in CI
-   - Test the logic and encryption/decryption flow
+1. **Fast Tests (N=2^14, ~50ms per operation)** - Run by default in CI
+   - 148 tests covering logic and encryption/decryption flow
    - Use weaker scrypt parameters for speed
    - Example: `test_generate_encrypted_key_fast()`
-   - These verify correctness without security overhead
+   - Complete in ~9 seconds total
+   - Verify correctness without security overhead
 
-2. **Slow Tests (N=2^20, ~1-5s)** - Marked with `#[ignore]`
-   - Test with production-strength scrypt parameters
+2. **Slow Tests (N=2^20, ~1-5s per operation)** - Marked with `#[ignore]`
+   - 11 tests with production-strength scrypt parameters
    - Verify full security properties
    - Example: `test_generate_encrypted_key()`
-   - Run manually or in pre-release validation
+   - Complete in ~16 seconds total (performance improved!)
+   - **Should be run before every commit** - now fast enough
 
 **Rationale:**
 - Scrypt is **intentionally slow** as a security feature (memory-hard KDF)
@@ -238,12 +254,14 @@ cargo +nightly miri test --lib
 
 **When to run slow tests:**
 ```bash
-# Before major releases
+# Before EVERY commit (performance improved - only ~16 seconds)
 cargo test -- --ignored
 
-# With time budget
-gtimeout 120 cargo test -- --ignored
+# Run all tests together (~25 seconds total)
+cargo test && cargo test -- --ignored
 ```
+
+**Performance Note:** Recent optimizations have improved slow test performance significantly. What previously took 1-5 seconds per operation now completes the entire 11-test suite in ~16 seconds. This makes it practical to run slow tests before every commit, ensuring production scrypt parameters are always verified.
 
 **Test fixture strategy:**
 - C-generated fixtures in `tests/fixtures/keys/test.key` use N=2^20

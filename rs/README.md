@@ -20,13 +20,15 @@ A pure Rust implementation of [minisign](https://jedisct1.github.io/minisign/), 
 
 ### Test Coverage
 
-- **134 total tests** covering all operations and CLI behavior
-- **99 unit tests** covering all crypto operations, key handling, and file formats
+- **159 total tests** covering all operations and CLI behavior
+- **107 unit tests** covering all crypto operations, key handling, and file formats
 - **16 CLI integration tests** using assert_cmd for end-to-end validation
 - **7 compatibility tests** verifying interoperability with C minisign
 - **12 cross-binary tests** ensuring full C minisign compatibility
-- **Fast test suite** using optimized scrypt parameters (~6 seconds)
-- **Slow security tests** using production scrypt parameters (marked `#[ignore]`)
+- **6 edge case tests** for unicode, symlinks, and large files
+- **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
+- **Fast test suite** using optimized scrypt parameters (~9 seconds)
+- **Slow test suite** with production scrypt parameters (~16 seconds)
 
 ### Code Quality
 
@@ -61,11 +63,14 @@ Download from the [releases page](https://github.com/jedisct1/minisign/releases)
 # Build the project
 cargo build --release
 
-# Run tests (fast)
-gtimeout 60 cargo test
+# Run tests (fast - 148 tests, ~9 seconds)
+cargo test
 
-# Run tests including slow security tests
-gtimeout 120 cargo test -- --ignored
+# Run slow security tests (11 tests, ~16 seconds)
+cargo test -- --ignored
+
+# Run all tests (159 tests, ~25 seconds)
+cargo test && cargo test -- --ignored
 
 # Check code quality
 cargo fmt --check
@@ -88,17 +93,20 @@ cargo test test_sign_verify_roundtrip
 
 The project uses a dual testing strategy for operations involving scrypt:
 
-- **Fast tests** (default): Use N=2^14 (~50ms per operation)
-- **Slow tests** (`#[ignore]`): Use N=2^20 (~1-5s per operation)
+- **Fast tests** (148 tests, default): Use N=2^14 (~50ms per operation)
+- **Slow tests** (11 tests, `#[ignore]`): Use N=2^20 (~1-5s per operation)
 
-Fast tests provide rapid feedback during development, while slow tests ensure production security parameters work correctly.
+Fast tests provide rapid feedback during development, while slow tests verify production security parameters work correctly. With recent performance improvements, slow tests now complete in ~16 seconds.
 
 ```bash
-# Run only fast tests (default)
+# Run only fast tests (default, ~9 seconds)
 cargo test
 
-# Run slow security tests
-cargo test -- --ignored --nocapture
+# Run slow security tests (~16 seconds)
+cargo test -- --ignored
+
+# Run all tests (~25 seconds)
+cargo test && cargo test -- --ignored
 ```
 
 ## Architecture
@@ -234,10 +242,13 @@ cargo fmt
 # 2. Run clippy (pedantic mode)
 cargo clippy -- -D clippy::all -D clippy::pedantic
 
-# 3. Run full test suite
-gtimeout 60 cargo test
+# 3. Run fast test suite (~9 seconds)
+cargo test
 
-# 4. Verify no unsafe code or unwraps in production paths
+# 4. Run slow security tests (~16 seconds)
+cargo test -- --ignored
+
+# 5. Verify no unsafe code or unwraps in production paths
 ```
 
 ### Adding New Features
