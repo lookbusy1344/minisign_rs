@@ -5,6 +5,8 @@
 
 A dead simple tool to sign files and verify signatures.
 
+A Rust port of this project is in the [rs](rs/) directory.
+
 ## Table of Contents
 
 - [Minisign](#minisign)
