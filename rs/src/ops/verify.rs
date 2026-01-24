@@ -116,6 +116,14 @@ fn verify_message_signature(
     sig_box: &SignatureBox,
     message: &[u8],
 ) -> Result<()> {
+    // First, verify that the keynum matches
+    if pubkey.keynum() != sig_box.sig_struct().keynum() {
+        return Err(Error::KeyMismatch {
+            sig_keynum: sig_box.sig_struct().keynum().to_hex(),
+            pub_keynum: pubkey.keynum().to_hex(),
+        });
+    }
+
     // For prehashed signatures, we need to hash the message first
     let data_to_verify = if sig_box.sig_struct().is_prehashed() {
         blake2b_512(message).to_vec()
@@ -233,5 +241,71 @@ mod tests {
         let wrong_message = b"Wrong message";
         let result = verify_message_signature(&pubkey, &sig_box, wrong_message);
         assert!(result.is_err(), "should fail with wrong message");
+    }
+}
+
+/// Test that verification fails when keynum doesn't match
+#[test]
+fn test_verify_with_wrong_keynum() {
+    use crate::crypto::generate_keypair;
+    use crate::keys::{PubkeyStruct, SeckeyStruct};
+    use crate::ops::sign::{SignOptions, sign};
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    let secret_key_file = temp_dir.path().join("test.key");
+    let public_key_file = temp_dir.path().join("test.pub");
+    let wrong_pubkey_file = temp_dir.path().join("wrong.pub");
+
+    // Create a message
+    std::fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Generate first keypair
+    let (secret_key1, public_key1, keynum1) = generate_keypair().expect("RNG should work");
+    let seckey1 = SeckeyStruct::new_unencrypted(keynum1, &secret_key1);
+    let pubkey1 = PubkeyStruct::new(keynum1, public_key1);
+
+    // Generate second keypair with different keynum
+    let (_, public_key2, keynum2) = generate_keypair().expect("RNG should work");
+    let pubkey2 = PubkeyStruct::new(keynum2, public_key2);
+
+    // Save keys
+    std::fs::write(&secret_key_file, seckey1.to_file_contents("test key 1")).expect("write failed");
+    std::fs::write(&public_key_file, pubkey1.to_file_contents("test key 1")).expect("write failed");
+    std::fs::write(&wrong_pubkey_file, pubkey2.to_file_contents("test key 2"))
+        .expect("write failed");
+
+    // Sign with key 1
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+    sign(&sign_opts, None).expect("sign should succeed");
+
+    // Try to verify with key 2 (different keynum) - should fail
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(wrong_pubkey_file.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: false,
+    };
+
+    let result = verify(&verify_opts);
+    assert!(result.is_err(), "Should fail when keynum doesn't match");
+
+    // Verify the error is KeyMismatch
+    if let Err(e) = result {
+        match e {
+            Error::KeyMismatch { .. } => (), // Expected
+            _ => panic!("Expected KeyMismatch error, got: {e:?}"),
+        }
     }
 }
