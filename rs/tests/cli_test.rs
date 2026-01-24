@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 /// Helper to create a test command
 fn minisign_cmd() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("minisign"))
+    Command::new(assert_cmd::cargo::cargo_bin!("minisign_rs"))
 }
 
 #[test]
