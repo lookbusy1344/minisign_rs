@@ -2,6 +2,7 @@ name: Slow Tests
 
 on:
   push:
+    branches: [ master, lb_rust ]
   pull_request:
   schedule:
     # Run nightly to catch C minisign updates
