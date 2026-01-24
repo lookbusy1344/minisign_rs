@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// A dead simple tool to sign files and verify signatures
 #[derive(Debug, Parser)]
 #[command(name = "minisign")]
-#[command(version)]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), " (Rust)"))]
 #[command(about = "A dead simple tool to sign files and verify signatures", long_about = None)]
 #[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]

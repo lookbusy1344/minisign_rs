@@ -24,7 +24,14 @@ fn check_c_minisign_available() -> bool {
     c_minisign()
         .arg("-v")
         .output()
-        .map(|output| output.status.success())
+        .map(|output| {
+            if !output.status.success() {
+                return false;
+            }
+            // Check this is C minisign, not our Rust version
+            let version_output = String::from_utf8_lossy(&output.stdout);
+            !version_output.contains("Rust")
+        })
         .unwrap_or(false)
 }
 
