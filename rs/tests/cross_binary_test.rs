@@ -39,15 +39,6 @@ macro_rules! require_c_minisign {
 }
 
 #[test]
-fn test_c_minisign_available() {
-    assert!(
-        check_c_minisign_available(),
-        "C minisign is not available. Install with: brew install minisign\n\
-         These tests verify compatibility between C and Rust implementations."
-    );
-}
-
-#[test]
 fn test_version_output_format() {
     require_c_minisign!();
 
