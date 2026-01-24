@@ -1,0 +1,302 @@
+//! Edge case tests for minisign
+//!
+//! Tests for boundary conditions and unusual inputs
+
+use minisign::ops::{
+    generate::{GenerateOptions, generate},
+    sign::{SignOptions, sign},
+    verify::{PublicKeySource, VerifyOptions, verify},
+};
+use std::fs;
+use tempfile::TempDir;
+
+/// Test signing and verifying an empty file
+#[test]
+fn test_empty_file_signing() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("empty.txt");
+    let sig_file = temp_dir.path().join("empty.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Create empty file
+    fs::write(&message_file, b"").expect("Failed to create empty file");
+
+    // Sign empty file (prehashed mode)
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+    sign(&sign_opts, None).expect("Should sign empty file");
+
+    // Verify signature on empty file
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify empty file signature");
+}
+
+/// Test signing and verifying an empty file in legacy mode
+#[test]
+fn test_empty_file_legacy_mode() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("empty_legacy.txt");
+    let sig_file = temp_dir.path().join("empty_legacy.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Create empty file
+    fs::write(&message_file, b"").expect("Failed to create empty file");
+
+    // Sign empty file (legacy mode - non-prehashed)
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: false, // Legacy mode
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+    sign(&sign_opts, None).expect("Should sign empty file in legacy mode");
+
+    // Verify signature on empty file
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify empty file legacy signature");
+}
+
+/// Test signing with Unicode (non-ASCII) in trusted comment
+#[test]
+fn test_unicode_in_trusted_comment() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Create message
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Sign with Unicode trusted comment (emoji, Chinese, Arabic)
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some("Signed 🔐 签名 توقيع".to_string()),
+        untrusted_comment: Some("Test signature 测试 اختبار 🚀".to_string()),
+        force: true,
+    };
+    let result = sign(&sign_opts, None).expect("Should sign with Unicode comments");
+    assert!(result.trusted_comment.contains("🔐"));
+    assert!(result.trusted_comment.contains("签名"));
+
+    // Verify signature with Unicode comments
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: false,
+    };
+    let result = verify(&verify_opts).expect("Should verify signature with Unicode");
+    assert!(result.trusted_comment.contains("🔐"));
+}
+
+/// Test signing with Unicode (non-ASCII) in untrusted comment
+#[test]
+fn test_unicode_in_untrusted_comment() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Create message
+    fs::write(&message_file, b"Test").expect("Failed to write message");
+
+    // Sign with Unicode untrusted comment only
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: Some("Файл подписан ✓".to_string()),
+        force: true,
+    };
+    sign(&sign_opts, None).expect("Should sign with Unicode untrusted comment");
+
+    // Verify and check untrusted comment
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: false,
+    };
+    let result = verify(&verify_opts).expect("Should verify");
+    assert!(result.untrusted_comment.contains("Файл"));
+}
+
+/// Test signing a large file with prehashed mode
+#[test]
+fn test_large_file_prehashed() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("large.bin");
+    let sig_file = temp_dir.path().join("large.bin.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Create a 100MB file (not 4GB to keep tests fast)
+    // This tests that large files work with prehashed mode
+    let large_data = vec![0xABu8; 100 * 1024 * 1024]; // 100 MB
+    fs::write(&message_file, large_data).expect("Failed to write large file");
+
+    // Sign large file - should use prehashed mode
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some("Large file signature".to_string()),
+        untrusted_comment: None,
+        force: true,
+    };
+    sign(&sign_opts, None).expect("Should sign large file");
+
+    // Verify signature
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify large file signature");
+}
+
+/// Test handling of symlinks in file paths
+#[cfg(unix)]
+#[test]
+fn test_symlink_handling() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let message_link = temp_dir.path().join("message_link.txt");
+    let sig_file = temp_dir.path().join("message_link.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Create message file and symlink to it
+    fs::write(&message_file, b"Real file content").expect("Failed to write message");
+    symlink(&message_file, &message_link).expect("Failed to create symlink");
+
+    // Sign the symlink - should follow it and sign the real file
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_link.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+    sign(&sign_opts, None).expect("Should sign through symlink");
+
+    // Verify using the symlink
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_link.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify through symlink");
+
+    // Verify using the real file - should also work
+    let verify_opts2 = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts2).expect("Should verify real file with symlink signature");
+}
