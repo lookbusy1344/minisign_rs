@@ -4,7 +4,7 @@
 
 use crate::{
     Result,
-    crypto::{blake2b_512, verify as crypto_verify},
+    crypto::{blake2b_512_stream, verify as crypto_verify},
     errors::Error,
     keys::PubkeyStruct,
     signature::SignatureBox,
@@ -71,12 +71,8 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
     // Load the signature
     let sig_box = load_signature(&options.signature_file)?;
 
-    // Load the message
-    let message = std::fs::read(&options.message_file)
-        .map_err(|e| Error::file_read(options.message_file.clone(), e))?;
-
     // Verify the signature on the message
-    verify_message_signature(&pubkey, &sig_box, &message)?;
+    verify_message_signature(&pubkey, &sig_box, &options.message_file)?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
@@ -114,7 +110,7 @@ fn load_signature(path: impl AsRef<Path>) -> Result<SignatureBox> {
 fn verify_message_signature(
     pubkey: &PubkeyStruct,
     sig_box: &SignatureBox,
-    message: &[u8],
+    message_file: &str,
 ) -> Result<()> {
     // First, verify that the keynum matches
     if pubkey.keynum() != sig_box.sig_struct().keynum() {
@@ -124,11 +120,14 @@ fn verify_message_signature(
         });
     }
 
-    // For prehashed signatures, we need to hash the message first
+    // For prehashed signatures, we stream hash the message
+    // For non-prehashed, we need the full message in memory
     let data_to_verify = if sig_box.sig_struct().is_prehashed() {
-        blake2b_512(message).to_vec()
+        let file =
+            std::fs::File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        blake2b_512_stream(file)?.to_vec()
     } else {
-        message.to_vec()
+        std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?
     };
 
     // Verify the Ed25519 signature
@@ -231,15 +230,19 @@ mod tests {
             fs::read_to_string("tests/fixtures/signatures/hello.txt.minisig").unwrap();
         let sig_box = SignatureBox::from_file_contents(&sig_contents).unwrap();
 
-        let message = fs::read("tests/fixtures/messages/hello.txt").unwrap();
+        let message_file = "tests/fixtures/messages/hello.txt";
 
         // Should succeed with correct message
-        verify_message_signature(&pubkey, &sig_box, &message)
+        verify_message_signature(&pubkey, &sig_box, message_file)
             .expect("should verify correct message");
 
-        // Should fail with wrong message
-        let wrong_message = b"Wrong message";
-        let result = verify_message_signature(&pubkey, &sig_box, wrong_message);
+        // Should fail with wrong message (create a temp file with wrong content)
+        let temp_dir = tempfile::tempdir().unwrap();
+        let wrong_message_file = temp_dir.path().join("wrong.txt");
+        fs::write(&wrong_message_file, b"Wrong message").unwrap();
+
+        let result =
+            verify_message_signature(&pubkey, &sig_box, wrong_message_file.to_str().unwrap());
         assert!(result.is_err(), "should fail with wrong message");
     }
 }

@@ -9,6 +9,7 @@ use blake2::{Blake2b, Blake2b512, Digest};
 use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use scrypt::{Params as ScryptParams, scrypt};
+use std::io::Read;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 // Constants from the minisign specification
@@ -243,6 +244,38 @@ pub fn blake2b_512(data: &[u8]) -> [u8; 64] {
     let mut hasher = Blake2b512::new();
     hasher.update(data);
     hasher.finalize().into()
+}
+
+/// Compute Blake2b-512 hash from a reader (streaming)
+///
+/// Used for hashing large files without loading them entirely into memory
+///
+/// # Arguments
+///
+/// * `reader` - The data source to hash
+///
+/// # Returns
+///
+/// A 64-byte hash
+///
+/// # Errors
+///
+/// Returns an error if reading from the input fails
+pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
+    let mut hasher = Blake2b512::new();
+    let mut buffer = [0u8; 8192]; // 8KB buffer
+
+    loop {
+        let n = reader
+            .read(&mut buffer)
+            .map_err(|e| Error::other(format!("failed to read data: {e}")))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+
+    Ok(hasher.finalize().into())
 }
 
 /// Derive a key from a password using Scrypt with custom parameters
@@ -552,5 +585,29 @@ mod tests {
         // This uses the full SENSITIVE parameters and will be slow
         let key = derive_key(password, &salt, 32).expect("derivation with full params failed");
         assert_eq!(key.len(), 32);
+    }
+
+    #[test]
+    fn test_blake2b_512_stream() {
+        use std::io::Cursor;
+
+        // Test with empty input
+        let empty = Cursor::new(Vec::<u8>::new());
+        let hash = blake2b_512_stream(empty).expect("streaming hash failed");
+        let expected = blake2b_512(b"");
+        assert_eq!(hash, expected);
+
+        // Test with "hello"
+        let hello = Cursor::new(b"hello".to_vec());
+        let hash = blake2b_512_stream(hello).expect("streaming hash failed");
+        let expected = blake2b_512(b"hello");
+        assert_eq!(hash, expected);
+
+        // Test with larger data (10KB)
+        let large_data = vec![42u8; 10 * 1024];
+        let cursor = Cursor::new(large_data.clone());
+        let hash_stream = blake2b_512_stream(cursor).expect("streaming hash failed");
+        let hash_direct = blake2b_512(&large_data);
+        assert_eq!(hash_stream, hash_direct);
     }
 }

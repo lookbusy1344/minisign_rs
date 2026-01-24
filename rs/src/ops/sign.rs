@@ -4,7 +4,7 @@
 
 use crate::{
     Result,
-    crypto::{SecretKey, blake2b_512, sign as crypto_sign},
+    crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
     errors::Error,
     keys::SeckeyStruct,
     signature::{SigStruct, SignatureBox},
@@ -67,10 +67,6 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
         (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
     };
 
-    // Load the message
-    let message = std::fs::read(&options.message_file)
-        .map_err(|e| Error::file_read(&options.message_file, e))?;
-
     // Determine the signature file path
     let sig_file_path = options
         .signature_file
@@ -86,7 +82,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     let sig_box = create_signature(
         &secret_key,
         keynum,
-        &message,
+        &options.message_file,
         options.prehashed,
         options.trusted_comment.as_deref(),
         options.untrusted_comment.as_deref(),
@@ -114,16 +110,21 @@ fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
 fn create_signature(
     secret_key: &SecretKey,
     keynum: crate::crypto::KeyNum,
-    message: &[u8],
+    message_file: &str,
     prehashed: bool,
     trusted_comment: Option<&str>,
     untrusted_comment: Option<&str>,
 ) -> Result<SignatureBox> {
     // Determine what data to sign
     let data_to_sign = if prehashed {
-        blake2b_512(message).to_vec()
+        // Open file and stream hash
+        let file =
+            std::fs::File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        blake2b_512_stream(file)?.to_vec()
     } else {
-        message.to_vec()
+        // For non-prehashed mode, we need the full message in memory
+        // (Ed25519 requires the full message for signing)
+        std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?
     };
 
     // Sign the message
@@ -178,7 +179,7 @@ fn generate_default_trusted_comment() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{crypto::verify as crypto_verify, keys::PubkeyStruct};
+    use crate::{crypto::{blake2b_512, verify as crypto_verify}, keys::PubkeyStruct};
     use std::fs;
     use tempfile::TempDir;
 
@@ -422,6 +423,7 @@ mod tests {
     #[test]
     fn test_sign_prehashed_vs_normal() {
         use crate::crypto::generate_keypair;
+        use std::fs;
 
         let temp_dir = TempDir::new().unwrap();
         let message_path = temp_dir.path().join("message.txt");
@@ -432,12 +434,26 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
 
         // Create prehashed signature
-        let sig_prehashed =
-            create_signature(&secret_key, keynum, message, true, Some("test"), None).unwrap();
+        let sig_prehashed = create_signature(
+            &secret_key,
+            keynum,
+            message_path.to_str().unwrap(),
+            true,
+            Some("test"),
+            None,
+        )
+        .unwrap();
 
         // Create normal signature
-        let sig_normal =
-            create_signature(&secret_key, keynum, message, false, Some("test"), None).unwrap();
+        let sig_normal = create_signature(
+            &secret_key,
+            keynum,
+            message_path.to_str().unwrap(),
+            false,
+            Some("test"),
+            None,
+        )
+        .unwrap();
 
         // They should have different sig_alg indicators
         assert!(sig_prehashed.sig_struct().is_prehashed());
@@ -448,5 +464,41 @@ mod tests {
             sig_prehashed.sig_struct().signature().as_bytes(),
             sig_normal.sig_struct().signature().as_bytes()
         );
+    }
+
+    #[test]
+    fn test_sign_large_file_streaming() {
+        use crate::crypto::{blake2b_512_stream, generate_keypair, verify as crypto_verify};
+        use std::fs;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Generate a 1MB file
+        let large_file = temp_dir.path().join("large.bin");
+        let data = vec![42u8; 1024 * 1024]; // 1MB
+        fs::write(&large_file, data).unwrap();
+
+        // Generate keypair
+        let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+
+        // Sign in prehashed mode (uses streaming)
+        let sig_box = create_signature(
+            &secret_key,
+            keynum,
+            large_file.to_str().unwrap(),
+            true,
+            Some("large file test"),
+            None,
+        )
+        .expect("signing large file should succeed");
+
+        // Verify we got a valid signature
+        assert!(sig_box.sig_struct().is_prehashed());
+
+        // Verify the signature is valid
+        let file = fs::File::open(&large_file).unwrap();
+        let hash = blake2b_512_stream(file).unwrap();
+        crypto_verify(&public_key, &hash, sig_box.sig_struct().signature())
+            .expect("signature should verify");
     }
 }
