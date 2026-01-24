@@ -11,7 +11,7 @@ use tempfile::TempDir;
 
 /// Helper to create a command for the Rust minisign binary
 fn rust_minisign() -> Command {
-    Command::cargo_bin("minisign").expect("Failed to find Rust minisign binary")
+    Command::new(assert_cmd::cargo::cargo_bin!("minisign"))
 }
 
 /// Helper to create a command for the C minisign binary (from homebrew)
@@ -40,12 +40,11 @@ macro_rules! require_c_minisign {
 
 #[test]
 fn test_c_minisign_available() {
-    if !check_c_minisign_available() {
-        panic!(
-            "C minisign is not available. Install with: brew install minisign\n\
-             These tests verify compatibility between C and Rust implementations."
-        );
-    }
+    assert!(
+        check_c_minisign_available(),
+        "C minisign is not available. Install with: brew install minisign\n\
+         These tests verify compatibility between C and Rust implementations."
+    );
 }
 
 #[test]
@@ -94,16 +93,10 @@ fn test_help_output_similarity() {
     // Check that both have the main operation flags
     // C minisign shows these in usage lines, Rust shows in detailed help
     for flag in &["-G", "-S", "-V", "-R"] {
-        assert!(
-            rust_help.contains(flag),
-            "Rust help missing flag: {}",
-            flag
-        );
+        assert!(rust_help.contains(flag), "Rust help missing flag: {flag}");
         assert!(
             c_help.contains(flag),
-            "C help missing operation flag: {}\nC output: {}",
-            flag,
-            c_help
+            "C help missing operation flag: {flag}\nC output: {c_help}"
         );
     }
 

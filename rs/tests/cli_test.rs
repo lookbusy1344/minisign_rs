@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 /// Helper to create a test command
 fn minisign_cmd() -> Command {
-    Command::cargo_bin("minisign").expect("Failed to find minisign binary")
+    Command::new(assert_cmd::cargo::cargo_bin!("minisign"))
 }
 
 #[test]
