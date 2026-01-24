@@ -4,13 +4,21 @@
 
 use crate::errors::{Error, Result};
 use clap::Parser;
+use git_version::git_version;
 use std::path::{Path, PathBuf};
+
+const VERSION: &str = git_version!(
+    args = ["--abbrev=7", "--always"],
+    prefix = concat!(env!("CARGO_PKG_VERSION"), " ("),
+    suffix = ")",
+    fallback = "unknown"
+);
 
 /// A dead simple Rust tool to sign files and verify signatures
 #[derive(Debug, Parser)]
 #[command(name = "minisign")]
-#[command(version = concat!(env!("CARGO_PKG_VERSION"), " (Rust)"))]
-#[command(about = "A dead simple Rust tool to sign files and verify signatures", long_about = None)]
+#[command(version = VERSION)]
+#[command(about = concat!("minisign ", env!("CARGO_PKG_VERSION"), " - A dead simple Rust tool to sign files and verify signatures"), long_about = None)]
 #[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]
 #[allow(clippy::struct_excessive_bools)]
