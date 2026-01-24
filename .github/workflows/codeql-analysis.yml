@@ -20,18 +20,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'c', 'rust' ]
+        language: [ 'rust' ]
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install C dependencies
-      if: matrix.language == 'c'
-      run: sudo apt-get install -qy libsodium-dev
-
     - name: Setup Rust toolchain
-      if: matrix.language == 'rust'
       uses: dtolnay/rust-toolchain@stable
 
     - name: Initialize CodeQL
@@ -39,14 +34,7 @@ jobs:
       with:
         languages: ${{ matrix.language }}
 
-    - name: Build C
-      if: matrix.language == 'c'
-      run: |
-        cd src
-        make
-
     - name: Build Rust
-      if: matrix.language == 'rust'
       run: |
         cd rs
         cargo build --release
