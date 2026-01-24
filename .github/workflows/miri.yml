@@ -40,14 +40,6 @@ jobs:
         cargo miri test --lib || echo "::warning::Some miri tests failed or were skipped"
       continue-on-error: true
 
-    - name: Run miri on specific modules
-      run: |
-        # Test individual modules that should be fully miri-compatible
-        cargo miri test --lib crypto::tests || true
-        cargo miri test --lib formats::tests || true
-        cargo miri test --lib errors::tests || true
-      continue-on-error: true
-
     - name: Miri check summary
       run: |
         echo "Miri memory safety check completed"
