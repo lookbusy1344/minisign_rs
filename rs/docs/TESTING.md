@@ -8,8 +8,9 @@
 - Must run in < 1 second
 - No filesystem or network access
 
-### Integration Tests (`tests/integration/`)
+### Integration Tests (`tests/cli_test.rs`)
 - Test multiple components together
+- Test CLI behavior end-to-end
 - May use tempfiles
 - Must run in < 5 seconds each
 - No external binaries required

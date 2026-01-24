@@ -1,0 +1,37 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ master, lb_rust ]
+  pull_request:
+    branches: [ master, lb_rust ]
+
+jobs:
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: rs
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install tarpaulin
+      run: cargo install cargo-tarpaulin
+      timeout-minutes: 10
+
+    - name: Run coverage
+      run: cargo tarpaulin --out Xml --skip-clean --timeout 300
+      timeout-minutes: 15
+
+    - name: Upload to codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: rs/cobertura.xml
+        fail_ci_if_error: false
+        verbose: true
