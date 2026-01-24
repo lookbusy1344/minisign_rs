@@ -286,6 +286,10 @@ fn is_interactive() -> bool {
 fn prompt_password(prompt: &str, password_file: Option<&std::path::Path>) -> Result<String> {
     // If password file is provided, read from it
     if let Some(path) = password_file {
+        #[cfg(not(debug_assertions))]
+        eprintln!(
+            "Warning: --password-file is insecure and should only be used for testing purposes."
+        );
         let password = std::fs::read_to_string(path)
             .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
         // Trim trailing newline if present
