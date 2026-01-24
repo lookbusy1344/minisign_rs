@@ -127,7 +127,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         signature_file: Some(signature_file.to_string_lossy().to_string()),
         trusted_comment: cli.trusted_comment.clone(),
         untrusted_comment: cli.untrusted_comment.clone(),
-        prehashed: cli.prehashed,
+        prehashed: !cli.legacy, // Legacy mode means non-prehashed
         force: cli.force,
     };
 

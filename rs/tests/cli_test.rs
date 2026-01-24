@@ -480,3 +480,52 @@ fn test_prehashed_mode() {
         .success()
         .stdout(predicate::str::contains("verified"));
 }
+
+/// Test signing with legacy mode (-l flag)
+#[test]
+fn test_sign_with_legacy_mode() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("test_message.txt");
+    let sig_file = temp_dir.path().join("test_message.txt.minisig");
+
+    // Generate an unencrypted key
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Create a test message
+    fs::write(&message_file, b"Test message for legacy mode")
+        .expect("Failed to write message file");
+
+    // Sign with legacy mode
+    minisign_cmd()
+        .arg("-S")
+        .arg("-l") // Legacy mode flag
+        .arg("-W") // No password for unencrypted key
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success();
+
+    // Read the signature file and verify it uses non-prehashed mode
+    let sig_contents = fs::read_to_string(&sig_file).expect("Failed to read signature file");
+    let sig_box = minisign::signature::SignatureBox::from_file_contents(&sig_contents)
+        .expect("Failed to parse signature");
+
+    // Legacy mode should NOT be prehashed (should use "Ed" not "ED")
+    assert!(
+        !sig_box.sig_struct().is_prehashed(),
+        "Legacy mode signature should not be prehashed"
+    );
+}

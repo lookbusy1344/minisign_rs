@@ -6,9 +6,13 @@
 use minisign::{
     crypto::{blake2b_512, verify},
     keys::PubkeyStruct,
+    ops::{
+        generate::{generate, GenerateOptions},
+        sign::{sign, SignOptions},
+    },
     signature::SignatureBox,
 };
-use std::fs;
+use std::{fs, process::Command};
 
 /// Test parsing a C-generated public key file
 #[test]
@@ -137,4 +141,143 @@ fn test_verify_c_generated_signature_wrong_key() {
     );
 
     assert!(result.is_err(), "should fail with wrong key");
+}
+
+/// Test cross-compatibility: C minisign legacy signature -> Rust verify
+#[test]
+fn test_verify_c_legacy_signature() {
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let message_file = temp_dir.path().join("legacy_test.txt");
+    let sig_file = temp_dir.path().join("legacy_test.txt.minisig");
+    let secret_key = temp_dir.path().join("legacy.key");
+    let public_key = temp_dir.path().join("legacy.pub");
+
+    // Create test message
+    fs::write(&message_file, b"Legacy mode test message").expect("Failed to write message");
+
+    // Generate key with C minisign
+    let output = Command::new("minisign")
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .output();
+
+    if output.is_err() || !output.as_ref().unwrap().status.success() {
+        eprintln!("Warning: C minisign not available, skipping test");
+        return;
+    }
+
+    // Sign with legacy mode using C minisign
+    let status = Command::new("minisign")
+        .arg("-S")
+        .arg("-l") // Legacy mode
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-m")
+        .arg(&message_file)
+        .output();
+
+    if status.is_err() || !status.as_ref().unwrap().status.success() {
+        eprintln!("Warning: C minisign sign failed, skipping test");
+        return;
+    }
+
+    // Load the C-generated signature
+    let sig_contents = fs::read_to_string(&sig_file).expect("Failed to read C-generated signature");
+    let sig_box = SignatureBox::from_file_contents(&sig_contents)
+        .expect("Failed to parse C-generated signature");
+
+    // Verify it's NOT prehashed (legacy mode)
+    assert!(
+        !sig_box.sig_struct().is_prehashed(),
+        "C legacy signature should not be prehashed"
+    );
+
+    // Load public key
+    let pubkey_contents = fs::read_to_string(&public_key).expect("Failed to read public key");
+    let pubkey =
+        PubkeyStruct::from_file_contents(&pubkey_contents).expect("Failed to parse public key");
+
+    // Load message
+    let message = fs::read(&message_file).expect("Failed to read message");
+
+    // Verify with Rust implementation (should NOT hash for legacy mode)
+    let data_to_verify = if sig_box.sig_struct().is_prehashed() {
+        blake2b_512(&message).to_vec()
+    } else {
+        message.clone()
+    };
+
+    verify(
+        pubkey.public_key(),
+        &data_to_verify,
+        sig_box.sig_struct().signature(),
+    )
+    .expect("Rust should verify C legacy signature");
+
+    // Verify global signature
+    sig_box
+        .verify_global_signature(pubkey.public_key())
+        .expect("Global signature should verify");
+}
+
+/// Test cross-compatibility: Rust legacy signature -> C minisign verify
+#[test]
+fn test_c_verify_rust_legacy_signature() {
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let message_file = temp_dir.path().join("rust_legacy.txt");
+    let sig_file = temp_dir.path().join("rust_legacy.txt.minisig");
+    let secret_key = temp_dir.path().join("rust_legacy.key");
+    let public_key = temp_dir.path().join("rust_legacy.pub");
+
+    // Create test message
+    fs::write(&message_file, b"Rust legacy mode test").expect("Failed to write message");
+
+    // Generate key with Rust
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Sign with Rust in legacy mode (non-prehashed)
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: false, // Legacy mode = non-prehashed
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+    sign(&sign_opts, None).expect("Failed to sign");
+
+    // Verify with C minisign
+    let status = Command::new("minisign")
+        .arg("-V")
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-m")
+        .arg(&message_file)
+        .output();
+
+    if let Ok(output) = status {
+        if output.status.success() {
+            // Success!
+        } else {
+            panic!(
+                "C minisign failed to verify Rust legacy signature: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    } else {
+        eprintln!("Warning: C minisign not available, skipping verification");
+    }
 }
