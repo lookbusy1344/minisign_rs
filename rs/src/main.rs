@@ -1,4 +1,5 @@
 use clap::Parser;
+use is_terminal::IsTerminal;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
@@ -270,8 +271,21 @@ fn handle_change(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
+/// Check if stdin is a terminal (interactive mode)
+fn is_interactive() -> bool {
+    io::stdin().is_terminal()
+}
+
 /// Prompt for password using rpassword
 fn prompt_password(prompt: &str) -> Result<String> {
+    // Check if we're in an interactive environment
+    if !is_interactive() {
+        return Err(Error::Usage(
+            "Cannot prompt for password in non-interactive mode. Use -W flag to skip password."
+                .into(),
+        ));
+    }
+
     print!("{prompt}");
     io::stdout()
         .flush()

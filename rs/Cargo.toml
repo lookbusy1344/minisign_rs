@@ -19,6 +19,7 @@ zeroize = { version = "1", features = ["derive"] }
 rpassword = "7"
 dirs = "5"
 getrandom = "0.2"
+is-terminal = "0.4"
 
 [dev-dependencies]
 assert_cmd = "2"
