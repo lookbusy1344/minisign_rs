@@ -36,6 +36,10 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact_name: minisign_rs.exe
             asset_name: minisign-windows-x86_64.exe
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            artifact_name: minisign_rs.exe
+            asset_name: minisign-windows-aarch64.exe
 
     defaults:
       run:
