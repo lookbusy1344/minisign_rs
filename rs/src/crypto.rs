@@ -271,7 +271,11 @@ pub fn derive_key_with_params(
 ) -> Result<Vec<u8>> {
     let mut output = vec![0u8; output_len];
 
-    let params = ScryptParams::new(log_n, r, p, output_len)
+    // The scrypt Params::new() has a max len of 64 bytes, but the low-level scrypt()
+    // function can produce any length output. We use a nominal len for Params (capped at 64),
+    // but pass the full output_len buffer to scrypt(), which determines the actual output size.
+    let params_len = output_len.min(64);
+    let params = ScryptParams::new(log_n, r, p, params_len)
         .map_err(|e| Error::KdfError(format!("invalid scrypt parameters: {e}")))?;
 
     scrypt(password, salt, &params, &mut output)

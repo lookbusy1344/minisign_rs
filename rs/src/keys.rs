@@ -18,6 +18,10 @@ pub const PUBKEY_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + PUBLIC_KEY_BYTES; // 42
 pub const SECKEY_STRUCT_SIZE: usize =
     2 + 2 + 2 + KDF_SALT_BYTES + 8 + 8 + KEYNUM_BYTES + SECRET_KEY_BYTES + CHECKSUM_BYTES; // 158 bytes
 
+/// Size of encrypted blob (keynum + secret key + checksum)
+/// Matches C minisign: sizeof(seckey_struct->keynum_sk) = 8 + 64 + 32 = 104 bytes
+const ENCRYPTED_BLOB_SIZE: usize = KEYNUM_BYTES + SECRET_KEY_BYTES + CHECKSUM_BYTES; // 104 bytes
+
 /// Signature algorithm identifier
 const SIG_ALG: &[u8; 2] = b"Ed";
 
@@ -207,9 +211,12 @@ impl std::fmt::Debug for PubkeyStruct {
 /// - 6-37: `kdf_salt` (32 bytes)
 /// - 38-45: `kdf_opslimit` (u64 LE)
 /// - 46-53: `kdf_memlimit` (u64 LE)
-/// - 54-61: keynum (8 bytes)
+/// - 54-61: keynum (8 bytes, encrypted if `kdf_alg` != "\0\0")
 /// - 62-125: `secret_key` (64 bytes, encrypted if `kdf_alg` != "\0\0")
-/// - 126-157: checksum (32 bytes, Blake2b-256 of keynum + `secret_key`)
+/// - 126-157: checksum (32 bytes, Blake2b-256 of `sig_alg` + `keynum` + `secret_key`, encrypted if `kdf_alg` != "\0\0")
+///
+/// For encrypted keys, `keynum`/`secret_key`/checksum fields store the encrypted versions.
+/// The plaintext keynum is recovered during decryption.
 #[derive(Clone)]
 pub struct SeckeyStruct {
     encrypted: bool,
@@ -217,6 +224,7 @@ pub struct SeckeyStruct {
     kdf_opslimit: u64,
     kdf_memlimit: u64,
     keynum: KeyNum,
+    encrypted_keynum: [u8; KEYNUM_BYTES],
     secret_key_encrypted: [u8; SECRET_KEY_BYTES],
     checksum: [u8; CHECKSUM_BYTES],
 }
@@ -236,6 +244,7 @@ impl SeckeyStruct {
             kdf_opslimit: 0,
             kdf_memlimit: 0,
             keynum,
+            encrypted_keynum: [0u8; KEYNUM_BYTES], // Not used for unencrypted keys
             secret_key_encrypted,
             checksum: [0u8; CHECKSUM_BYTES], // All zeros for unencrypted keys
         }
@@ -243,7 +252,8 @@ impl SeckeyStruct {
 
     /// Create a new encrypted secret key structure
     ///
-    /// The secret key is encrypted using XOR with a key derived from the password.
+    /// The `keynum`, secret key, and checksum are encrypted together using XOR with a key derived from the password.
+    /// This matches the C minisign behavior which encrypts the combined 104-byte blob (`keynum` + `secret_key` + checksum).
     ///
     /// # Arguments
     ///
@@ -268,18 +278,34 @@ impl SeckeyStruct {
         // Convert opslimit/memlimit to scrypt parameters
         let (log_n, r, p) = Self::opslimit_memlimit_to_params(kdf_opslimit, kdf_memlimit);
 
-        // Derive encryption key from password
-        let derived_key =
-            derive_key_with_params(password, &kdf_salt, log_n, r, p, SECRET_KEY_BYTES)?;
+        // Compute checksum of unencrypted keynum + secret_key (before encryption)
+        let computed_checksum = Self::compute_checksum(keynum, secret_key.as_bytes());
 
-        // Encrypt secret key using XOR (libsodium crypto_stream_xor behavior)
-        let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
-        for i in 0..SECRET_KEY_BYTES {
-            secret_key_encrypted[i] = secret_key.as_bytes()[i] ^ derived_key[i];
+        // Derive 104 bytes (keynum + secret_key + checksum) to match C implementation
+        let derived_key =
+            derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
+
+        // Create combined blob: keynum + secret_key + checksum
+        let mut blob = Vec::with_capacity(ENCRYPTED_BLOB_SIZE);
+        blob.extend_from_slice(keynum.as_bytes());
+        blob.extend_from_slice(secret_key.as_bytes());
+        blob.extend_from_slice(&computed_checksum);
+
+        // Encrypt entire blob with XOR
+        let mut encrypted_blob = [0u8; ENCRYPTED_BLOB_SIZE];
+        for i in 0..ENCRYPTED_BLOB_SIZE {
+            encrypted_blob[i] = blob[i] ^ derived_key[i];
         }
 
-        // Compute checksum of unencrypted keynum + secret_key
-        let checksum = Self::compute_checksum(keynum, secret_key.as_bytes());
+        // Split back into encrypted components
+        let mut encrypted_keynum = [0u8; KEYNUM_BYTES];
+        encrypted_keynum.copy_from_slice(&encrypted_blob[0..KEYNUM_BYTES]);
+
+        let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
+        secret_key_encrypted.copy_from_slice(&encrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
+
+        let mut checksum = [0u8; CHECKSUM_BYTES];
+        checksum.copy_from_slice(&encrypted_blob[(KEYNUM_BYTES + SECRET_KEY_BYTES)..]);
 
         Ok(Self {
             encrypted: true,
@@ -287,12 +313,17 @@ impl SeckeyStruct {
             kdf_opslimit,
             kdf_memlimit,
             keynum,
+            encrypted_keynum,
             secret_key_encrypted,
-            checksum,
+            checksum, // This is the encrypted checksum
         })
     }
 
     /// Decrypt the secret key using a password
+    ///
+    /// Decrypts the combined 104-byte blob (`keynum` + `secret_key` + checksum) to match C minisign behavior.
+    ///
+    /// Returns a tuple of (`secret_key`, `keynum`) where `keynum` is the decrypted key number.
     ///
     /// # Errors
     ///
@@ -300,7 +331,7 @@ impl SeckeyStruct {
     /// - Key is not encrypted
     /// - Key derivation fails
     /// - Checksum validation fails (wrong password or corrupted data)
-    pub fn decrypt(&self, password: &[u8]) -> Result<SecretKey> {
+    pub fn decrypt(&self, password: &[u8]) -> Result<(SecretKey, KeyNum)> {
         if !self.encrypted {
             return Err(Error::Other("key is not encrypted".to_string()));
         }
@@ -308,23 +339,42 @@ impl SeckeyStruct {
         // Convert opslimit/memlimit to scrypt parameters
         let (log_n, r, p) = Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit);
 
-        // Derive decryption key from password
+        // Derive 104 bytes (keynum + secret_key + checksum) to match C implementation
         let derived_key =
-            derive_key_with_params(password, &self.kdf_salt, log_n, r, p, SECRET_KEY_BYTES)?;
+            derive_key_with_params(password, &self.kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
 
-        // Decrypt secret key using XOR (encryption is symmetric)
-        let mut secret_key_bytes = [0u8; SECRET_KEY_BYTES];
-        for i in 0..SECRET_KEY_BYTES {
-            secret_key_bytes[i] = self.secret_key_encrypted[i] ^ derived_key[i];
+        // Reconstruct encrypted blob: keynum + secret_key + checksum
+        let mut encrypted_blob = Vec::with_capacity(ENCRYPTED_BLOB_SIZE);
+        encrypted_blob.extend_from_slice(&self.encrypted_keynum);
+        encrypted_blob.extend_from_slice(&self.secret_key_encrypted);
+        encrypted_blob.extend_from_slice(&self.checksum); // checksum field contains encrypted checksum
+
+        // Decrypt entire blob
+        let mut decrypted_blob = [0u8; ENCRYPTED_BLOB_SIZE];
+        for i in 0..ENCRYPTED_BLOB_SIZE {
+            decrypted_blob[i] = encrypted_blob[i] ^ derived_key[i];
         }
 
-        // Validate checksum
-        let computed_checksum = Self::compute_checksum(self.keynum, &secret_key_bytes);
-        if computed_checksum != self.checksum {
+        // Extract decrypted components
+        let mut decrypted_keynum_bytes = [0u8; KEYNUM_BYTES];
+        decrypted_keynum_bytes.copy_from_slice(&decrypted_blob[0..KEYNUM_BYTES]);
+        let decrypted_keynum = KeyNum::from_bytes(decrypted_keynum_bytes);
+
+        let mut secret_key_bytes = [0u8; SECRET_KEY_BYTES];
+        secret_key_bytes.copy_from_slice(&decrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
+
+        let mut decrypted_checksum = [0u8; CHECKSUM_BYTES];
+        decrypted_checksum.copy_from_slice(&decrypted_blob[(KEYNUM_BYTES + SECRET_KEY_BYTES)..]);
+
+        // Recompute checksum from decrypted keynum + secret_key
+        let computed_checksum = Self::compute_checksum(decrypted_keynum, &secret_key_bytes);
+
+        // Verify decrypted checksum matches recomputed checksum
+        if computed_checksum != decrypted_checksum {
             return Err(Error::ChecksumFailed);
         }
 
-        Ok(SecretKey::from_bytes(secret_key_bytes))
+        Ok((SecretKey::from_bytes(secret_key_bytes), decrypted_keynum))
     }
 
     /// Get the unencrypted secret key (only works for unencrypted keys)
@@ -349,7 +399,9 @@ impl SeckeyStruct {
         keynum: KeyNum,
         secret_key: &[u8; SECRET_KEY_BYTES],
     ) -> [u8; CHECKSUM_BYTES] {
-        let mut data = Vec::with_capacity(KEYNUM_BYTES + SECRET_KEY_BYTES);
+        // Matches C minisign: hash(sig_alg + keynum + sk)
+        let mut data = Vec::with_capacity(2 + KEYNUM_BYTES + SECRET_KEY_BYTES);
+        data.extend_from_slice(SIG_ALG); // "Ed"
         data.extend_from_slice(keynum.as_bytes());
         data.extend_from_slice(secret_key);
 
@@ -463,7 +515,14 @@ impl SeckeyStruct {
             &mut bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end],
             self.kdf_memlimit,
         );
-        bytes[SECKEY_KEYNUM_OFFSET..keynum_end].copy_from_slice(self.keynum.as_bytes());
+
+        // For encrypted keys, write encrypted_keynum; for unencrypted, write plaintext keynum
+        if self.encrypted {
+            bytes[SECKEY_KEYNUM_OFFSET..keynum_end].copy_from_slice(&self.encrypted_keynum);
+        } else {
+            bytes[SECKEY_KEYNUM_OFFSET..keynum_end].copy_from_slice(self.keynum.as_bytes());
+        }
+
         bytes[SECKEY_SK_OFFSET..sk_end].copy_from_slice(&self.secret_key_encrypted);
         bytes[SECKEY_CHECKSUM_OFFSET..checksum_end].copy_from_slice(&self.checksum);
 
@@ -531,6 +590,13 @@ impl SeckeyStruct {
         keynum_bytes.copy_from_slice(&bytes[SECKEY_KEYNUM_OFFSET..keynum_end]);
         let keynum = KeyNum::from_bytes(keynum_bytes);
 
+        // For encrypted keys, store encrypted keynum separately for serialization
+        let encrypted_keynum = if encrypted {
+            keynum_bytes
+        } else {
+            [0u8; KEYNUM_BYTES]
+        };
+
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
         secret_key_encrypted.copy_from_slice(&bytes[SECKEY_SK_OFFSET..sk_end]);
 
@@ -542,7 +608,8 @@ impl SeckeyStruct {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
-            keynum,
+            keynum, // Contains encrypted keynum if encrypted, plaintext if not
+            encrypted_keynum, // Stores encrypted keynum for roundtrip serialization
             secret_key_encrypted,
             checksum,
         })
@@ -584,6 +651,7 @@ impl std::fmt::Debug for SeckeyStruct {
             .field("kdf_salt", &"[...]")
             .field("kdf_opslimit", &self.kdf_opslimit)
             .field("kdf_memlimit", &self.kdf_memlimit)
+            .field("encrypted_keynum", &"[REDACTED]")
             .field("secret_key_encrypted", &"[REDACTED]")
             .field("checksum", &"[...]")
             .finish()
@@ -819,7 +887,7 @@ mod tests {
         assert!(encrypted_key.is_encrypted());
 
         // Decrypt it
-        let decrypted_key = encrypted_key
+        let (decrypted_key, _) = encrypted_key
             .decrypt(password)
             .expect("Failed to decrypt key");
 
@@ -896,7 +964,7 @@ mod tests {
         let password = b"test";
 
         // Decrypt it
-        let secret_key = seckey.decrypt(password).expect("Failed to decrypt key");
+        let (secret_key, _) = seckey.decrypt(password).expect("Failed to decrypt key");
 
         // Verify we got a valid secret key
         assert_eq!(secret_key.as_bytes().len(), SECRET_KEY_BYTES);

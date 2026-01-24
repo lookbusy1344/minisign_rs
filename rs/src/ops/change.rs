@@ -62,7 +62,7 @@ pub fn change(
     // Decrypt the secret key with old password
     let secret_key = if seckey.is_encrypted() {
         let pwd = old_password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
+        (seckey.decrypt(pwd)?).0
     } else {
         seckey.get_unencrypted_secret_key()?
     };
@@ -141,7 +141,7 @@ fn change_with_custom_params(
 
     let secret_key = if seckey.is_encrypted() {
         let pwd = old_password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
+        (seckey.decrypt(pwd)?).0
     } else {
         seckey.get_unencrypted_secret_key()?
     };

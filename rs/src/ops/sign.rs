@@ -62,7 +62,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     let seckey = load_secret_key(&options.secret_key_file)?;
     let secret_key = if seckey.is_encrypted() {
         let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
+        (seckey.decrypt(pwd)?).0
     } else {
         seckey.get_unencrypted_secret_key()?
     };

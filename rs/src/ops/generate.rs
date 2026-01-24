@@ -287,7 +287,7 @@ mod tests {
         let sk_contents = fs::read_to_string(&sk_path).unwrap();
         let seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
         assert!(seckey.is_encrypted());
-        seckey
+        let (_secret_key, _keynum) = seckey
             .decrypt(password)
             .expect("should decrypt with correct password");
 
@@ -327,7 +327,7 @@ mod tests {
         let sk_contents = fs::read_to_string(&sk_path).unwrap();
         let seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
         assert!(seckey.is_encrypted());
-        seckey
+        let (_secret_key, _keynum) = seckey
             .decrypt(password)
             .expect("should decrypt with correct password");
 

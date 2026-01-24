@@ -59,12 +59,12 @@ pub fn recreate(options: &RecreateOptions, password: Option<&[u8]>) -> Result<Re
     // Load the secret key
     let seckey = load_secret_key(&options.secret_key_file)?;
 
-    // Decrypt if necessary
-    let secret_key = if seckey.is_encrypted() {
+    // Decrypt if necessary and get the keynum
+    let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = password.ok_or(Error::PasswordRequired)?;
         seckey.decrypt(pwd)?
     } else {
-        seckey.get_unencrypted_secret_key()?
+        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
     };
 
     // Extract public key from secret key
@@ -72,10 +72,10 @@ pub fn recreate(options: &RecreateOptions, password: Option<&[u8]>) -> Result<Re
     let public_key = extract_public_key_from_secret(&secret_key);
 
     // Create public key structure
-    let pubkey = PubkeyStruct::new(*seckey.keynum(), public_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
 
     // Generate comment
-    let keynum_hex = seckey.keynum().to_hex();
+    let keynum_hex = keynum.to_hex();
     let comment = options
         .comment
         .clone()
