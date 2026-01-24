@@ -101,6 +101,14 @@ pub enum Error {
     #[error("missing required argument: {0}")]
     MissingArgument(String),
 
+    // CLI usage errors
+    #[error("usage: {0}")]
+    Usage(String),
+
+    // I/O errors (general)
+    #[error("I/O error: {0}")]
+    Io(String),
+
     // Generic errors
     #[error("{0}")]
     Other(String),
