@@ -109,10 +109,10 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         .unwrap_or_else(Cli::default_secret_key_path);
 
     // Get signature file path
-    let signature_file = cli
-        .signature_file
-        .clone()
-        .unwrap_or_else(|| Cli::default_signature_path(message_file));
+    let signature_file = match &cli.signature_file {
+        Some(path) => path.clone(),
+        None => Cli::default_signature_path(message_file)?,
+    };
 
     // Prompt for password (we'll check if the key needs it later)
     let password = if cli.no_password {
@@ -165,10 +165,10 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     };
 
     // Get signature file path
-    let signature_file = cli
-        .signature_file
-        .clone()
-        .unwrap_or_else(|| Cli::default_signature_path(message_file));
+    let signature_file = match &cli.signature_file {
+        Some(path) => path.clone(),
+        None => Cli::default_signature_path(message_file)?,
+    };
 
     let options = VerifyOptions {
         public_key,

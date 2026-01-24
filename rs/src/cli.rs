@@ -2,6 +2,7 @@
 //!
 //! This module defines the CLI structure matching the C minisign interface exactly.
 
+use crate::errors::{Error, Result};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
@@ -149,17 +150,20 @@ impl Cli {
     }
 
     /// Get the default signature path for a message file
-    #[must_use]
-    pub fn default_signature_path(message_file: &Path) -> PathBuf {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path has no valid filename component
+    pub fn default_signature_path(message_file: &Path) -> Result<PathBuf> {
         let mut sig_path = message_file.to_path_buf();
-        let mut file_name = message_file
+        let file_name = message_file
             .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        file_name.push_str(".minisig");
-        sig_path.set_file_name(file_name);
-        sig_path
+            .ok_or_else(|| Error::InvalidPath(message_file.to_path_buf()))?;
+
+        let mut file_name_string = file_name.to_string_lossy().to_string();
+        file_name_string.push_str(".minisig");
+        sig_path.set_file_name(file_name_string);
+        Ok(sig_path)
     }
 }
 
@@ -240,32 +244,33 @@ mod tests {
         use std::path::Path;
 
         let msg = Path::new("test.txt");
-        let sig = Cli::default_signature_path(msg);
+        let sig = Cli::default_signature_path(msg).unwrap();
         assert_eq!(sig, PathBuf::from("test.txt.minisig"));
 
         let msg = Path::new("/path/to/file.dat");
-        let sig = Cli::default_signature_path(msg);
+        let sig = Cli::default_signature_path(msg).unwrap();
         assert_eq!(sig, PathBuf::from("/path/to/file.dat.minisig"));
     }
-}
 
-#[test]
-fn test_default_signature_path_edge_cases() {
-    use std::path::PathBuf;
+    #[test]
+    fn test_default_signature_path_edge_cases() {
+        use std::path::Path;
 
-    // Normal case
-    let path = PathBuf::from("/path/to/file.txt");
-    let sig = Cli::default_signature_path(&path);
-    assert_eq!(sig, PathBuf::from("/path/to/file.txt.minisig"));
+        // Path with regular file - should work
+        let path = Path::new("/some/path/file.txt");
+        let sig = Cli::default_signature_path(path).unwrap();
+        assert_eq!(sig, PathBuf::from("/some/path/file.txt.minisig"));
 
-    // Root path case (has no filename)
-    let root = PathBuf::from("/");
-    let sig = Cli::default_signature_path(&root);
-    // Currently this produces "/.minisig" which might not be intended
-    assert_eq!(sig, PathBuf::from("/.minisig"));
+        // Root path - file_name() returns None, should return error
+        let root = Path::new("/");
+        let result = Cli::default_signature_path(root);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::InvalidPath(_)));
 
-    // Relative path
-    let rel = PathBuf::from("file.txt");
-    let sig = Cli::default_signature_path(&rel);
-    assert_eq!(sig, PathBuf::from("file.txt.minisig"));
+        // Relative path ending in ".." - file_name() returns None, should return error
+        let rel = Path::new("../some/..");
+        let result = Cli::default_signature_path(rel);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::InvalidPath(_)));
+    }
 }
