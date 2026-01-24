@@ -10,6 +10,7 @@ use crate::crypto::{
 };
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64, read_u64_le, write_u64_le};
+use subtle::ConstantTimeEq;
 
 /// Size of the public key structure in bytes
 pub const PUBKEY_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + PUBLIC_KEY_BYTES; // 42 bytes
@@ -372,11 +373,12 @@ impl SeckeyStruct {
         let computed_checksum = Self::compute_checksum(decrypted_keynum, &secret_key_bytes);
 
         // Verify decrypted checksum matches recomputed checksum
-        if computed_checksum != decrypted_checksum {
-            return Err(Error::ChecksumFailed);
+        // Use constant-time comparison to prevent timing side-channel attacks
+        if computed_checksum.ct_eq(&decrypted_checksum).into() {
+            Ok((SecretKey::from_bytes(secret_key_bytes), decrypted_keynum))
+        } else {
+            Err(Error::ChecksumFailed)
         }
-
-        Ok((SecretKey::from_bytes(secret_key_bytes), decrypted_keynum))
     }
 
     /// Get the unencrypted secret key (only works for unencrypted keys)

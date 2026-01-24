@@ -248,3 +248,24 @@ mod tests {
         assert_eq!(sig, PathBuf::from("/path/to/file.dat.minisig"));
     }
 }
+
+#[test]
+fn test_default_signature_path_edge_cases() {
+    use std::path::PathBuf;
+
+    // Normal case
+    let path = PathBuf::from("/path/to/file.txt");
+    let sig = Cli::default_signature_path(&path);
+    assert_eq!(sig, PathBuf::from("/path/to/file.txt.minisig"));
+
+    // Root path case (has no filename)
+    let root = PathBuf::from("/");
+    let sig = Cli::default_signature_path(&root);
+    // Currently this produces "/.minisig" which might not be intended
+    assert_eq!(sig, PathBuf::from("/.minisig"));
+
+    // Relative path
+    let rel = PathBuf::from("file.txt");
+    let sig = Cli::default_signature_path(&rel);
+    assert_eq!(sig, PathBuf::from("file.txt.minisig"));
+}
