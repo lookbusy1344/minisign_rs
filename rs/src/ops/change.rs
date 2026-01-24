@@ -96,7 +96,12 @@ pub fn change(
     };
 
     // Write the modified secret key back to file
-    let seckey_contents = new_seckey.to_file_contents("minisign encrypted secret key");
+    let seckey_comment = if options.remove_password {
+        "minisign secret key"
+    } else {
+        "minisign encrypted secret key"
+    };
+    let seckey_contents = new_seckey.to_file_contents(seckey_comment);
     write_secret_key_file(&options.secret_key_file, &seckey_contents)?;
 
     Ok(ChangeResult {

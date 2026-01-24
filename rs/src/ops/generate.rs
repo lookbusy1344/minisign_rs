@@ -126,8 +126,13 @@ pub fn generate(options: &GenerateOptions, password: Option<&[u8]>) -> Result<Ge
     ensure_parent_directory(&options.secret_key_file)?;
     ensure_parent_directory(&options.public_key_file)?;
 
-    // Write the secret key file
-    let seckey_contents = seckey.to_file_contents("minisign encrypted secret key");
+    // Write the secret key file with appropriate comment
+    let seckey_comment = if options.no_password {
+        "minisign secret key"
+    } else {
+        "minisign encrypted secret key"
+    };
+    let seckey_contents = seckey.to_file_contents(seckey_comment);
     write_secret_key_file(&options.secret_key_file, &seckey_contents)?;
 
     // Write the public key file
@@ -235,8 +240,13 @@ fn generate_with_custom_params(
     ensure_parent_directory(&options.secret_key_file)?;
     ensure_parent_directory(&options.public_key_file)?;
 
-    // Write the secret key file
-    let seckey_contents = seckey.to_file_contents("minisign encrypted secret key");
+    // Write the secret key file with appropriate comment
+    let seckey_comment = if options.no_password {
+        "minisign secret key"
+    } else {
+        "minisign encrypted secret key"
+    };
+    let seckey_contents = seckey.to_file_contents(seckey_comment);
     write_secret_key_file(&options.secret_key_file, &seckey_contents)?;
 
     // Write the public key file
