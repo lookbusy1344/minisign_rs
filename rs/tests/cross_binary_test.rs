@@ -11,7 +11,7 @@ use tempfile::TempDir;
 
 /// Helper to create a command for the Rust minisign binary
 fn rust_minisign() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("minisign"))
+    Command::new(assert_cmd::cargo::cargo_bin!("minisign_rs"))
 }
 
 /// Helper to create a command for the C minisign binary (from homebrew)

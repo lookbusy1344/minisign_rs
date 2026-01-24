@@ -88,10 +88,10 @@ The `tests/fixtures` directory contains pre-generated keys and test files for qu
 
 ```bash
 # Sign a test file
-cargo run --release -- -S -m tests/fixtures/messages/hello.txt -s tests/fixtures/keys/test.key --password-file tests/fixtures/messages/password.txt
+cargo run --release --bin minisign_rs -- -S -m tests/fixtures/messages/hello.txt -s tests/fixtures/keys/test.key --password-file tests/fixtures/messages/password.txt
 
 # Verify the signature
-cargo run --release -- -V -m tests/fixtures/messages/hello.txt -p tests/fixtures/keys/test.pub
+cargo run --release --bin minisign_rs -- -V -m tests/fixtures/messages/hello.txt -p tests/fixtures/keys/test.pub
 ```
 
 Available test keys:

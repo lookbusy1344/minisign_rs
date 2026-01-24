@@ -30,7 +30,7 @@ proptest = "1"
 hex = "0.4"
 
 [[bin]]
-name = "minisign"
+name = "minisign_rs"
 path = "src/main.rs"
 
 [lib]

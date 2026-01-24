@@ -177,7 +177,7 @@ You can manually verify compatibility:
 
 ```bash
 # 1. Generate key with Rust
-cargo run -- -G -W -s rust.key -p rust.pub
+cargo run --bin minisign_rs -- -G -W -s rust.key -p rust.pub
 
 # 2. Verify Rust key works with C minisign
 echo "test" > message.txt
@@ -188,8 +188,8 @@ minisign -V -m message.txt -p rust.pub
 minisign -G -W -s c.key -p c.pub
 
 # 4. Verify C key works with Rust
-cargo run -- -S -W -m message.txt -s c.key
-cargo run -- -V -m message.txt -p c.pub
+cargo run --bin minisign_rs -- -S -W -m message.txt -s c.key
+cargo run --bin minisign_rs -- -V -m message.txt -p c.pub
 ```
 
 ## Regression Testing
@@ -244,8 +244,8 @@ The CI pipeline (`/.github/workflows/rust.yml`) runs on every commit:
 
 ```bash
 # Your existing C minisign keys just work
-cargo run -- -S -m file.txt -s ~/.minisign/minisign.key
-cargo run -- -V -m file.txt -p minisign.pub
+cargo run --bin minisign_rs -- -S -m file.txt -s ~/.minisign/minisign.key
+cargo run --bin minisign_rs -- -V -m file.txt -p minisign.pub
 ```
 
 ### From Rust to C minisign
