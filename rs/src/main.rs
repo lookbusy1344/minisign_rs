@@ -88,10 +88,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
         println!();
-        println!(
-            "minisign -Vm <file> -P {}",
-            result.keynum_hex
-        );
+        println!("minisign -Vm <file> -P {}", result.keynum_hex);
     }
 
     Ok(())
@@ -225,7 +222,10 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let result = recreate(&options, password.as_deref().map(str::as_bytes))?;
 
     if !cli.quiet {
-        println!("Public key recreated as {}", result.public_key_file.display());
+        println!(
+            "Public key recreated as {}",
+            result.public_key_file.display()
+        );
     }
 
     Ok(())
@@ -277,6 +277,5 @@ fn prompt_password(prompt: &str) -> Result<String> {
         .flush()
         .map_err(|e| Error::Io(format!("Failed to flush stdout: {e}")))?;
 
-    rpassword::read_password()
-        .map_err(|e| Error::Io(format!("Failed to read password: {e}")))
+    rpassword::read_password().map_err(|e| Error::Io(format!("Failed to read password: {e}")))
 }

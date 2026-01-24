@@ -41,10 +41,7 @@ fn test_version_flag() {
 
 #[test]
 fn test_generate_missing_arguments() {
-    minisign_cmd()
-        .arg("-G")
-        .assert()
-        .failure();
+    minisign_cmd().arg("-G").assert().failure();
 }
 
 #[test]
