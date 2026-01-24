@@ -84,13 +84,13 @@ pub fn generate(options: &GenerateOptions, password: Option<&[u8]>) -> Result<Ge
     }
 
     // Generate the keypair
-    let (secret_key, public_key, keynum) = generate_keypair();
+    let (secret_key, public_key, keynum) = generate_keypair()?;
 
     // Create the secret key structure
     let seckey = if options.no_password {
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
-        let pwd = password.unwrap(); // Safe because we checked above
+        let pwd = password.ok_or(Error::PasswordRequired)?;
 
         // Generate random salt
         let mut kdf_salt = [0u8; 32];
@@ -193,13 +193,13 @@ fn generate_with_custom_params(
     }
 
     // Generate the keypair
-    let (secret_key, public_key, keynum) = generate_keypair();
+    let (secret_key, public_key, keynum) = generate_keypair()?;
 
     // Create the secret key structure
     let seckey = if options.no_password {
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
-        let pwd = password.unwrap();
+        let pwd = password.ok_or(Error::PasswordRequired)?;
 
         // Generate random salt
         let mut kdf_salt = [0u8; 32];

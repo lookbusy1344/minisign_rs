@@ -110,14 +110,13 @@ impl KeyNum {
 
     /// Generate a random key number
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the system random number generator fails (extremely rare)
-    #[must_use]
-    pub fn generate() -> Self {
+    /// Returns an error if the system random number generator fails
+    pub fn generate() -> Result<Self> {
         let mut bytes = [0u8; KEYNUM_BYTES];
-        getrandom::getrandom(&mut bytes).expect("RNG failure");
-        Self(bytes)
+        getrandom::getrandom(&mut bytes).map_err(|e| Error::RngError(e.to_string()))?;
+        Ok(Self(bytes))
     }
 
     /// Get a reference to the key number bytes
@@ -148,16 +147,19 @@ impl std::fmt::Debug for KeyNum {
 /// # Returns
 ///
 /// A tuple of (`secret_key`, `public_key`, `keynum`)
-#[must_use]
-pub fn generate_keypair() -> (SecretKey, PublicKey, KeyNum) {
+///
+/// # Errors
+///
+/// Returns an error if the random number generator fails
+pub fn generate_keypair() -> Result<(SecretKey, PublicKey, KeyNum)> {
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
 
     let secret_key = SecretKey::from_bytes(signing_key.to_keypair_bytes());
     let public_key = PublicKey::from_bytes(verifying_key.to_bytes());
-    let keynum = KeyNum::generate();
+    let keynum = KeyNum::generate()?;
 
-    (secret_key, public_key, keynum)
+    Ok((secret_key, public_key, keynum))
 }
 
 /// Sign a message with a secret key
@@ -324,8 +326,8 @@ mod tests {
 
     #[test]
     fn test_keynum_generation() {
-        let kn1 = KeyNum::generate();
-        let kn2 = KeyNum::generate();
+        let kn1 = KeyNum::generate().expect("RNG should work");
+        let kn2 = KeyNum::generate().expect("RNG should work");
         // Should be extremely unlikely to be equal
         assert_ne!(kn1, kn2);
     }
@@ -389,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_sign_verify_roundtrip() {
-        let (secret_key, public_key, _keynum) = generate_keypair();
+        let (secret_key, public_key, _keynum) = generate_keypair().expect("RNG should work");
         let message = b"test message";
 
         let signature = sign(&secret_key, message).expect("signing failed");
@@ -398,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_verify_wrong_message() {
-        let (secret_key, public_key, _keynum) = generate_keypair();
+        let (secret_key, public_key, _keynum) = generate_keypair().expect("RNG should work");
         let message = b"test message";
         let wrong_message = b"wrong message";
 
@@ -409,8 +411,8 @@ mod tests {
 
     #[test]
     fn test_verify_wrong_key() {
-        let (secret_key, _public_key, _keynum) = generate_keypair();
-        let (_, wrong_public_key, _) = generate_keypair();
+        let (secret_key, _public_key, _keynum) = generate_keypair().expect("RNG should work");
+        let (_, wrong_public_key, _) = generate_keypair().expect("RNG should work");
         let message = b"test message";
 
         let signature = sign(&secret_key, message).expect("signing failed");

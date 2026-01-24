@@ -123,7 +123,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Generate a test keypair and write secret key
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
         let sk_path = temp_dir.path().join("test.key");
@@ -163,7 +163,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Generate a test keypair with fast encryption (N=2^14)
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpassword";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -210,7 +210,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted secret key
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpassword";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -253,7 +253,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
 
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"correctpassword";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -298,7 +298,7 @@ mod tests {
     fn test_recreate_file_exists_without_force() {
         let temp_dir = TempDir::new().unwrap();
 
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
         let sk_path = temp_dir.path().join("test.key");
@@ -323,7 +323,7 @@ mod tests {
     fn test_recreate_force_overwrite() {
         let temp_dir = TempDir::new().unwrap();
 
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
         let sk_path = temp_dir.path().join("test.key");
@@ -347,7 +347,8 @@ mod tests {
 
     #[test]
     fn test_extract_public_key_from_secret() {
-        let (secret_key, expected_public_key, _keynum) = generate_keypair();
+        let (secret_key, expected_public_key, _keynum) =
+            generate_keypair().expect("RNG should work");
 
         let extracted_public = extract_public_key_from_secret(&secret_key);
 
@@ -359,7 +360,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Generate keypair and save both keys
-        let (secret_key, public_key, keynum) = generate_keypair();
+        let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
         let pubkey_original = PubkeyStruct::new(keynum, public_key);
 

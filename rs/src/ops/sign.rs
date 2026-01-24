@@ -266,7 +266,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Generate a test key with weak scrypt parameters
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpass";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -429,7 +429,7 @@ mod tests {
         fs::write(&message_path, message).unwrap();
 
         // Generate a temporary keypair
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
 
         // Create prehashed signature
         let sig_prehashed =

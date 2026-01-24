@@ -192,7 +192,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted key with fast parameters (N=2^14)
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let old_password = b"oldpassword";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -249,7 +249,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted key with fast parameters
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"password";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -298,7 +298,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create an unencrypted key
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
         let sk_path = temp_dir.path().join("test.key");
@@ -332,7 +332,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted key
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"password";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -372,7 +372,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
 
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"correctpassword";
         let mut kdf_salt = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut kdf_salt);
@@ -410,7 +410,7 @@ mod tests {
     fn test_encrypt_without_new_password_fails() {
         let temp_dir = TempDir::new().unwrap();
 
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
         let sk_path = temp_dir.path().join("test.key");
@@ -434,7 +434,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
 
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
         let sk_path = temp_dir.path().join("test.key");

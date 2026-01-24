@@ -7,8 +7,8 @@ use minisign::{
     crypto::{blake2b_512, verify},
     keys::PubkeyStruct,
     ops::{
-        generate::{generate, GenerateOptions},
-        sign::{sign, SignOptions},
+        generate::{GenerateOptions, generate},
+        sign::{SignOptions, sign},
     },
     signature::SignatureBox,
 };

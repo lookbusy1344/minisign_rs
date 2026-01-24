@@ -85,6 +85,9 @@ pub enum Error {
     #[error("key derivation failed: {0}")]
     KdfError(String),
 
+    #[error("random number generator failed: {0}")]
+    RngError(String),
+
     #[error("password required but not provided")]
     PasswordRequired,
 

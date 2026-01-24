@@ -862,7 +862,7 @@ mod tests {
         use crate::crypto::generate_keypair;
 
         // Generate a test keypair
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
 
         let password = b"test_password";
         let kdf_salt = [42u8; KDF_SALT_BYTES];
@@ -901,7 +901,7 @@ mod tests {
     fn test_decrypt_with_wrong_password() {
         use crate::crypto::generate_keypair;
 
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
 
         let password = b"correct_password";
         let wrong_password = b"wrong_password";
@@ -935,7 +935,7 @@ mod tests {
         use crate::crypto::generate_keypair;
 
         // Generate a test keypair
-        let (secret_key, _public_key, keynum) = generate_keypair();
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
 
         // Create unencrypted secret key structure
         let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);

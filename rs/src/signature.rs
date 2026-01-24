@@ -407,7 +407,7 @@ mod tests {
     fn test_signature_box_file_format_roundtrip() {
         use crate::crypto::{generate_keypair, sign};
 
-        let (secret_key, public_key, keynum) = generate_keypair();
+        let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
         let message = b"test message";
         let signature = sign(&secret_key, message).expect("signing should succeed");
 
@@ -441,7 +441,7 @@ mod tests {
     fn test_signature_box_global_signature_verification() {
         use crate::crypto::generate_keypair;
 
-        let (secret_key, public_key, keynum) = generate_keypair();
+        let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
         let signature = Signature::from_bytes([42; SIGNATURE_BYTES]);
         let sig_struct = SigStruct::new(keynum, signature, false);
 
@@ -459,7 +459,7 @@ mod tests {
             .expect("should verify");
 
         // Should fail with wrong key
-        let (_, wrong_key, _) = generate_keypair();
+        let (_, wrong_key, _) = generate_keypair().expect("RNG should work");
         assert!(sig_box.verify_global_signature(&wrong_key).is_err());
     }
 
@@ -474,7 +474,7 @@ mod tests {
     fn test_signature_box_prehashed_mode() {
         use crate::crypto::generate_keypair;
 
-        let (secret_key, _, keynum) = generate_keypair();
+        let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
         let signature = Signature::from_bytes([99; SIGNATURE_BYTES]);
         let sig_struct = SigStruct::new(keynum, signature, true);
 
