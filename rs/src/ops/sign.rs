@@ -179,7 +179,10 @@ fn generate_default_trusted_comment() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{crypto::{blake2b_512, verify as crypto_verify}, keys::PubkeyStruct};
+    use crate::{
+        crypto::{blake2b_512, verify as crypto_verify},
+        keys::PubkeyStruct,
+    };
     use std::fs;
     use tempfile::TempDir;
 

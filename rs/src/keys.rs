@@ -11,6 +11,7 @@ use crate::crypto::{
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64, read_u64_le, write_u64_le};
 use subtle::ConstantTimeEq;
+use zeroize::Zeroizing;
 
 /// Size of the public key structure in bytes
 pub const PUBKEY_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + PUBLIC_KEY_BYTES; // 42 bytes
@@ -286,8 +287,8 @@ impl SeckeyStruct {
         let derived_key =
             derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
 
-        // Create combined blob: keynum + secret_key + checksum
-        let mut blob = Vec::with_capacity(ENCRYPTED_BLOB_SIZE);
+        // Create combined blob: keynum + secret_key + checksum (zeroized on drop)
+        let mut blob = Zeroizing::new(Vec::with_capacity(ENCRYPTED_BLOB_SIZE));
         blob.extend_from_slice(keynum.as_bytes());
         blob.extend_from_slice(secret_key.as_bytes());
         blob.extend_from_slice(&computed_checksum);
@@ -345,14 +346,14 @@ impl SeckeyStruct {
         let derived_key =
             derive_key_with_params(password, &self.kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
 
-        // Reconstruct encrypted blob: keynum + secret_key + checksum
-        let mut encrypted_blob = Vec::with_capacity(ENCRYPTED_BLOB_SIZE);
+        // Reconstruct encrypted blob: keynum + secret_key + checksum (zeroized on drop)
+        let mut encrypted_blob = Zeroizing::new(Vec::with_capacity(ENCRYPTED_BLOB_SIZE));
         encrypted_blob.extend_from_slice(&self.encrypted_keynum);
         encrypted_blob.extend_from_slice(&self.secret_key_encrypted);
         encrypted_blob.extend_from_slice(&self.checksum); // checksum field contains encrypted checksum
 
-        // Decrypt entire blob
-        let mut decrypted_blob = [0u8; ENCRYPTED_BLOB_SIZE];
+        // Decrypt entire blob (zeroized on drop)
+        let mut decrypted_blob = Zeroizing::new([0u8; ENCRYPTED_BLOB_SIZE]);
         for i in 0..ENCRYPTED_BLOB_SIZE {
             decrypted_blob[i] = encrypted_blob[i] ^ derived_key[i];
         }

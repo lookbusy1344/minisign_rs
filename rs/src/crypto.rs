@@ -10,7 +10,7 @@ use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, Verifier, V
 use rand::rngs::OsRng;
 use scrypt::{Params as ScryptParams, scrypt};
 use std::io::Read;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 // Constants from the minisign specification
 pub const SIGNATURE_BYTES: usize = 64;
@@ -291,7 +291,7 @@ pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
 ///
 /// # Returns
 ///
-/// The derived key
+/// The derived key wrapped in `Zeroizing` for automatic memory cleanup
 ///
 /// # Errors
 ///
@@ -303,8 +303,8 @@ pub fn derive_key_with_params(
     r: u32,
     p: u32,
     output_len: usize,
-) -> Result<Vec<u8>> {
-    let mut output = vec![0u8; output_len];
+) -> Result<Zeroizing<Vec<u8>>> {
+    let mut output = Zeroizing::new(vec![0u8; output_len]);
 
     // The scrypt Params::new() has a max len of 64 bytes, but the low-level scrypt()
     // function can produce any length output. We use a nominal len for Params (capped at 64),
@@ -334,12 +334,12 @@ pub fn derive_key_with_params(
 ///
 /// # Returns
 ///
-/// The derived key
+/// The derived key wrapped in `Zeroizing` for automatic memory cleanup
 ///
 /// # Errors
 ///
 /// Returns `Error::KdfError` if key derivation fails
-pub fn derive_key(password: &[u8], salt: &[u8], output_len: usize) -> Result<Vec<u8>> {
+pub fn derive_key(password: &[u8], salt: &[u8], output_len: usize) -> Result<Zeroizing<Vec<u8>>> {
     derive_key_with_params(password, salt, SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P, output_len)
 }
 
