@@ -4,3 +4,4 @@ target/
 .DS_Store
 copilotDiffState.xml
 copilot.data.*.xml
+tests/fixtures/messages/hello.txt.minisig

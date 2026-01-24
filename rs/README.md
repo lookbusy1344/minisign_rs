@@ -82,6 +82,25 @@ cargo test test_sign_verify_roundtrip
 
 ## Testing
 
+### Quick Testing with Fixtures
+
+The `tests/fixtures` directory contains pre-generated keys and test files for quick testing:
+
+```bash
+# Sign a test file
+cargo run --release -- -S -m tests/fixtures/messages/hello.txt -s tests/fixtures/keys/test.key --password-file tests/fixtures/messages/password.txt
+
+# Verify the signature
+cargo run --release -- -V -m tests/fixtures/messages/hello.txt -p tests/fixtures/keys/test.pub
+```
+
+Available test keys:
+- `tests/fixtures/keys/test.key` (password: "test")
+- `tests/fixtures/keys/unencrypted.key` (no password)
+- `tests/fixtures/keys/c_encrypted_password123.key` (password: "password123")
+
+See `tests/fixtures/keys/README.md` for complete details.
+
 ### Test Categories
 
 1. **Unit Tests**: In-module tests for individual functions
