@@ -56,6 +56,19 @@ pub fn change(
     old_password: Option<&[u8]>,
     new_password: Option<&[u8]>,
 ) -> Result<ChangeResult> {
+    change_with_log_n(options, old_password, new_password, SCRYPT_LOG_N)
+}
+
+/// Internal implementation of change with custom scrypt `log_n` parameter
+///
+/// This allows both the production function and tests to share the same logic
+/// while using different scrypt parameters.
+fn change_with_log_n(
+    options: &ChangeOptions,
+    old_password: Option<&[u8]>,
+    new_password: Option<&[u8]>,
+    log_n: u8,
+) -> Result<ChangeResult> {
     // Load the secret key
     let seckey = load_secret_key(&options.secret_key_file)?;
 
@@ -80,7 +93,7 @@ pub fn change(
         rand::thread_rng().fill_bytes(&mut kdf_salt);
 
         // Calculate KDF parameters using libsodium formula
-        let n = 1u64 << SCRYPT_LOG_N;
+        let n = 1u64 << log_n;
         let r = u64::from(SCRYPT_R);
         let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
@@ -134,55 +147,6 @@ fn write_secret_key_file(path: &PathBuf, contents: &str) -> Result<()> {
     Ok(())
 }
 
-/// Change password with custom scrypt parameters (for testing)
-#[cfg(test)]
-fn change_with_custom_params(
-    options: &ChangeOptions,
-    old_password: Option<&[u8]>,
-    new_password: Option<&[u8]>,
-    log_n: u8,
-) -> Result<ChangeResult> {
-    let seckey = load_secret_key(&options.secret_key_file)?;
-
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = old_password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
-
-    let new_seckey = if options.remove_password {
-        SeckeyStruct::new_unencrypted(keynum, &secret_key)
-    } else {
-        let new_pwd = new_password.ok_or(Error::PasswordRequired)?;
-
-        let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
-
-        let n = 1u64 << log_n;
-        let r = u64::from(SCRYPT_R);
-        let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
-        let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
-
-        SeckeyStruct::new_encrypted(
-            keynum,
-            &secret_key,
-            new_pwd,
-            kdf_salt,
-            kdf_opslimit,
-            kdf_memlimit,
-        )?
-    };
-
-    let seckey_contents = new_seckey.to_file_contents("minisign encrypted secret key");
-    write_secret_key_file(&options.secret_key_file, &seckey_contents)?;
-
-    Ok(ChangeResult {
-        secret_key_file: options.secret_key_file.clone(),
-        encrypted: !options.remove_password,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,9 +191,8 @@ mod tests {
             remove_password: false,
         };
 
-        let result =
-            change_with_custom_params(&options, Some(old_password), Some(new_password), 14)
-                .expect("password change should succeed");
+        let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
+            .expect("password change should succeed");
 
         assert_eq!(result.secret_key_file, sk_path);
         assert!(result.encrypted);
@@ -283,7 +246,7 @@ mod tests {
             remove_password: true,
         };
 
-        let result = change_with_custom_params(&options, Some(password), None, 14)
+        let result = change_with_log_n(&options, Some(password), None, 14)
             .expect("password removal should succeed");
 
         assert_eq!(result.secret_key_file, sk_path);
@@ -316,7 +279,7 @@ mod tests {
             remove_password: false,
         };
 
-        let result = change_with_custom_params(&options, None, Some(new_password), 14)
+        let result = change_with_log_n(&options, None, Some(new_password), 14)
             .expect("adding password should succeed");
 
         assert!(result.encrypted);
@@ -366,7 +329,7 @@ mod tests {
             remove_password: false,
         };
 
-        let result = change_with_custom_params(&options, None, Some(b"newpass"), 14);
+        let result = change_with_log_n(&options, None, Some(b"newpass"), 14);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::PasswordRequired));
     }
@@ -406,8 +369,7 @@ mod tests {
             remove_password: false,
         };
 
-        let result =
-            change_with_custom_params(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
+        let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
         assert!(result.is_err());
     }
 
@@ -427,7 +389,7 @@ mod tests {
             remove_password: false,
         };
 
-        let result = change_with_custom_params(&options, None, None, 14);
+        let result = change_with_log_n(&options, None, None, 14);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::PasswordRequired));
     }
@@ -457,7 +419,7 @@ mod tests {
             remove_password: false,
         };
 
-        change_with_custom_params(&options, None, Some(b"password"), 14)
+        change_with_log_n(&options, None, Some(b"password"), 14)
             .expect("adding password should succeed");
 
         // Verify permissions are still 0600
