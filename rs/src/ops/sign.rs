@@ -165,7 +165,8 @@ fn create_signature(
 
 /// Create the data that the global signature signs
 fn create_global_signature_data(sig_struct: &SigStruct, trusted_comment: &str) -> Vec<u8> {
-    let mut data = Vec::new();
+    let capacity = sig_struct.signature().as_bytes().len() + trusted_comment.len();
+    let mut data = Vec::with_capacity(capacity);
     data.extend_from_slice(sig_struct.signature().as_bytes());
     data.extend_from_slice(trusted_comment.as_bytes());
     data

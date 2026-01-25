@@ -334,7 +334,8 @@ impl SignatureBox {
     /// Returns `Error::VerificationFailed` if the global signature is invalid
     pub fn verify_global_signature(&self, public_key: &PublicKey) -> Result<()> {
         // Build the data that was signed: signature bytes + trusted comment
-        let mut data = Vec::new();
+        let capacity = self.sig_struct.signature().as_bytes().len() + self.trusted_comment.len();
+        let mut data = Vec::with_capacity(capacity);
         data.extend_from_slice(self.sig_struct.signature().as_bytes());
         data.extend_from_slice(self.trusted_comment.as_bytes());
 
@@ -355,7 +356,8 @@ impl SignatureBox {
         secret_key: &SecretKey,
     ) -> Result<Self> {
         // Build the data to sign: signature bytes + trusted comment
-        let mut data = Vec::new();
+        let capacity = sig_struct.signature().as_bytes().len() + trusted_comment.len();
+        let mut data = Vec::with_capacity(capacity);
         data.extend_from_slice(sig_struct.signature().as_bytes());
         data.extend_from_slice(trusted_comment.as_bytes());
 

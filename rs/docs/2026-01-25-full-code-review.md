@@ -420,10 +420,15 @@ Add `# Examples` sections to all public API functions.
 
 ### Priority 4: Low (Nice to Have)
 
-#### 4.1 Pre-allocate vectors with known capacity
-**Effort**: 1-2 hours
+#### 4.1 ✅ COMPLETED: Pre-allocate vectors with known capacity
+**Effort**: 30 minutes
 
 Minor performance optimization in hot paths.
+
+**Completed**: Pre-allocated vectors with known capacity in:
+- `ops/sign.rs:create_global_signature_data()` - signature + comment concatenation
+- `signature.rs:verify_global_signature()` - signature + comment concatenation
+- `signature.rs:with_global_signature()` - signature + comment concatenation
 
 #### 4.2 Add property-based tests for validation
 **Effort**: 2-3 hours
