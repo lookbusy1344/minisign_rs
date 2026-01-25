@@ -8,7 +8,6 @@ use crate::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
 };
-use rand::RngCore;
 use std::path::{Path, PathBuf};
 
 // Scrypt parameters matching libsodium SENSITIVE level
@@ -104,9 +103,9 @@ fn generate_with_log_n(
     } else {
         let pwd = password.ok_or(Error::PasswordRequired)?;
 
-        // Generate random salt
+        // Generate random salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
         let n = 1u64 << log_n;

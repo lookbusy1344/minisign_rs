@@ -3,7 +3,6 @@
 //! This module implements changing or removing the password on a secret key.
 
 use crate::{Result, errors::Error, keys::SeckeyStruct};
-use rand::RngCore;
 use std::path::PathBuf;
 
 // Scrypt parameters matching libsodium SENSITIVE level
@@ -88,9 +87,9 @@ fn change_with_log_n(
         // Re-encrypt with new password
         let new_pwd = new_password.ok_or(Error::PasswordRequired)?;
 
-        // Generate new salt
+        // Generate new salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
         let n = 1u64 << log_n;
@@ -156,7 +155,6 @@ mod tests {
 
     #[test]
     fn test_change_password_fast() {
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -164,7 +162,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let old_password = b"oldpassword";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -212,7 +210,6 @@ mod tests {
 
     #[test]
     fn test_remove_password_from_encrypted_key() {
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -220,7 +217,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"password";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -295,7 +292,6 @@ mod tests {
 
     #[test]
     fn test_change_without_old_password_fails() {
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -303,7 +299,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"password";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -336,14 +332,13 @@ mod tests {
 
     #[test]
     fn test_change_with_wrong_old_password_fails() {
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"correctpassword";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;

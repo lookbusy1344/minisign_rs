@@ -158,7 +158,6 @@ mod tests {
 
     #[test]
     fn test_recreate_from_encrypted_key_fast() {
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -166,7 +165,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpassword";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -205,7 +204,6 @@ mod tests {
 
     #[test]
     fn test_recreate_without_password_fails() {
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -213,7 +211,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpassword";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -249,14 +247,13 @@ mod tests {
 
     #[test]
     fn test_recreate_wrong_password_fails() {
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"correctpassword";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;

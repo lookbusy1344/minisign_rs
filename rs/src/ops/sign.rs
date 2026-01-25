@@ -265,7 +265,6 @@ mod tests {
         // First, generate a fast encrypted key for testing
         use crate::crypto::generate_keypair;
         use crate::keys::SeckeyStruct;
-        use rand::RngCore;
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -273,7 +272,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpass";
         let mut kdf_salt = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
+        getrandom::getrandom(&mut kdf_salt).unwrap();
 
         // Use N=2^14 for fast testing (~50ms)
         let n = 1u64 << 14;
