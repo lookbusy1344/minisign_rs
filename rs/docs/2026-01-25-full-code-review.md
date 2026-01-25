@@ -112,7 +112,7 @@ The following functions are duplicated across modules with minor variations:
 
 **Recommendation**: Extract to a shared `utils.rs` or add these to `keys.rs` as public methods.
 
-### 2.2 ⚠️ Inconsistent Error Context
+### 2.2 ✅ FIXED: Inconsistent Error Context
 
 Some file operations provide rich error context:
 ```rust
@@ -123,6 +123,10 @@ Others use generic errors:
 ```rust
 Error::other(format!("failed to read data: {e}"))  // Less informative
 ```
+
+**Status**: FIXED - Replaced all `Error::other()` calls in production code with structured error types:
+- `crypto.rs:187`: Now uses `Error::InvalidSecretKey` instead of `Error::other`
+- `crypto.rs:276`: Now uses `Error::Io` instead of `Error::other`
 
 **Recommendation**: Use structured errors consistently with path information.
 
@@ -395,10 +399,12 @@ Add to `tests/fuzzing.rs`:
 
 Test TOCTOU prevention by spawning multiple processes attempting to create same files.
 
-#### 3.3 Improve error context consistency
-**Effort**: 2-3 hours
+#### 3.3 ✅ COMPLETED: Improve error context consistency
+**Effort**: 30 minutes
 
 Audit all `Error::other()` calls and replace with structured variants.
+
+**Completed**: Replaced all production `Error::other()` calls with appropriate structured error types.
 
 #### 3.4 Add documentation examples
 **Effort**: 2-3 hours
