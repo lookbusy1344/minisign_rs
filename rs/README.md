@@ -73,8 +73,8 @@ cargo test -- --ignored
 cargo test && cargo test -- --ignored
 
 # Check code quality
-cargo fmt --check
-cargo clippy -- -D clippy::all -D clippy::pedantic
+cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
+cargo fmt
 
 # Run a specific test
 cargo test test_sign_verify_roundtrip
@@ -259,7 +259,7 @@ The Rust implementation provides significant memory safety improvements:
 cargo fmt
 
 # 2. Run clippy (pedantic mode)
-cargo clippy -- -D clippy::all -D clippy::pedantic
+cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 
 # 3. Run fast test suite (~9 seconds)
 cargo test
