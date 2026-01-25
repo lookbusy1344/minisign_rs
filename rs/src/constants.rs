@@ -47,6 +47,20 @@ pub use crate::signature::{
 // Re-export file format constants from keys module
 pub use crate::keys::{ENCRYPTED_BLOB_SIZE, PUBKEY_STRUCT_SIZE, SECKEY_STRUCT_SIZE};
 
+/// Maximum file size for non-prehashed signing/verification (1 GB)
+///
+/// This limit prevents resource exhaustion from maliciously large files.
+/// Files larger than this should use prehashed mode, which streams the
+/// file through Blake2b-512 without loading it entirely into memory.
+///
+/// ## Rationale
+///
+/// - Ed25519 requires the full message in memory for non-prehashed signatures
+/// - 1 GB is large enough for most reasonable use cases
+/// - Larger files should use prehashed mode (already supports streaming)
+/// - Matches industry best practices (e.g., similar to git object size limits)
+pub const MAX_MESSAGE_SIZE_BYTES: u64 = 1024 * 1024 * 1024; // 1 GB
+
 /// All constants in one place for easy reference
 ///
 /// This module provides no additional functionality beyond re-exporting
@@ -177,5 +191,17 @@ mod tests {
         // Encrypted blob consistency
         assert!(ENCRYPTED_BLOB_SIZE < SECKEY_STRUCT_SIZE);
         assert!(ENCRYPTED_BLOB_SIZE > SECRET_KEY_BYTES);
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_max_message_size() {
+        // 1 GB limit
+        assert_eq!(MAX_MESSAGE_SIZE_BYTES, 1024 * 1024 * 1024);
+        assert_eq!(MAX_MESSAGE_SIZE_BYTES, 1_073_741_824);
+
+        // Should be reasonable for CLI tool
+        assert!(MAX_MESSAGE_SIZE_BYTES > 1_000_000); // > 1 MB
+        assert!(MAX_MESSAGE_SIZE_BYTES <= 10 * 1024 * 1024 * 1024); // <= 10 GB
     }
 }

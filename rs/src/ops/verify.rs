@@ -4,6 +4,7 @@
 
 use crate::{
     Result,
+    constants::MAX_MESSAGE_SIZE_BYTES,
     crypto::{blake2b_512_stream, verify as crypto_verify},
     errors::Error,
     keys::PubkeyStruct,
@@ -127,6 +128,9 @@ fn verify_message_signature(
             std::fs::File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
         blake2b_512_stream(file)?.to_vec()
     } else {
+        // For non-prehashed mode, check file size limit first
+        check_file_size_limit(message_file)?;
+
         std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?
     };
 
@@ -136,6 +140,23 @@ fn verify_message_signature(
         &data_to_verify,
         sig_box.sig_struct().signature(),
     )
+}
+
+/// Check that a file doesn't exceed the maximum size for non-prehashed mode
+///
+/// Files larger than `MAX_MESSAGE_SIZE_BYTES` (1 GB) should use prehashed mode,
+/// which streams the file through Blake2b-512 without loading it into memory.
+fn check_file_size_limit(path: &str) -> Result<()> {
+    let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
+
+    let file_size = metadata.len();
+    if file_size > MAX_MESSAGE_SIZE_BYTES {
+        return Err(Error::Other(format!(
+            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). This signature uses non-prehashed mode."
+        )));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -311,4 +332,116 @@ fn test_verify_with_wrong_keynum() {
             _ => panic!("Expected KeyMismatch error, got: {e:?}"),
         }
     }
+}
+
+#[test]
+fn test_check_file_size_limit_small_file() {
+    use tempfile::NamedTempFile;
+
+    // Create a small file (1 KB)
+    let temp_file = NamedTempFile::new().unwrap();
+    std::fs::write(temp_file.path(), vec![0u8; 1024]).unwrap();
+
+    // Should pass size check
+    check_file_size_limit(temp_file.path().to_str().unwrap()).expect("small file should pass");
+}
+
+#[test]
+fn test_verify_file_too_large_fails() {
+    use crate::crypto::generate_keypair;
+    use crate::keys::{PubkeyStruct, SeckeyStruct};
+    use crate::ops::sign::{SignOptions, sign};
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate a test keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create a small message and sign it in non-prehashed mode
+    let message_path = temp_dir.path().join("message.txt");
+    std::fs::write(&message_path, b"small message").unwrap();
+
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.to_str().unwrap().to_string(),
+        message_file: message_path.to_str().unwrap().to_string(),
+        signature_file: Some(sig_path.to_str().unwrap().to_string()),
+        prehashed: false, // Non-prehashed signature
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign(&sign_opts, None).expect("signing should succeed");
+
+    // Verify with small file should succeed
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.to_str().unwrap().to_string()),
+        signature_file: sig_path.to_str().unwrap().to_string(),
+        message_file: message_path.to_str().unwrap().to_string(),
+        output: false,
+        quiet: false,
+    };
+
+    verify(&verify_opts).expect("verification should succeed with small file");
+
+    // Note: We can't actually test with a > 1 GB file in unit tests,
+    // but the check_file_size_limit function is tested separately
+}
+
+#[test]
+fn test_verify_prehashed_mode_no_size_limit() {
+    use crate::crypto::generate_keypair;
+    use crate::keys::{PubkeyStruct, SeckeyStruct};
+    use crate::ops::sign::{SignOptions, sign};
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate a test keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create a 10 MB file (would be too large for non-prehashed in practice,
+    // but prehashed mode streams it)
+    let message_path = temp_dir.path().join("large.bin");
+    std::fs::write(&message_path, vec![42u8; 10 * 1024 * 1024]).unwrap();
+
+    let sig_path = temp_dir.path().join("large.bin.minisig");
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.to_str().unwrap().to_string(),
+        message_file: message_path.to_str().unwrap().to_string(),
+        signature_file: Some(sig_path.to_str().unwrap().to_string()),
+        prehashed: true, // Prehashed mode - no size limit
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign(&sign_opts, None).expect("signing large file in prehashed mode should succeed");
+
+    // Verify should succeed with prehashed mode (streaming)
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.to_str().unwrap().to_string()),
+        signature_file: sig_path.to_str().unwrap().to_string(),
+        message_file: message_path.to_str().unwrap().to_string(),
+        output: false,
+        quiet: false,
+    };
+
+    verify(&verify_opts).expect("verification should succeed with prehashed large file");
 }

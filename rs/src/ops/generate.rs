@@ -8,7 +8,11 @@ use crate::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
 };
-use std::path::{Path, PathBuf};
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 // Scrypt parameters matching libsodium SENSITIVE level
 const SCRYPT_LOG_N: u8 = 20; // N = 2^20 = 1,048,576
@@ -79,16 +83,6 @@ fn generate_with_log_n(
     password: Option<&[u8]>,
     log_n: u8,
 ) -> Result<GenerateResult> {
-    // Check if files already exist (unless force is set)
-    if !options.force {
-        if options.secret_key_file.exists() {
-            return Err(Error::FileExists(options.secret_key_file.clone()));
-        }
-        if options.public_key_file.exists() {
-            return Err(Error::FileExists(options.public_key_file.clone()));
-        }
-    }
-
     // Ensure password is provided if encryption is requested
     if !options.no_password && password.is_none() {
         return Err(Error::PasswordRequired);
@@ -144,12 +138,11 @@ fn generate_with_log_n(
         "minisign encrypted secret key"
     };
     let seckey_contents = seckey.to_file_contents(seckey_comment);
-    write_secret_key_file(&options.secret_key_file, &seckey_contents)?;
+    write_secret_key_file(&options.secret_key_file, &seckey_contents, options.force)?;
 
     // Write the public key file
     let pubkey_contents = pubkey.to_file_contents(&comment);
-    std::fs::write(&options.public_key_file, pubkey_contents)
-        .map_err(|e| Error::file_write(&options.public_key_file, e))?;
+    write_public_key_file(&options.public_key_file, &pubkey_contents, options.force)?;
 
     Ok(GenerateResult {
         secret_key_file: options.secret_key_file.clone(),
@@ -166,20 +159,70 @@ fn ensure_parent_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Write a secret key file with appropriate permissions
-fn write_secret_key_file(path: &Path, contents: &str) -> Result<()> {
-    // Write the file
-    std::fs::write(path, contents).map_err(|e| Error::file_write(path, e))?;
+/// Write a secret key file with atomic creation and appropriate permissions
+///
+/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
+/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
+/// On Unix systems, sets mode 0600 (read/write for owner only).
+fn write_secret_key_file(path: &Path, contents: &str, force: bool) -> Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true);
 
-    // Set restrictive permissions on Unix systems
+    if force {
+        // Force mode: create or truncate existing file
+        options.create(true).truncate(true);
+    } else {
+        // Normal mode: fail if file already exists (atomic check)
+        options.create_new(true);
+    }
+
+    // Set restrictive permissions on Unix systems (before writing)
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
-        let mut permissions = metadata.permissions();
-        permissions.set_mode(0o600); // Read/write for owner only
-        std::fs::set_permissions(path, permissions).map_err(|e| Error::file_write(path, e))?;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600); // Read/write for owner only
     }
+
+    let mut file = options.open(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            Error::FileExists(path.into())
+        } else {
+            Error::file_write(path, e)
+        }
+    })?;
+
+    file.write_all(contents.as_bytes())
+        .map_err(|e| Error::file_write(path, e))?;
+
+    Ok(())
+}
+
+/// Write a public key file with atomic creation
+///
+/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
+/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
+fn write_public_key_file(path: &Path, contents: &str, force: bool) -> Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true);
+
+    if force {
+        // Force mode: create or truncate existing file
+        options.create(true).truncate(true);
+    } else {
+        // Normal mode: fail if file already exists (atomic check)
+        options.create_new(true);
+    }
+
+    let mut file = options.open(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            Error::FileExists(path.into())
+        } else {
+            Error::file_write(path, e)
+        }
+    })?;
+
+    file.write_all(contents.as_bytes())
+        .map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
 }
@@ -455,5 +498,181 @@ mod tests {
         // Verify keynums match
         assert_eq!(seckey.keynum(), pubkey.keynum());
         assert_eq!(seckey.keynum().to_hex(), result.keynum_hex);
+    }
+
+    #[test]
+    fn test_atomic_file_creation_prevents_race() {
+        let temp_dir = TempDir::new().unwrap();
+        let sk_path = temp_dir.path().join("test.key");
+        let pk_path = temp_dir.path().join("test.pub");
+
+        // Create existing secret key file
+        fs::write(&sk_path, "existing secret key").unwrap();
+
+        let options = GenerateOptions {
+            secret_key_file: sk_path.clone(),
+            public_key_file: pk_path,
+            comment: None,
+            force: false,
+            no_password: true,
+        };
+
+        // Should fail due to existing file (atomic check)
+        let result = generate(&options, None);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::FileExists(_)));
+
+        // Verify original content unchanged
+        let contents = fs::read_to_string(&sk_path).unwrap();
+        assert_eq!(contents, "existing secret key");
+    }
+
+    #[test]
+    fn test_atomic_file_creation_pubkey_prevents_race() {
+        let temp_dir = TempDir::new().unwrap();
+        let sk_path = temp_dir.path().join("test.key");
+        let pk_path = temp_dir.path().join("test.pub");
+
+        // Create existing public key file
+        fs::write(&pk_path, "existing public key").unwrap();
+
+        let options = GenerateOptions {
+            secret_key_file: sk_path,
+            public_key_file: pk_path.clone(),
+            comment: None,
+            force: false,
+            no_password: true,
+        };
+
+        // Should fail due to existing file (atomic check)
+        let result = generate(&options, None);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::FileExists(_)));
+
+        // Verify original content unchanged
+        let contents = fs::read_to_string(&pk_path).unwrap();
+        assert_eq!(contents, "existing public key");
+    }
+
+    #[test]
+    fn test_atomic_file_creation_both_files_check() {
+        let temp_dir = TempDir::new().unwrap();
+        let sk_path = temp_dir.path().join("test.key");
+        let pk_path = temp_dir.path().join("test.pub");
+
+        // Create both files
+        fs::write(&sk_path, "existing sk").unwrap();
+        fs::write(&pk_path, "existing pk").unwrap();
+
+        let options = GenerateOptions {
+            secret_key_file: sk_path,
+            public_key_file: pk_path,
+            comment: None,
+            force: false,
+            no_password: true,
+        };
+
+        // Should fail (doesn't matter which file is checked first)
+        let result = generate(&options, None);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::FileExists(_)));
+    }
+
+    #[test]
+    fn test_write_secret_key_file_atomic_creation() {
+        let temp_dir = TempDir::new().unwrap();
+        let sk_path = temp_dir.path().join("new.key");
+
+        // Should succeed when file doesn't exist
+        write_secret_key_file(&sk_path, "secret key content", false)
+            .expect("should create new file");
+
+        // Verify content
+        let contents = fs::read_to_string(&sk_path).unwrap();
+        assert_eq!(contents, "secret key content");
+    }
+
+    #[test]
+    fn test_write_secret_key_file_prevents_overwrite() {
+        let temp_dir = TempDir::new().unwrap();
+        let sk_path = temp_dir.path().join("existing.key");
+
+        // Create initial file
+        fs::write(&sk_path, "original content").unwrap();
+
+        // Try to write without force - should fail
+        let result = write_secret_key_file(&sk_path, "new content", false);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::FileExists(_)));
+
+        // Verify original content unchanged
+        let contents = fs::read_to_string(&sk_path).unwrap();
+        assert_eq!(contents, "original content");
+    }
+
+    #[test]
+    fn test_write_secret_key_file_force_overwrites() {
+        let temp_dir = TempDir::new().unwrap();
+        let sk_path = temp_dir.path().join("test.key");
+
+        // Create initial file
+        fs::write(&sk_path, "original content").unwrap();
+
+        // Write with force - should succeed
+        write_secret_key_file(&sk_path, "overwritten content", true)
+            .expect("should overwrite with force");
+
+        // Verify content was overwritten
+        let contents = fs::read_to_string(&sk_path).unwrap();
+        assert_eq!(contents, "overwritten content");
+    }
+
+    #[test]
+    fn test_write_public_key_file_atomic_creation() {
+        let temp_dir = TempDir::new().unwrap();
+        let pk_path = temp_dir.path().join("new.pub");
+
+        // Should succeed when file doesn't exist
+        write_public_key_file(&pk_path, "public key content", false)
+            .expect("should create new file");
+
+        // Verify content
+        let contents = fs::read_to_string(&pk_path).unwrap();
+        assert_eq!(contents, "public key content");
+    }
+
+    #[test]
+    fn test_write_public_key_file_prevents_overwrite() {
+        let temp_dir = TempDir::new().unwrap();
+        let pk_path = temp_dir.path().join("existing.pub");
+
+        // Create initial file
+        fs::write(&pk_path, "original content").unwrap();
+
+        // Try to write without force - should fail
+        let result = write_public_key_file(&pk_path, "new content", false);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::FileExists(_)));
+
+        // Verify original content unchanged
+        let contents = fs::read_to_string(&pk_path).unwrap();
+        assert_eq!(contents, "original content");
+    }
+
+    #[test]
+    fn test_write_public_key_file_force_overwrites() {
+        let temp_dir = TempDir::new().unwrap();
+        let pk_path = temp_dir.path().join("test.pub");
+
+        // Create initial file
+        fs::write(&pk_path, "original content").unwrap();
+
+        // Write with force - should succeed
+        write_public_key_file(&pk_path, "overwritten content", true)
+            .expect("should overwrite with force");
+
+        // Verify content was overwritten
+        let contents = fs::read_to_string(&pk_path).unwrap();
+        assert_eq!(contents, "overwritten content");
     }
 }
