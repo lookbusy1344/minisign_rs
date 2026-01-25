@@ -21,6 +21,8 @@ pub struct ChangeOptions {
     pub secret_key_file: PathBuf,
     /// Remove password (make unencrypted)
     pub remove_password: bool,
+    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    pub allow_kdf_fallback: bool,
 }
 
 /// Result of password change operation
@@ -105,6 +107,7 @@ fn change_with_log_n(
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            options.allow_kdf_fallback,
         )?
     };
 
@@ -153,6 +156,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 
@@ -164,6 +168,7 @@ mod tests {
         let options = ChangeOptions {
             secret_key_file: sk_path.clone(),
             remove_password: false,
+            allow_kdf_fallback: false,
         };
 
         let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
@@ -207,6 +212,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 
@@ -217,6 +223,7 @@ mod tests {
         let options = ChangeOptions {
             secret_key_file: sk_path.clone(),
             remove_password: true,
+            allow_kdf_fallback: false,
         };
 
         let result = change_with_log_n(&options, Some(password), None, 14)
@@ -250,6 +257,7 @@ mod tests {
         let options = ChangeOptions {
             secret_key_file: sk_path.clone(),
             remove_password: false,
+            allow_kdf_fallback: false,
         };
 
         let result = change_with_log_n(&options, None, Some(new_password), 14)
@@ -288,6 +296,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 
@@ -298,6 +307,7 @@ mod tests {
         let options = ChangeOptions {
             secret_key_file: sk_path,
             remove_password: false,
+            allow_kdf_fallback: false,
         };
 
         let result = change_with_log_n(&options, None, Some(b"newpass"), 14);
@@ -326,6 +336,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 
@@ -336,6 +347,7 @@ mod tests {
         let options = ChangeOptions {
             secret_key_file: sk_path,
             remove_password: false,
+            allow_kdf_fallback: false,
         };
 
         let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
@@ -356,6 +368,7 @@ mod tests {
         let options = ChangeOptions {
             secret_key_file: sk_path,
             remove_password: false,
+            allow_kdf_fallback: false,
         };
 
         let result = change_with_log_n(&options, None, None, 14);
@@ -386,6 +399,7 @@ mod tests {
         let options = ChangeOptions {
             secret_key_file: sk_path.clone(),
             remove_password: false,
+            allow_kdf_fallback: false,
         };
 
         change_with_log_n(&options, None, Some(b"password"), 14)

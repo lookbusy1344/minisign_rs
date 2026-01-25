@@ -32,6 +32,8 @@ pub struct GenerateOptions {
     pub force: bool,
     /// Create unencrypted key (no password)
     pub no_password: bool,
+    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    pub allow_kdf_fallback: bool,
 }
 
 /// Result of key generation
@@ -111,6 +113,7 @@ fn generate_with_log_n(
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            options.allow_kdf_fallback,
         )?
     };
 
@@ -176,6 +179,7 @@ mod tests {
             comment: Some("Test key".to_string()),
             force: false,
             no_password: false,
+            allow_kdf_fallback: false,
         };
 
         let password = b"testpassword";
@@ -215,6 +219,7 @@ mod tests {
             comment: Some("Fast test key".to_string()),
             force: false,
             no_password: false,
+            allow_kdf_fallback: false,
         };
 
         let password = b"testpassword";
@@ -253,6 +258,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None).expect("generation should succeed");
@@ -282,6 +288,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: false, // Password required
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None);
@@ -305,6 +312,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None);
@@ -328,6 +336,7 @@ mod tests {
             comment: None,
             force: true,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         generate(&options, None).expect("should overwrite with force=true");
@@ -350,6 +359,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         generate(&options, None).expect("should create parent directories");
@@ -374,6 +384,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         generate(&options, None).expect("generation should succeed");
@@ -413,6 +424,7 @@ mod tests {
             comment: Some("Roundtrip test".to_string()),
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None).expect("generation should succeed");
@@ -444,6 +456,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         // Should fail due to existing file (atomic check)
@@ -471,6 +484,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         // Should fail due to existing file (atomic check)
@@ -499,6 +513,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         // Should fail (doesn't matter which file is checked first)

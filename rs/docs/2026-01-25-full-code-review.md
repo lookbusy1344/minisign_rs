@@ -48,26 +48,36 @@ let log_n = match n.checked_ilog2() {
 };
 ```
 
-### 1.2 ❌ MEDIUM: Fallback Logic Can Silently Weaken Security
+### 1.2 ✅ FIXED: Fallback Logic Can Silently Weaken Security
 
-**Location**: `src/keys.rs:286-322`
+**Location**: `src/keys.rs:286-345`, `src/cli.rs:105-106`, `src/main.rs`
 
-The scrypt parameter fallback halves `opslimit` and `memlimit` on failure, printing only to stderr:
+**Status**: FIXED - Fallback is now opt-in via `--allow-kdf-fallback` CLI flag
 
-```rust
-if fallback_used {
-    eprintln!(
-        "Warning: Key derivation used reduced parameters..."
-    );
-}
-```
+**Solution Implemented**:
+1. Added `--allow-kdf-fallback` CLI flag (defaults to false for secure-by-default behavior)
+2. Added `allow_fallback: bool` parameter to `SeckeyStruct::new_encrypted()`
+3. When `allow_fallback=false` (default), key derivation fails immediately instead of silently reducing security
+4. When `allow_fallback=true` (explicit opt-in), displays a CLEAR WARNING:
+   ```
+   ⚠️  WARNING: REDUCED SECURITY PARAMETERS ⚠️
+   Key derivation used weaker parameters due to memory constraints:
+     Original: opslimit=..., memlimit=...
+     Reduced:  opslimit=..., memlimit=...
+   This makes your key easier to brute-force. Consider using a system with more memory.
+   ```
+5. All production code paths pass `allow_kdf_fallback: false` unless user explicitly enables it
+6. Error message when fallback needed but not allowed guides user to the flag
 
-**Issue**: This warning goes to stderr but doesn't fail or log persistently. A user running in a constrained environment might not notice their keys are being encrypted with weaker parameters than intended.
+**Files Modified**:
+- `src/cli.rs`: Added `allow_kdf_fallback` field to `Cli` struct
+- `src/keys.rs`: Updated `new_encrypted()` to accept and respect `allow_fallback` parameter
+- `src/ops/generate.rs`: Added `allow_kdf_fallback` to `GenerateOptions`, passes CLI flag through
+- `src/ops/change.rs`: Added `allow_kdf_fallback` to `ChangeOptions`, passes CLI flag through
+- `src/main.rs`: Passes `cli.allow_kdf_fallback` to operation options
+- All tests updated to explicitly pass `false` for secure defaults
 
-**Recommendation**:
-- IMPORTANT: Automatic fallback should be opt-in, not default. This app should be secure by default, with the fallback requiring explicit user consent via a CLI flag.
-- Consider returning a result struct that indicates if fallback was used
-- Document this behavior prominently
+**Security Impact**: ✅ Greatly improved - users must explicitly opt-in to reduced security parameters
 
 ### 1.3 ✅ FIXED: Missing Validation of Untrusted Comment During Parse
 

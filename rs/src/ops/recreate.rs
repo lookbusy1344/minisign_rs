@@ -167,6 +167,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 
@@ -212,6 +213,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 
@@ -253,6 +255,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 

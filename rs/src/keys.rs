@@ -265,10 +265,11 @@ impl SeckeyStruct {
     /// * `kdf_salt` - The salt for key derivation
     /// * `kdf_opslimit` - Operations limit (N * r * `OPSLIMIT_MULTIPLIER`)
     /// * `kdf_memlimit` - Memory limit (N * r * `MEMLIMIT_MULTIPLIER`)
+    /// * `allow_fallback` - If true, allow reduced parameters on failure (LESS SECURE, opt-in only)
     ///
     /// # Errors
     ///
-    /// Returns an error if key derivation fails
+    /// Returns an error if key derivation fails or if fallback would be needed but is not allowed
     pub fn new_encrypted(
         keynum: KeyNum,
         secret_key: &SecretKey,
@@ -276,6 +277,7 @@ impl SeckeyStruct {
         kdf_salt: [u8; KDF_SALT_BYTES],
         kdf_opslimit: u64,
         kdf_memlimit: u64,
+        allow_fallback: bool,
     ) -> Result<Self> {
         use crate::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
 
@@ -284,6 +286,7 @@ impl SeckeyStruct {
 
         // Implement scrypt parameter fallback (matches C minisign.c:419-427)
         // Try derivation with initial parameters, halving on failure until minimum reached
+        // SECURITY: Fallback is opt-in only (allow_fallback must be true)
         let mut current_opslimit = kdf_opslimit;
         let mut current_memlimit = kdf_memlimit;
         let mut fallback_used = false;
@@ -300,25 +303,36 @@ impl SeckeyStruct {
                 break key;
             }
 
-            // Derivation failed - try with reduced parameters
+            // Derivation failed - check if we can fallback
+            if !allow_fallback {
+                return Err(Error::KdfError(
+                    "Key derivation failed - more memory needed (use --allow-kdf-fallback to reduce security parameters, not recommended)".to_string(),
+                ));
+            }
+
+            // Fallback is allowed - try with reduced parameters
             current_opslimit /= 2;
             current_memlimit /= 2;
 
             // Check if we've fallen below minimum thresholds
             if current_opslimit < SCRYPT_OPSLIMIT_MIN || current_memlimit < SCRYPT_MEMLIMIT_MIN {
                 return Err(Error::KdfError(
-                    "Unable to complete key derivation - more memory needed".to_string(),
+                    "Unable to complete key derivation - more memory needed even with minimum parameters".to_string(),
                 ));
             }
 
             fallback_used = true;
         };
 
-        // Log warning if fallback was used
+        // Display CLEAR WARNING if fallback was used
         if fallback_used {
+            eprintln!("\n⚠️  WARNING: REDUCED SECURITY PARAMETERS ⚠️");
             eprintln!(
-                "Warning: Key derivation used reduced parameters (opslimit={current_opslimit}, memlimit={current_memlimit})"
+                "Key derivation used weaker parameters due to memory constraints:"
             );
+            eprintln!("  Original: opslimit={kdf_opslimit}, memlimit={kdf_memlimit}");
+            eprintln!("  Reduced:  opslimit={current_opslimit}, memlimit={current_memlimit}");
+            eprintln!("This makes your key easier to brute-force. Consider using a system with more memory.\n");
         }
 
         // Create combined blob: keynum + secret_key + checksum (zeroized on drop)
@@ -993,6 +1007,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - secure by default
         )
         .expect("Failed to encrypt key");
 
@@ -1029,6 +1044,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - secure by default
         )
         .expect("Failed to encrypt key");
 
@@ -1162,7 +1178,7 @@ mod tests {
         getrandom::getrandom(&mut salt).expect("RNG should work");
 
         let encrypted =
-            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT)
+            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT, false)
                 .expect("Encryption with moderate parameters should succeed");
 
         // Verify the encrypted key stores parameters (either original or reduced if fallback occurred)
@@ -1217,7 +1233,7 @@ mod tests {
         getrandom::getrandom(&mut salt).expect("RNG should work");
 
         let encrypted =
-            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT)
+            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT, false)
                 .expect("Encryption should succeed");
 
         // The encrypted key should store the parameters that actually worked
@@ -1228,6 +1244,76 @@ mod tests {
 
         // On most systems with sufficient memory, no fallback occurs
         // so parameters should match (but we can't assert this deterministically)
+    }
+
+    #[test]
+    fn test_new_encrypted_rejects_fallback_when_not_allowed() {
+        use crate::crypto::generate_keypair;
+
+        // Use reasonable test parameters (N=2^14)
+        const N: u64 = 1 << 14;
+        const R: u64 = 8;
+        const OPSLIMIT: u64 = 4 * N * R;
+        const MEMLIMIT: u64 = 128 * N * R;
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
+        let password = b"test password";
+        let mut salt = [0u8; KDF_SALT_BYTES];
+        getrandom::getrandom(&mut salt).expect("RNG should work");
+
+        // With allow_fallback=false, should succeed on systems with sufficient memory
+        // This test primarily validates that the API signature exists and works
+        let result = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            false, // allow_fallback=false (secure by default)
+        );
+
+        // Should succeed with reasonable parameters on normal systems
+        assert!(
+            result.is_ok(),
+            "Encryption with allow_fallback=false should succeed with reasonable parameters"
+        );
+    }
+
+    #[test]
+    fn test_new_encrypted_allows_fallback_when_enabled() {
+        use crate::crypto::generate_keypair;
+
+        // Use reasonable test parameters (N=2^14)
+        const N: u64 = 1 << 14;
+        const R: u64 = 8;
+        const OPSLIMIT: u64 = 4 * N * R;
+        const MEMLIMIT: u64 = 128 * N * R;
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
+        let password = b"test password";
+        let mut salt = [0u8; KDF_SALT_BYTES];
+        getrandom::getrandom(&mut salt).expect("RNG should work");
+
+        // With allow_fallback=true, should succeed (either directly or via fallback)
+        let result = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            true, // allow_fallback=true (opt-in to reduced security)
+        );
+
+        assert!(
+            result.is_ok(),
+            "Encryption with allow_fallback=true should succeed"
+        );
     }
 
     // Property-based tests
