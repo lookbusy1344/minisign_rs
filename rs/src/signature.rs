@@ -244,6 +244,10 @@ impl SignatureBox {
             .unwrap_or(lines[0])
             .to_string();
 
+        // Validate untrusted comment for printability and embedded carriage returns
+        // This prevents display-based attacks via control characters
+        validate_comment(&untrusted_comment)?;
+
         // Line 2: base64-encoded SigStruct
         let sig_struct_bytes = decode_base64(lines[1])?;
         let sig_struct = SigStruct::from_bytes(&sig_struct_bytes)?;
@@ -552,5 +556,51 @@ mod tests {
             prop_assert_eq!(sig_struct.signature().as_bytes(), deserialized.signature().as_bytes());
             prop_assert_eq!(sig_struct.is_prehashed(), deserialized.is_prehashed());
         }
+    }
+
+    #[test]
+    fn test_untrusted_comment_with_control_characters() {
+        // Create a signature box with control characters in untrusted comment
+        let sig_box = SignatureBox {
+            untrusted_comment: "test\x00null".to_string(), // Embedded null byte
+            sig_struct: SigStruct::new(
+                KeyNum([0; 8]),
+                Signature::from_bytes([0; SIGNATURE_BYTES]),
+                false,
+            ),
+            trusted_comment: "valid comment".to_string(),
+            global_signature: Signature::from_bytes([0; SIGNATURE_BYTES]),
+        };
+
+        let serialized = sig_box.to_file_contents();
+        let result = SignatureBox::from_file_contents(&serialized);
+
+        // Should fail validation due to control character
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid comment"));
+    }
+
+    #[test]
+    fn test_untrusted_comment_with_carriage_return() {
+        // Create a signature box with carriage return in untrusted comment
+        let sig_box = SignatureBox {
+            untrusted_comment: "test\rcarriage".to_string(),
+            sig_struct: SigStruct::new(
+                KeyNum([0; 8]),
+                Signature::from_bytes([0; SIGNATURE_BYTES]),
+                false,
+            ),
+            trusted_comment: "valid comment".to_string(),
+            global_signature: Signature::from_bytes([0; SIGNATURE_BYTES]),
+        };
+
+        let serialized = sig_box.to_file_contents();
+        let result = SignatureBox::from_file_contents(&serialized);
+
+        // Should fail validation due to carriage return
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        // The error message should mention either "carriage return" or just "invalid comment"
+        assert!(err_msg.contains("carriage return") || err_msg.contains("invalid comment"));
     }
 }
