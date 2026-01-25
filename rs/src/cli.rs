@@ -111,6 +111,11 @@ pub struct Cli {
     #[arg(long = "allow-kdf-fallback")]
     pub allow_kdf_fallback: bool,
 
+    /// Force weak KDF parameters for testing (DEBUG ONLY - creates intentionally insecure keys)
+    #[cfg(debug_assertions)]
+    #[arg(long = "force-weak-kdf", hide = true)]
+    pub force_weak_kdf: bool,
+
     /// Show help
     #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]
     pub help: Option<bool>,
@@ -215,6 +220,8 @@ mod tests {
             no_password: false,
             password_file: None,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
             help: None,
             version: None,
         };
@@ -246,6 +253,8 @@ mod tests {
             no_password: false,
             password_file: None,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
             help: None,
             version: None,
         };
@@ -277,6 +286,8 @@ mod tests {
             no_password: false,
             password_file: None,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
             help: None,
             version: None,
         };
@@ -356,6 +367,8 @@ mod tests {
             help: None,
             version: None,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
         assert!(!cli.allow_kdf_fallback);
     }
@@ -388,6 +401,8 @@ mod tests {
             help: None,
             version: None,
             allow_kdf_fallback: true,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
         assert!(cli.allow_kdf_fallback);
     }

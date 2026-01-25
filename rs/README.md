@@ -265,10 +265,35 @@ cargo run -- -G --allow-kdf-fallback
 
 **Recommendation**: Avoid both flags in production. Use only when necessary and understand the security trade-offs.
 
+#### `--force-weak-kdf` (Debug Builds Only)
+
+**🔥 DEBUG ONLY - INTENTIONALLY INSECURE 🔥**
+
+Forces creation of weak KDF parameters (N=2^17, 8x easier to brute-force) for testing purposes.
+
+```bash
+# Example (debug builds only)
+cargo run -- -G --force-weak-kdf --password-file test.txt
+
+# Works with password changes too
+cargo run -- -C -s test.key --force-weak-kdf --password-file newpass.txt
+```
+
+- **Only available in debug builds** (`cargo build` without `--release`)
+- **Not available in release builds** for safety
+- Creates keys with N=2^17 instead of N=2^20 (8x weaker)
+- Displays loud warnings about intentional insecurity
+- Useful for:
+  - Testing weak key detection logic
+  - Creating fixture files for security testing
+  - Manual QA of warning systems
+- **NEVER use in production** - these keys are intentionally compromised
+
 **For detailed security analysis**, see [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) which explains:
 - Why fallback keys are permanently weaker (8-64x easier to brute-force)
 - How C minisign's automatic fallback differs from Rust's opt-in approach
 - How to detect and audit weak keys
+- How to force weak key creation for testing
 - Migration strategies for production deployments
 
 ### Inspecting Key Security

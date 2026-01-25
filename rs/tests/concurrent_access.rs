@@ -48,6 +48,8 @@ fn test_concurrent_key_generation_same_path() {
                 force: false, // Important: no force, should fail if exists
                 no_password: true,
                 allow_kdf_fallback: false,
+                #[cfg(debug_assertions)]
+                force_weak_kdf: false,
             };
 
             match generate(&opts, None) {
@@ -104,6 +106,8 @@ fn test_concurrent_signature_creation() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -211,6 +215,8 @@ fn test_concurrent_key_generation_with_force() {
                 force: true, // Force mode should allow overwrites
                 no_password: true,
                 allow_kdf_fallback: false,
+                #[cfg(debug_assertions)]
+                force_weak_kdf: false,
             };
 
             // All operations should succeed (or fail for other reasons, not file exists)
@@ -249,6 +255,8 @@ fn test_sequential_key_generation() {
         force: false,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
 
     generate(&opts, None).expect("First generation should succeed");
@@ -270,6 +278,8 @@ fn test_sequential_key_generation() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
 
     generate(&opts_force, None).expect("Generation with force should succeed");
@@ -314,6 +324,8 @@ fn test_toctou_prevention_with_existence_check() {
                     force: false,
                     no_password: true,
                     allow_kdf_fallback: false,
+                    #[cfg(debug_assertions)]
+                    force_weak_kdf: false,
                 };
 
                 if generate(&opts, None).is_ok() {
@@ -361,6 +373,8 @@ fn test_concurrent_different_files() {
                 force: false,
                 no_password: true,
                 allow_kdf_fallback: false,
+                #[cfg(debug_assertions)]
+                force_weak_kdf: false,
             };
 
             generate(&opts, None).expect("Should succeed for different files");

@@ -21,6 +21,7 @@ const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
 
 /// Options for key generation
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct GenerateOptions {
     /// Path to write the secret key file
     pub secret_key_file: PathBuf,
@@ -34,6 +35,9 @@ pub struct GenerateOptions {
     pub no_password: bool,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
     pub allow_kdf_fallback: bool,
+    /// Force weak KDF parameters for testing (DEBUG ONLY)
+    #[cfg(debug_assertions)]
+    pub force_weak_kdf: bool,
 }
 
 /// Result of key generation
@@ -101,10 +105,31 @@ fn generate_with_log_n(
         getrandom::getrandom(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
-        let n = 1u64 << log_n;
-        let r = u64::from(SCRYPT_R);
-        let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
-        let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
+        #[cfg(debug_assertions)]
+        let (kdf_opslimit, kdf_memlimit) = if options.force_weak_kdf {
+            // DEBUG ONLY: Force weak parameters (N=2^17, 8x weaker than production)
+            eprintln!("\n🔥 DEBUG WARNING: INTENTIONALLY INSECURE KEY 🔥");
+            eprintln!("--force-weak-kdf creates keys that are 8x easier to brute-force.");
+            eprintln!("NEVER use in production. For testing purposes only.\n");
+            (4_194_304_u64, 134_217_728_u64) // N=2^17, r=8
+        } else {
+            let n = 1u64 << log_n;
+            let r = u64::from(SCRYPT_R);
+            (
+                LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
+                LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
+            )
+        };
+
+        #[cfg(not(debug_assertions))]
+        let (kdf_opslimit, kdf_memlimit) = {
+            let n = 1u64 << log_n;
+            let r = u64::from(SCRYPT_R);
+            (
+                LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
+                LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
+            )
+        };
 
         SeckeyStruct::new_encrypted(
             keynum,
@@ -180,6 +205,8 @@ mod tests {
             force: false,
             no_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let password = b"testpassword";
@@ -220,6 +247,8 @@ mod tests {
             force: false,
             no_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let password = b"testpassword";
@@ -259,6 +288,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = generate(&options, None).expect("generation should succeed");
@@ -289,6 +320,8 @@ mod tests {
             force: false,
             no_password: false, // Password required
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = generate(&options, None);
@@ -313,6 +346,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = generate(&options, None);
@@ -337,6 +372,8 @@ mod tests {
             force: true,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         generate(&options, None).expect("should overwrite with force=true");
@@ -360,6 +397,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         generate(&options, None).expect("should create parent directories");
@@ -385,6 +424,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         generate(&options, None).expect("generation should succeed");
@@ -425,6 +466,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = generate(&options, None).expect("generation should succeed");
@@ -457,6 +500,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         // Should fail due to existing file (atomic check)
@@ -485,6 +530,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         // Should fail due to existing file (atomic check)
@@ -514,6 +561,8 @@ mod tests {
             force: false,
             no_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         // Should fail (doesn't matter which file is checked first)

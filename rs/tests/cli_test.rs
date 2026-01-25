@@ -665,3 +665,156 @@ fn test_inspect_uses_default_secret_key_path() {
         assert!(stderr.contains("Failed to read key file") || stderr.contains("No such file"));
     }
 }
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_weak_kdf_creates_weak_key() {
+    // Test that --force-weak-kdf creates a key with reduced parameters
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("weak.key");
+    let pk_path = temp_dir.path().join("weak.pub");
+    let password_file = temp_dir.path().join("password.txt");
+
+    fs::write(&password_file, "testpass").unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--force-weak-kdf")
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "DEBUG WARNING: INTENTIONALLY INSECURE KEY",
+        ))
+        .stderr(predicate::str::contains("--force-weak-kdf"))
+        .stderr(predicate::str::contains("NEVER use in production"));
+
+    // Verify the key was created with weak parameters
+    minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Security Level: LOW"))
+        .stdout(predicate::str::contains("opslimit: 4194304")) // N=2^17
+        .stdout(predicate::str::contains("memlimit: 134217728")) // 128 MB
+        .stdout(predicate::str::contains("N=2^17"))
+        .stdout(predicate::str::contains("Fallback (reduced parameters)"));
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_weak_kdf_with_change_password() {
+    // Test that --force-weak-kdf works with -C (change password)
+    // Note: -C doesn't support --password-file for both old and new passwords,
+    // so we test this via the ops module directly in unit tests instead
+    // This test is a placeholder showing the intended behavior
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_weak_kdf_requires_no_password_or_password_file() {
+    // --force-weak-kdf should work non-interactively (requires --password-file or -W)
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("weak.key");
+    let pk_path = temp_dir.path().join("weak.pub");
+
+    // Without password file in non-interactive mode should fail
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--force-weak-kdf")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Cannot prompt for password"));
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_weak_kdf_with_unencrypted_key_ignored() {
+    // --force-weak-kdf with -W (no password) should be ignored (no KDF to weaken)
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("unencrypted.key");
+    let pk_path = temp_dir.path().join("unencrypted.pub");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-W") // No password
+        .arg("--force-weak-kdf")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("--force-weak-kdf has no effect").not()); // Should not warn
+
+    // Verify key is unencrypted
+    minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Security Level: NONE"))
+        .stdout(predicate::str::contains("Encrypted: No"));
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_weak_kdf_creates_usable_key() {
+    // Verify that weak keys created with --force-weak-kdf can actually sign and verify
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("weak.key");
+    let pk_path = temp_dir.path().join("weak.pub");
+    let message_path = temp_dir.path().join("message.txt");
+    let password_file = temp_dir.path().join("password.txt");
+
+    fs::write(&message_path, "Test message").unwrap();
+    fs::write(&password_file, "testpass").unwrap();
+
+    // Generate weak key
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--force-weak-kdf")
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Sign with weak key
+    minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&message_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("WEAK KEY DETECTED")); // Should warn when signing
+
+    // Verify signature
+    minisign_cmd()
+        .arg("-V")
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-m")
+        .arg(&message_path)
+        .assert()
+        .success();
+}

@@ -27,6 +27,8 @@ fn test_empty_file_signing() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -73,6 +75,8 @@ fn test_empty_file_legacy_mode() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -119,6 +123,8 @@ fn test_unicode_in_trusted_comment() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -168,6 +174,8 @@ fn test_unicode_in_untrusted_comment() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -215,6 +223,8 @@ fn test_large_file_prehashed() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -267,6 +277,8 @@ fn test_symlink_handling() {
         force: true,
         no_password: true,
         allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
     };
     generate(&gen_opts, None).expect("Failed to generate key");
 

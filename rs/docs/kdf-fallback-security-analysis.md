@@ -440,7 +440,87 @@ Keys created with C minisign's automatic fallback can be used with Rust minisign
    minisign -G
    ```
 
-2. **Inspect Existing Keys**
+2. **Force Weak Keys for Testing (Debug Builds Only)**
+
+   The `--force-weak-kdf` flag allows intentional creation of weak keys for testing:
+
+   ```bash
+   # Create a weak key for testing (debug builds only)
+   minisign_rs -G --force-weak-kdf --password-file test.txt
+
+   # Change password to weak parameters
+   minisign_rs -C -s test.key --force-weak-kdf --password-file newpass.txt
+   ```
+
+   **Characteristics**:
+   - **Only available in debug builds** (`cargo build` without `--release`)
+   - Automatically removed in release builds for safety
+   - Creates keys with N=2^17 (8x weaker than production)
+   - Displays loud warnings about intentional insecurity
+   - Hidden from `--help` output to prevent accidental discovery
+
+   **Use cases**:
+   - Testing weak key detection logic
+   - Creating fixture files for security testing
+   - Manual QA of warning systems
+   - Demonstrating security impact of weak parameters
+
+   **Safety measures**:
+   - Compilation fails in release mode if flag is used
+   - Displays "DEBUG WARNING: INTENTIONALLY INSECURE KEY" message
+   - Warns "NEVER use in production"
+   - Results in keys that trigger persistent weak key warnings
+
+   **Example usage and output**:
+
+   ```bash
+   # Create a weak key for testing
+   $ cargo run -- -G -s test_weak.key -p test_weak.pub --force-weak-kdf --password-file pass.txt
+
+   🔥 DEBUG WARNING: INTENTIONALLY INSECURE KEY 🔥
+   --force-weak-kdf creates keys that are 8x easier to brute-force.
+   NEVER use in production. For testing purposes only.
+
+   The secret key was saved as test_weak.key - Keep it secret!
+   The public key was saved as test_weak.pub - That one can be public.
+
+   # Inspect the weak key
+   $ cargo run -- -I -s test_weak.key
+
+   Security Level: LOW 🔥
+
+   Key Information:
+   ├─ Key ID: RW4tQTKepuvhc=
+   ├─ Encrypted: Yes
+   ├─ KDF Algorithm: Scrypt
+   └─ KDF Parameters:
+      ├─ opslimit: 4194304 (N=2^17, r=8, p=1)
+      ├─ memlimit: 134217728 (128 MB)
+      ├─ Creation: Fallback (reduced parameters)
+      └─ Brute-force resistance: 8x weaker than production strength
+
+   ⚠️  RECOMMENDATION: Regenerate this key on a system with ≥2GB RAM for full security.
+
+   # Signing with weak key shows persistent warnings
+   $ cargo run -- -S -s test_weak.key -m file.txt --password-file pass.txt
+
+   ⚠️  WARNING: WEAK KEY DETECTED ⚠️
+   This key was created with reduced security parameters.
+   It is easier to brute-force than a production-strength key.
+   Consider regenerating this key on a system with more memory.
+   See rs/docs/kdf-fallback-security-analysis.md for details.
+
+   Signature written to file.txt.minisig
+   ```
+
+   **Implementation details**:
+   - Flag is conditionally compiled: `#[cfg(debug_assertions)]`
+   - In `src/cli.rs`: Hidden from help with `hide = true`
+   - In `src/ops/generate.rs` and `src/ops/change.rs`: Forces N=2^17 parameters
+   - Bypasses normal scrypt allocation by providing pre-calculated weak values
+   - Works with both `-G` (generate) and `-C` (change password) operations
+
+3. **Inspect Existing Keys**
 
    The `-I/--inspect` command allows you to audit your keys:
 

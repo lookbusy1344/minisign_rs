@@ -16,6 +16,7 @@ const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
 
 /// Options for changing secret key password
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ChangeOptions {
     /// Path to the secret key file
     pub secret_key_file: PathBuf,
@@ -23,6 +24,9 @@ pub struct ChangeOptions {
     pub remove_password: bool,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
     pub allow_kdf_fallback: bool,
+    /// Force weak KDF parameters for testing (DEBUG ONLY)
+    #[cfg(debug_assertions)]
+    pub force_weak_kdf: bool,
 }
 
 /// Result of password change operation
@@ -95,10 +99,31 @@ fn change_with_log_n(
         getrandom::getrandom(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
-        let n = 1u64 << log_n;
-        let r = u64::from(SCRYPT_R);
-        let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
-        let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
+        #[cfg(debug_assertions)]
+        let (kdf_opslimit, kdf_memlimit) = if options.force_weak_kdf {
+            // DEBUG ONLY: Force weak parameters (N=2^17, 8x weaker than production)
+            eprintln!("\n🔥 DEBUG WARNING: INTENTIONALLY INSECURE KEY 🔥");
+            eprintln!("--force-weak-kdf creates keys that are 8x easier to brute-force.");
+            eprintln!("NEVER use in production. For testing purposes only.\n");
+            (4_194_304_u64, 134_217_728_u64) // N=2^17, r=8
+        } else {
+            let n = 1u64 << log_n;
+            let r = u64::from(SCRYPT_R);
+            (
+                LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
+                LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
+            )
+        };
+
+        #[cfg(not(debug_assertions))]
+        let (kdf_opslimit, kdf_memlimit) = {
+            let n = 1u64 << log_n;
+            let r = u64::from(SCRYPT_R);
+            (
+                LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
+                LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
+            )
+        };
 
         SeckeyStruct::new_encrypted(
             keynum,
@@ -169,6 +194,8 @@ mod tests {
             secret_key_file: sk_path.clone(),
             remove_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
@@ -224,6 +251,8 @@ mod tests {
             secret_key_file: sk_path.clone(),
             remove_password: true,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = change_with_log_n(&options, Some(password), None, 14)
@@ -258,6 +287,8 @@ mod tests {
             secret_key_file: sk_path.clone(),
             remove_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = change_with_log_n(&options, None, Some(new_password), 14)
@@ -308,6 +339,8 @@ mod tests {
             secret_key_file: sk_path,
             remove_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = change_with_log_n(&options, None, Some(b"newpass"), 14);
@@ -348,6 +381,8 @@ mod tests {
             secret_key_file: sk_path,
             remove_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
@@ -369,6 +404,8 @@ mod tests {
             secret_key_file: sk_path,
             remove_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         let result = change_with_log_n(&options, None, None, 14);
@@ -400,6 +437,8 @@ mod tests {
             secret_key_file: sk_path.clone(),
             remove_password: false,
             allow_kdf_fallback: false,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
         };
 
         change_with_log_n(&options, None, Some(b"password"), 14)
@@ -409,5 +448,60 @@ mod tests {
         let metadata = fs::metadata(&sk_path).unwrap();
         let permissions = metadata.permissions();
         assert_eq!(permissions.mode() & 0o777, 0o600);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn test_change_password_with_force_weak_kdf() {
+        // Test that --force-weak-kdf creates weak keys when changing password
+        use crate::crypto::generate_keypair;
+
+        let temp_dir = TempDir::new().unwrap();
+        let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+        let old_password = b"oldpassword";
+
+        // Create a normal production-strength key
+        let mut kdf_salt = [0u8; 32];
+        getrandom::getrandom(&mut kdf_salt).unwrap();
+        let seckey = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            old_password,
+            kdf_salt,
+            33_554_432, // Production N=2^20
+            1_073_741_824,
+            false,
+        )
+        .unwrap();
+
+        let sk_path = temp_dir.path().join("test.key");
+        fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+
+        // Change password with force_weak_kdf
+        let new_password = b"newpassword";
+        let options = ChangeOptions {
+            secret_key_file: sk_path.clone(),
+            remove_password: false,
+            allow_kdf_fallback: false,
+            force_weak_kdf: true, // Force weak parameters
+        };
+
+        let result = change_with_log_n(&options, Some(old_password), Some(new_password), 20)
+            .expect("password change should succeed");
+
+        assert!(result.encrypted);
+
+        // Verify the key now has weak parameters
+        let sk_contents = fs::read_to_string(&sk_path).unwrap();
+        let new_seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
+
+        assert!(new_seckey.is_weak_kdf(), "key should be weak after change");
+        assert_eq!(new_seckey.kdf_opslimit(), 4_194_304); // N=2^17
+        assert_eq!(new_seckey.kdf_memlimit(), 134_217_728); // 128 MB
+
+        // Verify it can be decrypted with new password
+        let (_sk, _kn) = new_seckey
+            .decrypt(new_password)
+            .expect("should decrypt with new password");
     }
 }

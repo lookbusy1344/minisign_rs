@@ -76,6 +76,8 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         force: cli.force,
         no_password: cli.no_password,
         allow_kdf_fallback: cli.allow_kdf_fallback,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: cli.force_weak_kdf,
     };
 
     let result = generate(&options, password.as_ref().map(|p| p.as_bytes()))?;
@@ -266,6 +268,8 @@ fn handle_change(cli: &Cli) -> Result<()> {
         secret_key_file,
         remove_password: cli.no_password && new_password.is_none(),
         allow_kdf_fallback: cli.allow_kdf_fallback,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: cli.force_weak_kdf,
     };
 
     let result = change(
