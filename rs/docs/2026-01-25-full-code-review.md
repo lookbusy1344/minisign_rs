@@ -26,7 +26,7 @@ This review examines the Rust implementation of minisign with fresh eyes, noting
 
 ## 1. Critical Findings
 
-### 1.1 ❌ MEDIUM: Potential Integer Overflow in Scrypt Parameter Calculation
+### 1.1 ✅ FIXED: Potential Integer Overflow in Scrypt Parameter Calculation
 
 **Location**: `src/keys.rs:511-520`
 
@@ -69,7 +69,7 @@ if fallback_used {
 - Consider returning a result struct that indicates if fallback was used
 - Document this behavior prominently
 
-### 1.3 ⚠️ LOW-MEDIUM: Missing Validation of Untrusted Comment During Parse
+### 1.3 ✅ FIXED: Missing Validation of Untrusted Comment During Parse
 
 **Location**: `src/signature.rs:242-245`
 
@@ -90,7 +90,7 @@ let untrusted_comment = lines[0]
 
 ## 2. Code Quality Issues
 
-### 2.1 ⚠️ Duplicate Code Patterns
+### 2.1 ✅ FIXED: Duplicate Code Patterns
 
 The following functions are duplicated across modules with minor variations:
 
@@ -290,7 +290,7 @@ This is acceptable because this is a debug/testing feature, not intended for pro
 
 ### Priority 1: Critical (Fix Before Release)
 
-#### 1.1 Fix scrypt parameter calculation edge cases
+#### 1.1 ✅ COMPLETED: Fix scrypt parameter calculation edge cases
 **Effort**: 2-4 hours
 
 ```rust
@@ -321,7 +321,7 @@ fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32,
 **Files to modify**: `src/keys.rs`  
 **Tests to add**: Edge cases for 0, max u64, non-power-of-2 values
 
-#### 1.2 Add untrusted comment validation
+#### 1.2 ✅ COMPLETED: Add untrusted comment validation
 **Effort**: 30 minutes
 
 ```rust
@@ -334,7 +334,7 @@ validate_comment(&untrusted_comment)?;
 
 ### Priority 2: High (Fix Within 1 Week)
 
-#### 2.1 Consolidate duplicate file writing code
+#### 2.1 ✅ COMPLETED: Consolidate duplicate file writing code
 **Effort**: 2-3 hours
 
 Create `src/file_utils.rs`:
@@ -345,7 +345,7 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct>;
 
 **Files to modify**: Create `file_utils.rs`, refactor `ops/*.rs`
 
-#### 2.2 Zeroize password in CLI
+#### 2.2 ✅ COMPLETED: Zeroize password in CLI
 **Effort**: 1 hour
 
 ```rust
@@ -360,7 +360,7 @@ fn prompt_password(...) -> Result<Zeroizing<String>> {
 
 **Files to modify**: `src/main.rs`
 
-#### 2.3 Remove unused `anyhow` dependency
+#### 2.3 ✅ COMPLETED: Remove unused `anyhow` dependency
 **Effort**: 10 minutes
 
 ```bash
