@@ -7,11 +7,11 @@ Security-critical pure Rust rewrite of minisign. Must maintain byte-level compat
 ## Pre-Commit Requirements (MANDATORY)
 
 ```bash
-# 1. Format code
-cargo fmt
-
-# 2. Run clippy with EXACT CI flags (do NOT skip flags)
+# 1. Run clippy with EXACT CI flags (do NOT skip flags)
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
+
+# 2. Format code
+cargo fmt
 
 # 3. Run fast test suite (148 tests, ~9 seconds)
 cargo test
