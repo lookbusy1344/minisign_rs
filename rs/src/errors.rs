@@ -104,6 +104,9 @@ pub enum Error {
     #[error("missing required argument: {0}")]
     MissingArgument(String),
 
+    #[error("invalid comment: {0}")]
+    InvalidComment(String),
+
     // CLI usage errors
     #[error("usage: {0}")]
     Usage(String),

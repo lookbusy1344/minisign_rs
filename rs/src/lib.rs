@@ -10,6 +10,7 @@ pub mod formats;
 pub mod keys;
 pub mod ops;
 pub mod signature;
+pub mod validation;
 
 // Re-export commonly used types
 pub use errors::Error;

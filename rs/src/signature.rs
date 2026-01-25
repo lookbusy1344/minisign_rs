@@ -9,6 +9,7 @@ use crate::crypto::{
 };
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64};
+use crate::validation::validate_comment;
 
 /// Size of the signature structure in bytes
 pub const SIG_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + SIGNATURE_BYTES; // 74 bytes
@@ -252,6 +253,10 @@ impl SignatureBox {
             .strip_prefix("trusted comment: ")
             .unwrap_or(lines[2])
             .to_string();
+
+        // Validate trusted comment for printability and embedded carriage returns
+        // This matches C implementation's is_printable() check
+        validate_comment(&trusted_comment)?;
 
         // Line 4: base64-encoded global signature
         let global_sig_bytes = decode_base64(lines[3])?;

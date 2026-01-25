@@ -8,9 +8,10 @@ use crate::{
     errors::Error,
     keys::SeckeyStruct,
     signature::{
-        SigStruct, SignatureBox, COMMENTMAXBYTES, COMMENT_PREFIX_SIZE, TRUSTEDCOMMENTMAXBYTES,
-        TRUSTED_COMMENT_PREFIX_SIZE,
+        COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
+        TRUSTEDCOMMENTMAXBYTES,
     },
+    validation::validate_comment,
 };
 use std::path::Path;
 
@@ -148,14 +149,16 @@ fn create_signature(
 
     // Validate comment lengths (matches C implementation behavior)
     if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
-        eprintln!(
-            "Warning: comment too long. This breaks compatibility with signify."
-        );
+        eprintln!("Warning: comment too long. This breaks compatibility with signify.");
     }
 
     if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
         return Err(Error::Other("Trusted comment too long".to_string()));
     }
+
+    // Validate comments for printability and carriage returns (matches C implementation)
+    validate_comment(&untrusted_comment)?;
+    validate_comment(&trusted_comment)?;
 
     // Create global signature (signs: signature_bytes || trusted_comment)
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
