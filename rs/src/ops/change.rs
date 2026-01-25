@@ -3,7 +3,8 @@
 //! This module implements changing or removing the password on a secret key.
 
 use crate::{Result, errors::Error, keys::SeckeyStruct};
-use std::{fs::OpenOptions, io::Write, path::PathBuf};
+use super::file_utils::{load_secret_key, write_secret_key_file};
+use std::path::PathBuf;
 
 // Scrypt parameters matching libsodium SENSITIVE level
 const SCRYPT_LOG_N: u8 = 20; // N = 2^20 = 1,048,576
@@ -114,41 +115,13 @@ fn change_with_log_n(
         "minisign encrypted secret key"
     };
     let seckey_contents = new_seckey.to_file_contents(seckey_comment);
-    write_secret_key_file(&options.secret_key_file, &seckey_contents)?;
+    // Always overwrite when changing password (force=true)
+    write_secret_key_file(&options.secret_key_file, &seckey_contents, true)?;
 
     Ok(ChangeResult {
         secret_key_file: options.secret_key_file.clone(),
         encrypted: !options.remove_password,
     })
-}
-
-/// Load a secret key from a file
-fn load_secret_key(path: &PathBuf) -> Result<SeckeyStruct> {
-    let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
-    SeckeyStruct::from_file_contents(&contents)
-}
-
-/// Write a secret key file with appropriate permissions
-///
-/// For password changes, we always overwrite the existing file (force mode).
-/// On Unix systems, sets mode 0600 (read/write for owner only).
-fn write_secret_key_file(path: &PathBuf, contents: &str) -> Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-
-    // Set restrictive permissions on Unix systems (before writing)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600); // Read/write for owner only
-    }
-
-    let mut file = options.open(path).map_err(|e| Error::file_write(path, e))?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
 }
 
 #[cfg(test)]

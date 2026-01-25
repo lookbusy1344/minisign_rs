@@ -6,13 +6,10 @@ use crate::{
     Result,
     crypto::PublicKey,
     errors::Error,
-    keys::{PubkeyStruct, SeckeyStruct},
+    keys::PubkeyStruct,
 };
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use super::file_utils::{load_secret_key, write_public_key_file};
+use std::path::PathBuf;
 
 /// Options for recreating a public key
 #[derive(Debug, Clone)]
@@ -90,12 +87,6 @@ pub fn recreate(options: &RecreateOptions, password: Option<&[u8]>) -> Result<Re
     })
 }
 
-/// Load a secret key from a file
-fn load_secret_key(path: &PathBuf) -> Result<SeckeyStruct> {
-    let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
-    SeckeyStruct::from_file_contents(&contents)
-}
-
 /// Extract the public key from an Ed25519 secret key
 ///
 /// Ed25519 secret keys are 64 bytes: [32-byte scalar || 32-byte public key]
@@ -107,36 +98,6 @@ fn extract_public_key_from_secret(secret_key: &crate::crypto::SecretKey) -> Publ
     public_key_bytes.copy_from_slice(&secret_bytes[32..64]);
 
     PublicKey::from_bytes(public_key_bytes)
-}
-
-/// Write a public key file with atomic creation
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-fn write_public_key_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
 }
 
 #[cfg(test)]

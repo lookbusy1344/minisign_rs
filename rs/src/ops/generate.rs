@@ -8,11 +8,8 @@ use crate::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
 };
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use super::file_utils::{write_public_key_file, write_secret_key_file};
+use std::path::{Path, PathBuf};
 
 // Scrypt parameters matching libsodium SENSITIVE level
 const SCRYPT_LOG_N: u8 = 20; // N = 2^20 = 1,048,576
@@ -156,74 +153,6 @@ fn ensure_parent_directory(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent().filter(|p| !p.exists()) {
         std::fs::create_dir_all(parent).map_err(|e| Error::file_write(parent, e))?;
     }
-    Ok(())
-}
-
-/// Write a secret key file with atomic creation and appropriate permissions
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-/// On Unix systems, sets mode 0600 (read/write for owner only).
-fn write_secret_key_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    // Set restrictive permissions on Unix systems (before writing)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600); // Read/write for owner only
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
-}
-
-/// Write a public key file with atomic creation
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-fn write_public_key_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
     Ok(())
 }
 
