@@ -236,9 +236,15 @@ cargo run -- -G --allow-kdf-fallback
 - **Without this flag**: operations fail immediately if 128MB cannot be allocated
 - **With this flag**: operations attempt fallback before failing
 - Prevents complete failure on memory-limited devices (embedded systems, containers)
-- C minisign does not support this flag
+- C minisign does not support this flag (it always allows fallback automatically)
 
 **Recommendation**: Avoid both flags in production. Use only when necessary and understand the security trade-offs.
+
+**For detailed security analysis**, see [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) which explains:
+- Why fallback keys are permanently weaker (8-64x easier to brute-force)
+- How C minisign's automatic fallback differs from Rust's opt-in approach
+- How to detect and audit weak keys
+- Migration strategies for production deployments
 
 ## Performance & Memory
 
@@ -353,6 +359,7 @@ All workflows use caching for faster builds.
 - [Compatibility Documentation](COMPATIBILITY.md) - Byte-level C/Rust compatibility proof
 - [Performance Benchmark Report](docs/benchmark-report.md) - C vs Rust performance comparison
 - [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed analysis of both implementations
+- [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) - Security implications of weak KDF parameters
 - [Development Guidelines](CLAUDE.md) - Essential development workflow
 - [Design Document](../docs/plans/2026-01-23-rust-rewrite-design.md) - Original implementation plan
 
