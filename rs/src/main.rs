@@ -4,8 +4,8 @@ use minisign::{
     Error, Result,
     cli::{Action, Cli},
     ops::{
-        ChangeOptions, GenerateOptions, PublicKeySource, RecreateOptions, SignOptions,
-        VerifyOptions, change, generate, recreate, sign, verify,
+        ChangeOptions, GenerateOptions, InspectOptions, PublicKeySource, RecreateOptions,
+        SignOptions, VerifyOptions, change, generate, inspect, recreate, sign, verify,
     },
 };
 use std::io::{self, Write};
@@ -42,6 +42,7 @@ fn run() -> Result<()> {
         Action::Verify => handle_verify(&cli),
         Action::Recreate => handle_recreate(&cli),
         Action::Change => handle_change(&cli),
+        Action::Inspect => handle_inspect(&cli),
     }
 }
 
@@ -275,6 +276,88 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     if !cli.quiet {
         println!("Password changed for {}", result.secret_key_file.display());
+    }
+
+    Ok(())
+}
+
+fn handle_inspect(cli: &Cli) -> Result<()> {
+    use minisign::ops::inspect::{KeyType, SecurityLevel};
+
+    // Determine which key file to inspect
+    // Priority: -s (secret key), -p (public key), then default secret key
+    let key_file = if let Some(ref sk_file) = cli.secret_key_file {
+        sk_file.to_string_lossy().to_string()
+    } else if let Some(ref pk_file) = cli.public_key_file {
+        pk_file.to_string_lossy().to_string()
+    } else {
+        // Default to secret key path
+        Cli::default_secret_key_path().to_string_lossy().to_string()
+    };
+
+    let options = InspectOptions { key_file };
+    let result = inspect(&options)?;
+
+    // Display security level prominently first (for secret keys)
+    if let Some(security_level) = result.security_level {
+        match security_level {
+            SecurityLevel::High => println!("Security Level: HIGH ✓\n"),
+            SecurityLevel::Medium => println!("Security Level: MEDIUM ⚠\n"),
+            SecurityLevel::Low => println!("Security Level: LOW 🔥\n"),
+            SecurityLevel::None => println!("Security Level: NONE (UNENCRYPTED) ⚠\n"),
+        }
+    }
+
+    // Display key information
+    println!("Key Information:");
+    println!("├─ Key ID: {}", result.key_id);
+
+    match result.key_type {
+        KeyType::SecretEncrypted => {
+            println!("├─ Encrypted: Yes");
+            println!("├─ KDF Algorithm: Scrypt");
+
+            if let Some(kdf) = result.kdf_info {
+                println!("└─ KDF Parameters:");
+                println!(
+                    "   ├─ opslimit: {} (N=2^{}, r={}, p={})",
+                    kdf.opslimit, kdf.log_n, kdf.r, kdf.p
+                );
+                println!(
+                    "   ├─ memlimit: {} ({} MB)",
+                    kdf.memlimit,
+                    kdf.memlimit / 1_048_576
+                );
+
+                if kdf.is_fallback {
+                    println!("   ├─ Creation: Fallback (reduced parameters)");
+                    if let Some(multiplier) = kdf.weakness_multiplier {
+                        println!(
+                            "   └─ Brute-force resistance: {multiplier}x weaker than production strength"
+                        );
+                    }
+                } else {
+                    println!("   └─ Creation: Normal (production parameters)");
+                }
+
+                // Add recommendation for weak keys
+                if result.security_level == Some(SecurityLevel::Low) {
+                    println!();
+                    println!(
+                        "⚠️  RECOMMENDATION: Regenerate this key on a system with ≥2GB RAM for full security."
+                    );
+                }
+            }
+        }
+        KeyType::SecretUnencrypted => {
+            println!("└─ Encrypted: No");
+            println!();
+            println!("⚠️  WARNING: This key is stored in plaintext.");
+            println!("   Anyone with file access can use it without a password.");
+        }
+        KeyType::Public => {
+            println!("└─ Type: Ed25519 Public Key");
+        }
     }
 
     Ok(())

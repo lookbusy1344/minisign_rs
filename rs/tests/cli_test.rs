@@ -574,3 +574,80 @@ fn test_help_shows_version() {
         .success()
         .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
 }
+
+#[test]
+fn test_inspect_production_key() {
+    // Inspect the C-generated production-strength encrypted key
+    minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg("tests/fixtures/keys/test.key")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Security Level: HIGH"))
+        .stdout(predicate::str::contains("opslimit: 33554432"))
+        .stdout(predicate::str::contains("memlimit: 1073741824"))
+        .stdout(predicate::str::contains("N=2^20"))
+        .stdout(predicate::str::contains("Normal (production parameters)"));
+}
+
+#[test]
+fn test_inspect_unencrypted_key() {
+    // Inspect a C-generated unencrypted key
+    minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg("tests/fixtures/keys/unencrypted.key")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Security Level: NONE"))
+        .stdout(predicate::str::contains("Encrypted: No"))
+        .stdout(predicate::str::contains(
+            "WARNING: This key is stored in plaintext",
+        ));
+}
+
+#[test]
+fn test_inspect_public_key() {
+    // Inspect a C-generated public key
+    minisign_cmd()
+        .arg("-I")
+        .arg("-p")
+        .arg("tests/fixtures/keys/test.pub")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Key ID:"))
+        .stdout(predicate::str::contains("Ed25519 Public Key"));
+}
+
+#[test]
+fn test_inspect_invalid_file() {
+    // Inspect an invalid key file
+    minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg("/nonexistent/key.file")
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_inspect_uses_default_secret_key_path() {
+    // When no key file is specified, should use default secret key path
+    // If the default key exists, inspect succeeds; otherwise it fails with a file error
+    let result = minisign_cmd().arg("-I").assert();
+
+    // Either succeeds (if default key exists) or fails with file read error
+    let output = result.get_output();
+    let success = output.status.success();
+
+    if success {
+        // If default key exists, should show key information
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Key Information:"));
+    } else {
+        // If default key doesn't exist, should show file read error
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Failed to read key file") || stderr.contains("No such file"));
+    }
+}

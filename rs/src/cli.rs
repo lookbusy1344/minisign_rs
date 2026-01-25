@@ -43,6 +43,10 @@ pub struct Cli {
     #[arg(short = 'C', group = "action")]
     pub change: bool,
 
+    /// Inspect a key file and display security parameters
+    #[arg(short = 'I', long = "inspect", group = "action")]
+    pub inspect: bool,
+
     /// Force overwrite existing files
     #[arg(short = 'f')]
     pub force: bool,
@@ -124,6 +128,7 @@ pub enum Action {
     Verify,
     Recreate,
     Change,
+    Inspect,
 }
 
 impl Cli {
@@ -140,6 +145,8 @@ impl Cli {
             Some(Action::Recreate)
         } else if self.change {
             Some(Action::Change)
+        } else if self.inspect {
+            Some(Action::Inspect)
         } else {
             None
         }
@@ -191,6 +198,7 @@ mod tests {
             verify: false,
             recreate: false,
             change: false,
+            inspect: false,
             force: false,
             prehashed: false,
             legacy: false,
@@ -221,6 +229,7 @@ mod tests {
             verify: false,
             recreate: false,
             change: false,
+            inspect: false,
             force: false,
             prehashed: false,
             legacy: false,
@@ -241,6 +250,37 @@ mod tests {
             version: None,
         };
         assert_eq!(cli.action(), None);
+    }
+
+    #[test]
+    fn test_inspect_action_detection() {
+        let cli = Cli {
+            generate: false,
+            sign: false,
+            verify: false,
+            recreate: false,
+            change: false,
+            inspect: true,
+            force: false,
+            prehashed: false,
+            legacy: false,
+            message_file: None,
+            output: false,
+            public_key_file: None,
+            public_key_base64: None,
+            quiet: false,
+            pretty_quiet: false,
+            secret_key_file: None,
+            trusted_comment: None,
+            untrusted_comment: None,
+            signature_file: None,
+            no_password: false,
+            password_file: None,
+            allow_kdf_fallback: false,
+            help: None,
+            version: None,
+        };
+        assert_eq!(cli.action(), Some(Action::Inspect));
     }
 
     #[test]
@@ -297,6 +337,7 @@ mod tests {
             verify: false,
             recreate: false,
             change: false,
+            inspect: false,
             force: false,
             prehashed: false,
             legacy: false,
@@ -328,6 +369,7 @@ mod tests {
             verify: false,
             recreate: false,
             change: false,
+            inspect: false,
             force: false,
             prehashed: false,
             legacy: false,
