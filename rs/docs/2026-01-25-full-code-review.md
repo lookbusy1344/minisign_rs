@@ -64,8 +64,8 @@ if fallback_used {
 
 **Issue**: This warning goes to stderr but doesn't fail or log persistently. A user running in a constrained environment might not notice their keys are being encrypted with weaker parameters than intended.
 
-**Recommendation**: 
-- Add a flag to disable automatic fallback
+**Recommendation**:
+- IMPORTANT: Automatic fallback should be opt-in, not default. This app should be secure by default, with the fallback requiring explicit user consent via a CLI flag.
 - Consider returning a result struct that indicates if fallback was used
 - Document this behavior prominently
 
@@ -202,6 +202,8 @@ The following public functions lack proper documentation:
    let password = std::fs::read_to_string(path)...
    Ok(password.trim_end().to_string())  // String not Zeroizing<String>
    ```
+
+This is acceptable because this is a debug/testing feature, not intended for production use, but should be documented.
 
 2. **Timing side-channels**: Password prompt uses standard string comparison in rpassword, not constant-time. However, this is for local user input, not network.
 
