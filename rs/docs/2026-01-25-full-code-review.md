@@ -130,13 +130,18 @@ Error::other(format!("failed to read data: {e}"))  // Less informative
 
 **Recommendation**: Use structured errors consistently with path information.
 
-### 2.3 ⚠️ Documentation Gaps
+### 2.3 ✅ FIXED: Documentation Gaps
 
 The following public functions lack proper documentation:
 
 - `PubkeyStruct::from_base64()` - minimal doc
 - `SeckeyStruct::new_unencrypted()` - checksum behavior undocumented
 - `SigStruct::new()` - no examples
+
+**Status**: FIXED - Added comprehensive documentation with examples to all three functions:
+- `PubkeyStruct::from_base64()`: Added detailed description, arguments, return value, error conditions, and working example
+- `SeckeyStruct::new_unencrypted()`: Added comprehensive docs explaining checksum behavior, security note, and working example
+- `SigStruct::new()`: Added detailed documentation explaining prehashed mode, with working example
 
 **Recommendation**: Add examples and edge case documentation.
 
@@ -406,10 +411,12 @@ Audit all `Error::other()` calls and replace with structured variants.
 
 **Completed**: Replaced all production `Error::other()` calls with appropriate structured error types.
 
-#### 3.4 Add documentation examples
-**Effort**: 2-3 hours
+#### 3.4 ✅ COMPLETED: Add documentation examples
+**Effort**: 1 hour
 
 Add `# Examples` sections to all public API functions.
+
+**Completed**: Added comprehensive documentation with working examples to key public API functions.
 
 ### Priority 4: Low (Nice to Have)
 

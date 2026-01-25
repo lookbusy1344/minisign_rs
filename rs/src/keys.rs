@@ -178,9 +178,33 @@ impl PubkeyStruct {
 
     /// Parse from base64-encoded string (without comment)
     ///
+    /// This parses the base64 representation typically found in `.pub` files
+    /// (excluding the untrusted comment line).
+    ///
+    /// # Arguments
+    ///
+    /// * `base64_str` - Base64-encoded public key structure (42 bytes when decoded)
+    ///
+    /// # Returns
+    ///
+    /// A `PubkeyStruct` containing the signature algorithm, key number, and public key
+    ///
     /// # Errors
     ///
-    /// Returns an error if base64 decoding fails or the data is invalid
+    /// Returns an error if:
+    /// - Base64 decoding fails
+    /// - The decoded data is not exactly 42 bytes
+    /// - The signature algorithm is not "Ed" (Ed25519)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use minisign::keys::PubkeyStruct;
+    ///
+    /// let base64 = "RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa";
+    /// let pubkey = PubkeyStruct::from_base64(base64)?;
+    /// # Ok::<(), minisign::Error>(())
+    /// ```
     pub fn from_base64(base64_str: &str) -> Result<Self> {
         let data = decode_base64(base64_str)?;
         Self::from_bytes(&data)
@@ -234,7 +258,34 @@ pub struct SeckeyStruct {
 impl SeckeyStruct {
     /// Create a new secret key structure (unencrypted)
     ///
-    /// For unencrypted keys, the checksum is set to all zeros (matching C behavior).
+    /// Creates an unencrypted secret key structure with no password protection.
+    /// The secret key is stored in plain form and the checksum is set to all zeros
+    /// (matching C minisign behavior for unencrypted keys).
+    ///
+    /// # Arguments
+    ///
+    /// * `keynum` - The 8-byte key number identifier
+    /// * `secret_key` - The 64-byte Ed25519 secret key
+    ///
+    /// # Returns
+    ///
+    /// A `SeckeyStruct` with `encrypted=false` and zero-filled KDF parameters
+    ///
+    /// # Security Note
+    ///
+    /// Unencrypted keys provide no protection if the key file is compromised.
+    /// Use `new_encrypted()` for password-protected keys.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minisign::crypto::generate_keypair;
+    /// use minisign::keys::SeckeyStruct;
+    ///
+    /// let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    /// let seckey_struct = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    /// assert!(!seckey_struct.is_encrypted());
+    /// ```
     #[must_use]
     pub fn new_unencrypted(keynum: KeyNum, secret_key: &SecretKey) -> Self {
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];

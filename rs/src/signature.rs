@@ -55,6 +55,35 @@ pub struct SigStruct {
 
 impl SigStruct {
     /// Create a new signature structure
+    ///
+    /// # Arguments
+    ///
+    /// * `keynum` - The 8-byte key number identifier (must match the signing key)
+    /// * `signature` - The 64-byte Ed25519 signature
+    /// * `prehashed` - Whether this signature is for a prehashed message (Blake2b-512)
+    ///
+    /// # Returns
+    ///
+    /// A `SigStruct` containing the signature metadata and signature bytes
+    ///
+    /// # Prehashed Mode
+    ///
+    /// When `prehashed=true`, the signature is computed over the Blake2b-512 hash of the
+    /// file content rather than the raw content. This is useful for large files to avoid
+    /// loading them entirely into memory, though it reduces security slightly as the
+    /// signature doesn't directly authenticate the file content.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minisign::signature::SigStruct;
+    /// use minisign::crypto::{sign, generate_keypair};
+    ///
+    /// let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    /// let message = b"Hello, world!";
+    /// let signature = sign(&secret_key, message).unwrap();
+    /// let sig_struct = SigStruct::new(keynum, signature, false);
+    /// ```
     #[must_use]
     pub fn new(keynum: KeyNum, signature: Signature, prehashed: bool) -> Self {
         Self {
