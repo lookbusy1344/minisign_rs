@@ -65,6 +65,16 @@ pub struct SignResult {
 pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
     // Load and decrypt the secret key
     let seckey = load_secret_key(&options.secret_key_file)?;
+
+    // Warn if key was created with weak KDF parameters (fallback)
+    if seckey.is_weak_kdf() {
+        eprintln!("\n⚠️  WARNING: WEAK KEY DETECTED ⚠️");
+        eprintln!("This key was created with reduced security parameters.");
+        eprintln!("It is easier to brute-force than a production-strength key.");
+        eprintln!("Consider regenerating this key on a system with more memory.");
+        eprintln!("See rs/docs/kdf-fallback-security-analysis.md for details.\n");
+    }
+
     let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = password.ok_or(Error::PasswordRequired)?;
         seckey.decrypt(pwd)?
@@ -800,5 +810,66 @@ mod tests {
         // Should succeed with prehashed mode (streaming)
         let result = sign(&options, None);
         assert!(result.is_ok(), "prehashed mode should handle large files");
+    }
+
+    #[test]
+    fn test_sign_with_weak_kdf_key() {
+        // Test that signing with a weak KDF key succeeds
+        // (Warning display will be verified manually or in integration tests)
+        use crate::crypto::generate_keypair;
+        use rand::Rng;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Generate a key with weak KDF parameters (N=2^17, fallback after 3 halvings)
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+        let password = b"testpass";
+        let mut kdf_salt = [0u8; 32];
+        rand::thread_rng().fill(&mut kdf_salt);
+
+        // Weak parameters: N=2^17, well below production N=2^20
+        let kdf_opslimit = 4_194_304; // After 3 fallbacks (8x weaker)
+        let kdf_memlimit = 134_217_728; // 128 MB
+
+        let seckey = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+            false,
+        )
+        .expect("key creation should succeed");
+
+        // Verify the key is indeed weak
+        assert!(seckey.is_weak_kdf(), "key should be detected as weak");
+
+        // Write the key file
+        let sk_path = temp_dir.path().join("weak.key");
+        std::fs::write(&sk_path, seckey.to_file_contents("weak key")).unwrap();
+
+        // Create a message to sign
+        let message_path = temp_dir.path().join("message.txt");
+        std::fs::write(&message_path, b"Test message").unwrap();
+
+        let options = SignOptions {
+            secret_key_file: sk_path.to_str().unwrap().to_string(),
+            message_file: message_path.to_str().unwrap().to_string(),
+            signature_file: None,
+            prehashed: false,
+            trusted_comment: Some("Test with weak key".to_string()),
+            untrusted_comment: Some("weak key test".to_string()),
+            force: false,
+        };
+
+        // Signing should succeed (warning should be displayed to stderr)
+        let result = sign(&options, Some(password));
+        assert!(result.is_ok(), "signing with weak key should succeed");
+
+        // Verify signature file was created
+        let sig_path = temp_dir.path().join("message.txt.minisig");
+        assert!(sig_path.exists(), "signature file should be created");
     }
 }

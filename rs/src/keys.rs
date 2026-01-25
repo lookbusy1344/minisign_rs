@@ -256,6 +256,10 @@ pub struct SeckeyStruct {
 }
 
 impl SeckeyStruct {
+    // Production-strength KDF parameters (N=2^20, r=8, p=1)
+    const PRODUCTION_OPSLIMIT: u64 = 33_554_432;
+    const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
+
     /// Create a new secret key structure (unencrypted)
     ///
     /// Creates an unencrypted secret key structure with no password protection.
@@ -438,6 +442,15 @@ impl SeckeyStruct {
             return Err(Error::Other("key is not encrypted".to_string()));
         }
 
+        // Warn if key was created with weak KDF parameters (fallback)
+        if self.is_weak_kdf() {
+            eprintln!("\n⚠️  WARNING: WEAK KEY DETECTED ⚠️");
+            eprintln!("This key was created with reduced security parameters.");
+            eprintln!("It is easier to brute-force than a production-strength key.");
+            eprintln!("Consider regenerating this key on a system with more memory.");
+            eprintln!("See rs/docs/kdf-fallback-security-analysis.md for details.\n");
+        }
+
         // Convert opslimit/memlimit to scrypt parameters
         let (log_n, r, p) =
             Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit)?;
@@ -497,6 +510,46 @@ impl SeckeyStruct {
         // to detect wrong passwords.
 
         Ok(SecretKey::from_bytes(self.secret_key_encrypted))
+    }
+
+    /// Check if this key was created with weak KDF parameters (fallback parameters)
+    ///
+    /// Returns `true` if the key's KDF parameters are below production strength,
+    /// indicating it was created with `--allow-kdf-fallback` or on a memory-constrained
+    /// system using the C implementation's automatic fallback.
+    ///
+    /// Production strength parameters:
+    /// - `opslimit` = 33,554,432 (N=2^20, r=8, p=1)
+    /// - `memlimit` = 1,073,741,824 (1024 MB)
+    ///
+    /// # Returns
+    ///
+    /// - `true` if either `kdf_opslimit` or `kdf_memlimit` is below production strength
+    /// - `false` if the key is unencrypted (no KDF used)
+    /// - `false` if the key uses production-strength parameters
+    ///
+    /// # Security Implications
+    ///
+    /// Weak KDF parameters make the key easier to brute-force:
+    /// - After 1 fallback (512 MB): 2x easier to attack
+    /// - After 3 fallbacks (128 MB): 8x easier to attack
+    /// - Minimum parameters (16 MB): 64x easier to attack
+    ///
+    /// See `rs/docs/kdf-fallback-security-analysis.md` for details.
+    #[must_use]
+    pub fn is_weak_kdf(&self) -> bool {
+        // Unencrypted keys have kdf_opslimit and kdf_memlimit set to 0
+        // They should not be considered weak (they have no KDF at all)
+        if !self.encrypted {
+            return false;
+        }
+
+        // Key is weak if either parameter is below production strength
+        // Production parameters: N = 2^20, r = 8, p = 1
+        // opslimit = 4 * N * r = 4 * 1,048,576 * 8 = 33,554,432
+        // memlimit = 128 * N * r = 128 * 1,048,576 * 8 = 1,073,741,824
+        self.kdf_opslimit < Self::PRODUCTION_OPSLIMIT
+            || self.kdf_memlimit < Self::PRODUCTION_MEMLIMIT
     }
 
     /// Compute the checksum (Blake2b-256 of keynum + `secret_key`)
@@ -845,6 +898,7 @@ impl std::fmt::Debug for SeckeyStruct {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
     use std::fs;
 
     #[test]
@@ -1495,5 +1549,139 @@ mod tests {
         assert_eq!(log_n, 1);
         assert_eq!(r, 8);
         assert_eq!(p, 1);
+    }
+
+    #[test]
+    fn test_is_weak_kdf_production_strength() {
+        use crate::crypto::generate_keypair;
+        // Create a key with production-strength parameters
+        // N = 2^20, opslimit = 33,554,432, memlimit = 1,073,741,824
+        let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+        let password = b"test_password";
+        let mut kdf_salt = [0u8; KDF_SALT_BYTES];
+        rand::thread_rng().fill(&mut kdf_salt);
+
+        let kdf_opslimit = 33_554_432; // Production strength
+        let kdf_memlimit = 1_073_741_824;
+
+        let seckey = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+            false, // No fallback
+        )
+        .unwrap();
+
+        // Production strength key should NOT be weak
+        assert!(!seckey.is_weak_kdf());
+    }
+
+    #[test]
+    fn test_is_weak_kdf_fallback_parameters() {
+        use crate::crypto::generate_keypair;
+        // Create a key with fallback parameters (weaker)
+        // N = 2^17 (3 fallbacks from production), opslimit = 4,194,304, memlimit = 134,217,728
+        let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+        let password = b"test_password";
+        let mut kdf_salt = [0u8; KDF_SALT_BYTES];
+        rand::thread_rng().fill(&mut kdf_salt);
+
+        let kdf_opslimit = 4_194_304; // After 3 fallbacks (8x weaker)
+        let kdf_memlimit = 134_217_728; // 128 MB
+
+        let seckey = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+            false, // No fallback needed, we're directly creating with weak params
+        )
+        .unwrap();
+
+        // Fallback parameters should be detected as weak
+        assert!(seckey.is_weak_kdf());
+    }
+
+    #[test]
+    fn test_is_weak_kdf_low_parameters() {
+        use crate::crypto::generate_keypair;
+        // Create a key with low parameters (N=2^14, used in fast tests)
+        // This is well below production strength (N=2^20)
+        let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+        let password = b"test_password";
+        let mut kdf_salt = [0u8; KDF_SALT_BYTES];
+        rand::thread_rng().fill(&mut kdf_salt);
+
+        // N = 2^14, r = 8, p = 1
+        let kdf_opslimit = 524_288; // Well below production (33,554,432)
+        let kdf_memlimit = 16_777_216; // 16 MB, well below production (1024 MB)
+
+        let seckey = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+            false,
+        )
+        .unwrap();
+
+        // Low parameters should be detected as weak
+        assert!(seckey.is_weak_kdf());
+    }
+
+    #[test]
+    fn test_is_weak_kdf_unencrypted_key() {
+        use crate::crypto::generate_keypair;
+        // Unencrypted keys have kdf_opslimit and kdf_memlimit set to 0
+        // They should NOT be considered weak (they have no KDF)
+        let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+
+        let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+
+        // Unencrypted keys should NOT be considered weak
+        assert!(!seckey.is_weak_kdf());
+    }
+
+    #[test]
+    fn test_decrypt_weak_kdf_key() {
+        use crate::crypto::generate_keypair;
+        // Test that decrypting a weak key succeeds and returns correct data
+        // (Warning display will be verified manually or in integration tests)
+        let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+        let password = b"test_password";
+        let mut kdf_salt = [0u8; KDF_SALT_BYTES];
+        rand::thread_rng().fill(&mut kdf_salt);
+
+        // Create a key with weak parameters
+        let kdf_opslimit = 4_194_304; // After 3 fallbacks (8x weaker)
+        let kdf_memlimit = 134_217_728; // 128 MB
+
+        let seckey = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            kdf_salt,
+            kdf_opslimit,
+            kdf_memlimit,
+            false,
+        )
+        .unwrap();
+
+        // Verify the key is weak
+        assert!(seckey.is_weak_kdf());
+
+        // Decrypt should succeed and return the correct secret key
+        let (decrypted_secret_key, decrypted_keynum) = seckey.decrypt(password).unwrap();
+
+        // Verify decrypted data matches original
+        assert_eq!(decrypted_keynum.as_bytes(), keynum.as_bytes());
+        assert_eq!(decrypted_secret_key.as_bytes(), secret_key.as_bytes());
     }
 }
