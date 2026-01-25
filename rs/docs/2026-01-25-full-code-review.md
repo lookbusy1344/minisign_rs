@@ -430,10 +430,19 @@ Minor performance optimization in hot paths.
 - `signature.rs:verify_global_signature()` - signature + comment concatenation
 - `signature.rs:with_global_signature()` - signature + comment concatenation
 
-#### 4.2 Add property-based tests for validation
-**Effort**: 2-3 hours
+#### 4.2 ✅ COMPLETED: Add property-based tests for validation
+**Effort**: 1 hour
 
 Expand proptest coverage for `validation.rs`.
+
+**Completed**: Added 7 property-based tests for validation functions:
+- `prop_printable_ascii_valid` - Valid ASCII strings always pass
+- `prop_no_cr_valid` - Strings without \r pass CR validation
+- `prop_with_cr_invalid` - Strings with \r fail CR validation
+- `prop_valid_comment` - Valid printable comments pass
+- `prop_long_valid_string` - Long valid strings (up to 1000 bytes) work correctly
+- `prop_null_byte_invalid` - Null bytes always fail
+- `prop_newline_invalid` - Newlines always fail
 
 ---
 
