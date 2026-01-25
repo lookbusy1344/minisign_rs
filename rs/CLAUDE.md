@@ -13,12 +13,14 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - Use `?` operator for errors
 
 ## Pre-Commit Checklist
+**ALWAYS run in this exact order before committing:**
 ```bash
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
-cargo fmt
+cargo fmt                     # REQUIRED: Always run AFTER clippy, BEFORE commit
 cargo test                    # Fast tests (~9s)
 cargo test -- --ignored       # Slow security tests (~16s)
 ```
+**Note:** `cargo fmt` MUST be the last formatting step before commit to ensure consistent style.
 
 ## Key Locations
 ```

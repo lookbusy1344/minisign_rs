@@ -103,7 +103,7 @@ pub struct Cli {
     #[arg(long = "password-file", value_name = "FILE")]
     pub password_file: Option<PathBuf>,
 
-    /// Allow KDF parameter fallback on resource constraints (less secure, opt-in)
+    /// Allow KDF parameter fallback if 128MB allocation fails (permission only, does not force fallback)
     #[arg(long = "allow-kdf-fallback")]
     pub allow_kdf_fallback: bool,
 
