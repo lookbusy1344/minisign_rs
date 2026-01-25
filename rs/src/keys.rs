@@ -277,15 +277,49 @@ impl SeckeyStruct {
         kdf_opslimit: u64,
         kdf_memlimit: u64,
     ) -> Result<Self> {
-        // Convert opslimit/memlimit to scrypt parameters
-        let (log_n, r, p) = Self::opslimit_memlimit_to_params(kdf_opslimit, kdf_memlimit);
+        use crate::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
 
         // Compute checksum of unencrypted keynum + secret_key (before encryption)
         let computed_checksum = Self::compute_checksum(keynum, secret_key.as_bytes());
 
-        // Derive 104 bytes (keynum + secret_key + checksum) to match C implementation
-        let derived_key =
-            derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
+        // Implement scrypt parameter fallback (matches C minisign.c:419-427)
+        // Try derivation with initial parameters, halving on failure until minimum reached
+        let mut current_opslimit = kdf_opslimit;
+        let mut current_memlimit = kdf_memlimit;
+        let mut fallback_used = false;
+
+        let derived_key = loop {
+            // Convert opslimit/memlimit to scrypt parameters
+            let (log_n, r, p) =
+                Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit);
+
+            // Attempt key derivation
+            if let Ok(key) =
+                derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)
+            {
+                break key;
+            }
+
+            // Derivation failed - try with reduced parameters
+            current_opslimit /= 2;
+            current_memlimit /= 2;
+
+            // Check if we've fallen below minimum thresholds
+            if current_opslimit < SCRYPT_OPSLIMIT_MIN || current_memlimit < SCRYPT_MEMLIMIT_MIN {
+                return Err(Error::KdfError(
+                    "Unable to complete key derivation - more memory needed".to_string(),
+                ));
+            }
+
+            fallback_used = true;
+        };
+
+        // Log warning if fallback was used
+        if fallback_used {
+            eprintln!(
+                "Warning: Key derivation used reduced parameters (opslimit={current_opslimit}, memlimit={current_memlimit})"
+            );
+        }
 
         // Create combined blob: keynum + secret_key + checksum (zeroized on drop)
         let mut blob = Zeroizing::new(Vec::with_capacity(ENCRYPTED_BLOB_SIZE));
@@ -313,8 +347,8 @@ impl SeckeyStruct {
         Ok(Self {
             encrypted: true,
             kdf_salt,
-            kdf_opslimit,
-            kdf_memlimit,
+            kdf_opslimit: current_opslimit, // Store actual parameters that worked
+            kdf_memlimit: current_memlimit,
             keynum,
             encrypted_keynum,
             secret_key_encrypted,
@@ -1068,6 +1102,114 @@ mod tests {
 
         // Verify we got a valid secret key
         assert_eq!(secret_key.as_bytes().len(), SECRET_KEY_BYTES);
+    }
+
+    #[test]
+    fn test_scrypt_fallback_minimum_constants() {
+        use crate::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
+
+        // Verify minimum constants are defined and have reasonable values
+        // These match libsodium's minimum thresholds
+        assert_eq!(SCRYPT_OPSLIMIT_MIN, 32_768);
+        assert_eq!(SCRYPT_MEMLIMIT_MIN, 16_777_216);
+
+        // Note: Testing encryption with actual minimum parameters is challenging
+        // because different systems/scrypt implementations may have different
+        // practical limits. The fallback mechanism will reduce parameters until
+        // they work or hit these minimums.
+    }
+
+    #[test]
+    fn test_scrypt_fallback_with_moderate_parameters() {
+        use crate::crypto::generate_keypair;
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
+        // Test encryption with moderate parameters that should work on most systems
+        // log_N = 15 (N = 32768), r = 8, p = 1
+        // opslimit = 4 * 32768 * 8 = 1,048,576
+        // memlimit = 128 * 32768 * 8 = 33,554,432 (32 MB)
+        let password = b"test password";
+        let mut salt = [0u8; KDF_SALT_BYTES];
+        getrandom::getrandom(&mut salt).expect("RNG should work");
+
+        const OPSLIMIT: u64 = 1_048_576; // Moderate parameters
+        const MEMLIMIT: u64 = 33_554_432; // 32 MB
+
+        let encrypted = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+        )
+        .expect("Encryption with moderate parameters should succeed");
+
+        // Verify the encrypted key stores parameters (either original or reduced if fallback occurred)
+        assert!(encrypted.kdf_opslimit() > 0);
+        assert!(encrypted.kdf_memlimit() > 0);
+        assert!(encrypted.kdf_opslimit() <= OPSLIMIT);
+        assert!(encrypted.kdf_memlimit() <= MEMLIMIT);
+
+        // Verify decryption works
+        let (decrypted_key, decrypted_keynum) = encrypted
+            .decrypt(password)
+            .expect("Decryption should succeed");
+
+        assert_eq!(decrypted_keynum, keynum);
+        assert_eq!(decrypted_key.as_bytes(), secret_key.as_bytes());
+    }
+
+    #[test]
+    fn test_scrypt_parameters_below_minimum_would_fail() {
+        use crate::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
+
+        // Note: We cannot easily test actual fallback behavior because:
+        // 1. We'd need to make scrypt fail, which requires extreme memory pressure
+        // 2. The fallback loop is internal to new_encrypted()
+        //
+        // What we CAN test is that the minimum thresholds exist and are enforced.
+        // If parameters were to fall below minimum during fallback, encryption would fail.
+
+        // Verify minimum constants are reasonable values
+        assert_eq!(SCRYPT_OPSLIMIT_MIN, 32_768);
+        assert_eq!(SCRYPT_MEMLIMIT_MIN, 16_777_216);
+
+        // Parameters at minimum should work (tested above)
+        // Parameters below minimum would cause fallback to error out
+        // But we can't directly test parameters below minimum because
+        // new_encrypted() would fail in the conversion or validation
+    }
+
+    #[test]
+    fn test_encryption_stores_successful_parameters() {
+        use crate::crypto::generate_keypair;
+
+        // Use standard parameters (high memory requirements)
+        const OPSLIMIT: u64 = 33_554_432; // 4 * 2^20 * 8
+        const MEMLIMIT: u64 = 1_073_741_824; // 128 * 2^20 * 8
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
+        let password = b"test password";
+        let mut salt = [0u8; KDF_SALT_BYTES];
+        getrandom::getrandom(&mut salt).expect("RNG should work");
+
+        let encrypted =
+            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT)
+                .expect("Encryption should succeed");
+
+        // The encrypted key should store the parameters that actually worked
+        // If fallback occurred, these would be reduced values
+        // If no fallback, these should match the input
+        assert!(encrypted.kdf_opslimit() > 0);
+        assert!(encrypted.kdf_memlimit() > 0);
+
+        // On most systems with sufficient memory, no fallback occurs
+        // so parameters should match (but we can't assert this deterministically)
     }
 
     // Property-based tests

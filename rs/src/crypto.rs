@@ -26,6 +26,11 @@ pub const SCRYPT_LOG_N: u8 = 20;
 pub const SCRYPT_R: u32 = 8;
 pub const SCRYPT_P: u32 = 1;
 
+// Minimum scrypt parameters (matching libsodium minimums)
+// These are used as lower bounds for fallback mechanism
+pub const SCRYPT_OPSLIMIT_MIN: u64 = 32_768; // 2^15
+pub const SCRYPT_MEMLIMIT_MIN: u64 = 16_777_216; // 16 MB
+
 /// Ed25519 secret key (64 bytes) with automatic zeroization
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SecretKey(pub [u8; SECRET_KEY_BYTES]);
