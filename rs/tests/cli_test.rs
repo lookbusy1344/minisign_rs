@@ -559,10 +559,24 @@ fn test_version_includes_commit_hash() {
     let end = version_string.find(')').expect("Should have closing paren");
     let in_parens = &version_string[start + 1..end];
 
-    // Commit hash should be 7-8 hex characters (not "Rust")
+    // Commit info can be:
+    // - Pure hex hash: "abc1234" (7-8 chars)
+    // - Git describe format: "v0.1.0-6-g347e92d" (when commits after tag)
+    // - Tag only: "v0.1.0" (when exactly on tag)
+    let is_valid_commit_info = if in_parens.contains('-') && in_parens.contains('g') {
+        // Git describe format: extract hash after 'g' prefix
+        in_parens
+            .split('-')
+            .next_back()
+            .is_some_and(|hash| hash.starts_with('g') && hash.len() >= 8)
+    } else {
+        // Pure hex hash (legacy format)
+        in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit())
+    };
+
     assert!(
-        in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit()),
-        "Expected commit hash in parentheses, got: {in_parens}"
+        is_valid_commit_info,
+        "Expected valid commit info in parentheses, got: {in_parens}"
     );
 }
 
