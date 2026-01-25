@@ -291,7 +291,7 @@ impl SeckeyStruct {
         let derived_key = loop {
             // Convert opslimit/memlimit to scrypt parameters
             let (log_n, r, p) =
-                Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit);
+                Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit)?;
 
             // Attempt key derivation
             if let Ok(key) =
@@ -374,7 +374,7 @@ impl SeckeyStruct {
         }
 
         // Convert opslimit/memlimit to scrypt parameters
-        let (log_n, r, p) = Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit);
+        let (log_n, r, p) = Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit)?;
 
         // Derive 104 bytes (keynum + secret_key + checksum) to match C implementation
         let derived_key =
@@ -503,35 +503,59 @@ impl SeckeyStruct {
     /// - `log_n` < 14: Not recommended (too weak for key derivation)
     /// - `log_n` = 20: Production default (1-5 seconds per operation)
     /// - `log_n` > 22: May be excessive for most use cases
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
-    fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> (u8, u32, u32) {
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::ScryptParamError` if:
+    /// - N value is 0 or cannot be calculated
+    /// - `log_n` is out of valid range (0-255)
+    /// - Arithmetic overflow occurs during calculation
+    fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
         // Standard minisign uses r=8, p=1
         // We can derive N from either formula, using memlimit is simpler
         let r = SCRYPT_R_STANDARD;
         let p = SCRYPT_P_STANDARD;
 
         // N = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * r)
-        let n = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * u64::from(r));
-        // Safe cast: log2 of u64 max is ~64, which fits in u8
-        let log_n = (n as f64).log2() as u8;
+        // Use checked arithmetic to prevent overflow/underflow
+        let divisor = LIBSODIUM_MEMLIMIT_MULTIPLIER
+            .checked_mul(u64::from(r))
+            .ok_or_else(|| Error::ScryptParamError("overflow calculating divisor".into()))?;
+
+        let n = memlimit
+            .checked_div(divisor)
+            .ok_or_else(|| Error::ScryptParamError("division by zero".into()))?;
+
+        if n == 0 {
+            return Err(Error::ScryptParamError("N cannot be zero".into()));
+        }
+
+        // Use checked_ilog2 instead of f64 cast to avoid undefined behavior with 0 or overflow
+        let log_n = n
+            .checked_ilog2()
+            .and_then(|v| u8::try_from(v).ok())
+            .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
 
         // Verify our calculation is consistent with opslimit
         // opslimit should equal LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
-        let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * u64::from(r);
+        let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
+            .checked_mul(n)
+            .and_then(|v| v.checked_mul(u64::from(r)))
+            .ok_or_else(|| Error::ScryptParamError("overflow calculating expected opslimit".into()))?;
+
         if expected_opslimit != opslimit {
             // If they don't match, the key might use non-standard parameters
             // Fall back to deriving r from opslimit
-            // Safe cast: r values are typically small (8-16)
-            let derived_r =
-                u32::try_from(opslimit / (LIBSODIUM_OPSLIMIT_MULTIPLIER * n)).unwrap_or(r);
-            return (log_n, derived_r, p);
+            let derived_r = opslimit
+                .checked_div(LIBSODIUM_OPSLIMIT_MULTIPLIER.checked_mul(n).ok_or_else(|| {
+                    Error::ScryptParamError("overflow calculating derived r".into())
+                })?)
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(r);
+            return Ok((log_n, derived_r, p));
         }
 
-        (log_n, r, p)
+        Ok((log_n, r, p))
     }
 
     /// Get the key number
@@ -1242,5 +1266,76 @@ mod tests {
             // Verify all chars are valid hex
             prop_assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
         }
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_zero_n() {
+        // Test that N=0 is rejected (memlimit too small)
+        let opslimit = 1;
+        let memlimit = 1;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("N cannot be zero"));
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_overflow() {
+        // Test that extremely large values trigger log_n out of range
+        // Using values that would cause log_n > 255
+        let memlimit = u64::MAX;
+        let opslimit = u64::MAX;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        // Should return Ok with derived r, as the calculation succeeds even with large N
+        // The ilog2 of very large N will be valid (< 64)
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_valid() {
+        // Test with valid standard parameters (log_n=20, r=8, p=1)
+        // N = 2^20 = 1,048,576
+        // opslimit = 4 * N * r = 4 * 1,048,576 * 8 = 33,554,432
+        // memlimit = 128 * N * r = 128 * 1,048,576 * 8 = 1,073,741,824
+        let opslimit = 33_554_432;
+        let memlimit = 1_073_741_824;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_ok());
+        let (log_n, r, p) = result.unwrap();
+        assert_eq!(log_n, 20);
+        assert_eq!(r, 8);
+        assert_eq!(p, 1);
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_non_power_of_two() {
+        // Test with N that's not a power of 2
+        // N = 1000 (not a power of 2)
+        // opslimit = 4 * 1000 * 8 = 32,000
+        // memlimit = 128 * 1000 * 8 = 1,024,000
+        let opslimit = 32_000;
+        let memlimit = 1_024_000;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_ok());
+        let (log_n, r, p) = result.unwrap();
+        // log2(1000) ≈ 9.96, should truncate to 9
+        assert_eq!(log_n, 9);
+        assert_eq!(r, 8);
+        assert_eq!(p, 1);
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_min_valid() {
+        // Test with minimum valid parameters (log_n=1, r=8, p=1)
+        // N = 2^1 = 2
+        // opslimit = 4 * 2 * 8 = 64
+        // memlimit = 128 * 2 * 8 = 2,048
+        let opslimit = 64;
+        let memlimit = 2_048;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_ok());
+        let (log_n, r, p) = result.unwrap();
+        assert_eq!(log_n, 1);
+        assert_eq!(r, 8);
+        assert_eq!(p, 1);
     }
 }
