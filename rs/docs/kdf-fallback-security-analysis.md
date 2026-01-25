@@ -126,7 +126,7 @@ static void decrypt_key(SeckeyStruct *const seckey_struct) {
 
 ## Critical Security Issues
 
-### 1. **No Inspection Capability**
+### 1. **Limited Inspection Capability in C Implementation**
 
 The C implementation provides **zero** ways to inspect a key file's KDF parameters:
 
@@ -135,7 +135,7 @@ $ minisign --help
 # No --inspect, --show-params, --info commands
 ```
 
-**Users cannot determine**:
+**C minisign users cannot determine**:
 - Whether their key was created with fallback parameters
 - How weak their key might be (2x, 8x, or 64x weaker)
 - Whether they should regenerate their keys
@@ -146,7 +146,77 @@ The only indication is a **single-line warning at creation time** that:
 - Isn't logged anywhere
 - Can't be checked later
 
-### 2. **Permanent Security Degradation**
+**✅ Rust Implementation Solution**: The `-I/--inspect` command (added in commit e8bceb3) provides comprehensive key inspection:
+
+```bash
+$ minisign_rs -I -s ~/.minisign/minisign.key
+
+Security Level: HIGH ✓
+
+Key Information:
+├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+├─ Encrypted: Yes
+├─ KDF Algorithm: Scrypt
+└─ KDF Parameters:
+   ├─ opslimit: 33554432 (N=2^20, r=8, p=1)
+   ├─ memlimit: 1073741824 (1024 MB)
+   └─ Creation: Normal (production parameters)
+```
+
+For weak keys, the inspect command displays:
+
+```bash
+Security Level: LOW 🔥
+
+Key Information:
+├─ Key ID: RWQwpZXcv6r8MS...
+├─ Encrypted: Yes
+├─ KDF Algorithm: Scrypt
+└─ KDF Parameters:
+   ├─ opslimit: 4194304 (N=2^17, r=8, p=1)
+   ├─ memlimit: 134217728 (128 MB)
+   ├─ Creation: Fallback (reduced parameters)
+   └─ Brute-force resistance: 8x weaker than production strength
+
+⚠️  RECOMMENDATION: Regenerate this key on a system with ≥2GB RAM for full security.
+```
+
+The inspect command:
+- Works with both secret and public keys
+- Provides three-tier security classification (High/Medium/Low)
+- Shows exact KDF parameters and weakness multiplier
+- Offers actionable recommendations for weak keys
+- Reads directly from bytes 38-53 of the key file (fully compatible with C-generated keys)
+
+### 2. **Persistent Warning System**
+
+**✅ Rust Implementation Enhancement** (added in commit 63fd712): The Rust implementation now displays warnings **every time** a weak key is used, not just at creation:
+
+```rust
+// Warning appears during both signing and decryption operations
+if seckey.is_weak_kdf() {
+    eprintln!("\n⚠️  WARNING: WEAK KEY DETECTED ⚠️");
+    eprintln!("This key was created with reduced security parameters.");
+    eprintln!("It is easier to brute-force than a production-strength key.");
+    eprintln!("Consider regenerating this key on a system with more memory.");
+    eprintln!("See rs/docs/kdf-fallback-security-analysis.md for details.\n");
+}
+```
+
+This warning appears:
+- **During signing operations** (in `ops/sign.rs`)
+- **During key decryption** (in `keys.rs`)
+- **Every time the key is used** (not just once at creation)
+- **With actionable guidance** (links to this security analysis)
+
+The `is_weak_kdf()` method checks if KDF parameters are below production strength:
+- Production: `opslimit = 33,554,432`, `memlimit = 1,073,741,824`
+- Weak: Any value below production thresholds
+- Unencrypted keys return `false` (no KDF applied)
+
+**Impact**: Users cannot unknowingly continue using weak keys. The persistent warnings ensure awareness of the security trade-off.
+
+### 3. **Permanent Security Degradation**
 
 Once created with weak parameters, the key is permanently compromised:
 
@@ -163,7 +233,7 @@ Even when later used on high-memory system:
 → Distributing new public key to all verifiers
 ```
 
-### 3. **Silent Compromise**
+### 4. **Silent Compromise in C Implementation**
 
 The automatic fallback occurs without explicit user acknowledgment:
 
@@ -175,7 +245,7 @@ User feedback: "Warning: due to limited memory the KDF used less memory than the
                 ↑ Vague, non-actionable, easily dismissed
 ```
 
-### 4. **Attack Scenarios**
+### 5. **Attack Scenarios**
 
 **Scenario 1: Targeted Attack on IoT Devices**
 
@@ -370,24 +440,50 @@ Keys created with C minisign's automatic fallback can be used with Rust minisign
    minisign -G
    ```
 
-2. **Future Enhancement: Add Inspection Command**
+2. **Inspect Existing Keys**
+
+   The `-I/--inspect` command allows you to audit your keys:
 
    ```bash
-   # Proposed feature (not yet implemented)
-   minisign --inspect-key ~/.minisign/minisign.key
+   # Inspect a secret key
+   minisign_rs -I -s ~/.minisign/minisign.key
 
-   # Expected output:
+   # Inspect a public key
+   minisign_rs -I -p ~/.minisign/minisign.pub
+
+   # Output for production-strength key:
+   # Security Level: HIGH ✓
+   #
    # Key Information:
    # ├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
    # ├─ Encrypted: Yes
    # ├─ KDF Algorithm: Scrypt
    # └─ KDF Parameters:
-   #    ├─ N (iterations): 2^20 (1,048,576)  ✓ Production strength
-   #    ├─ r (block size): 8
-   #    ├─ p (parallelization): 1
-   #    ├─ Memory required: 1024 MB
-   #    └─ Security level: SENSITIVE (100% strength)
+   #    ├─ opslimit: 33554432 (N=2^20, r=8, p=1)
+   #    ├─ memlimit: 1073741824 (1024 MB)
+   #    └─ Creation: Normal (production parameters)
+
+   # Output for weak key:
+   # Security Level: LOW 🔥
+   #
+   # Key Information:
+   # ├─ Key ID: RWQwpZXcv6r8MS...
+   # ├─ Encrypted: Yes
+   # ├─ KDF Algorithm: Scrypt
+   # └─ KDF Parameters:
+   #    ├─ opslimit: 4194304 (N=2^17, r=8, p=1)
+   #    ├─ memlimit: 134217728 (128 MB)
+   #    ├─ Creation: Fallback (reduced parameters)
+   #    └─ Brute-force resistance: 8x weaker than production strength
+   #
+   # ⚠️  RECOMMENDATION: Regenerate this key on a system with ≥2GB RAM for full security.
    ```
+
+   **Security levels**:
+   - **HIGH**: Production parameters (N=2^20, 1024 MB)
+   - **MEDIUM**: 1-2 fallbacks (N=2^19-18, 256-512 MB, 2-4x weaker)
+   - **LOW**: 3+ fallbacks (N≤2^17, ≤128 MB, 8x+ weaker)
+   - **NONE**: Unencrypted key (no KDF protection)
 
 ### For Security-Critical Deployments
 
@@ -439,6 +535,59 @@ To maintain equivalent security:
 | Minimum (N=2^14) | 46 bits (e.g., 10 random chars) |
 
 Users would need **stronger passwords** to compensate for weaker KDF, but they aren't told this.
+
+---
+
+## Rust Implementation Security Enhancements
+
+The Rust implementation provides comprehensive protection against weak KDF parameters through multiple layers:
+
+### 1. **Creation-Time Protection**
+- Fail-by-default when production parameters cannot be met
+- Require explicit `--allow-kdf-fallback` flag for reduced parameters
+- Display detailed warnings showing exact weakness multiplier
+
+### 2. **Runtime Warnings** (commit 63fd712)
+- Detect weak keys during signing and decryption operations
+- Display warnings **every time** a weak key is used
+- Provide actionable guidance and links to security documentation
+- Cannot be silenced or dismissed (appears on stderr)
+
+### 3. **Inspection Capability** (commit e8bceb3)
+- New `-I/--inspect` command for auditing key security
+- Works with both secret and public keys
+- Three-tier security classification (High/Medium/Low)
+- Displays exact KDF parameters and weakness calculations
+- Fully compatible with C-generated keys (reads bytes 38-53)
+- Provides recommendations for weak keys
+
+### Implementation Details
+
+**Warning Detection** (`keys.rs:512-553`):
+```rust
+pub fn is_weak_kdf(&self) -> bool {
+    if !self.encrypted {
+        return false;  // Unencrypted keys have no KDF
+    }
+
+    // Check if parameters are below production strength
+    self.kdf_opslimit < PRODUCTION_OPSLIMIT
+        || self.kdf_memlimit < PRODUCTION_MEMLIMIT
+}
+```
+
+**Inspection** (`ops/inspect.rs`):
+- 615 lines of code
+- 12 unit tests covering all security levels
+- 5 integration tests for CLI behavior
+- Weakness multiplier calculation: `PRODUCTION_MEMLIMIT / actual_memlimit`
+- Security level classification based on memory thresholds
+
+**Test Coverage**:
+- Weak key detection: 5 unit tests
+- Warning display: 2 integration tests
+- Inspection command: 12 unit tests, 5 CLI tests
+- All following TDD principles (tests written first)
 
 ---
 
