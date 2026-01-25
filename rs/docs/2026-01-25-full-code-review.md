@@ -4,6 +4,19 @@
 **Reviewer**: Independent Security Review  
 **Scope**: Full codebase review of `./rs` - Rust conversion of minisign  
 **Reference**: CLAUDE.md project guidelines  
+**Status Update**: 2026-01-25 - Most issues addressed, 2 medium-priority items remain
+
+### Remediation Progress
+
+| Priority | Total | Fixed | Remaining |
+|----------|-------|-------|-----------|
+| P1 (Critical) | 3 | ✅ 3 | 0 |
+| P2 (High) | 3 | ✅ 3 | 0 |
+| P3 (Medium) | 4 | ✅ 2 | 2 |
+| P4 (Low) | 2 | ✅ 2 | 0 |
+| **Total** | **12** | **✅ 10** | **2** |
+
+**Remaining items:** Comprehensive fuzzing tests (3.1), Concurrent access tests (3.2)
 
 ---
 
@@ -457,12 +470,21 @@ Expand proptest coverage for `validation.rs`.
 5. **Error handling**: Consistent use of Result types and ? operator
 6. **Clippy compliance**: Pedantic mode clean
 
-### What Needs Improvement
+### What Needs Improvement (Updated 2026-01-25)
 
-1. **Edge case handling**: Scrypt parameter calculation can fail silently
-2. **Code duplication**: File writing functions repeated across modules
-3. **Test coverage gaps**: No fuzzing, no concurrent access tests
-4. **Password handling**: CLI password not zeroized
+**Remaining Medium Priority Items:**
+
+1. **Test coverage gaps**: 
+   - No comprehensive fuzzing tests for malformed input
+   - No concurrent access tests for TOCTOU prevention
+
+**All other items from original review have been addressed:**
+- ✅ Edge case handling: Fixed scrypt parameter calculation
+- ✅ Code duplication: Consolidated file writing functions
+- ✅ Password handling: CLI password now uses `Zeroizing<String>`
+- ✅ Documentation: Added comprehensive examples to public APIs
+- ✅ Error handling: Replaced generic errors with structured types
+- ✅ Performance: Pre-allocated vectors in hot paths
 5. **Documentation**: Some public APIs lack examples
 
 ### Suspiciously Quick Completion Assessment
