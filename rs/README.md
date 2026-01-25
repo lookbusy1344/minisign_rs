@@ -195,58 +195,52 @@ src/
 - ✅ Key files are interchangeable between implementations
 - ✅ All CLI flags and behaviors match exactly
 
-For complete compatibility documentation, see [COMPATIBILITY.md](COMPATIBILITY.md).
+For detailed analysis:
+- [COMPATIBILITY.md](COMPATIBILITY.md) - Complete compatibility documentation
+- [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed comparison of both implementations
 
 ## Performance & Memory
 
+The Rust implementation **matches or exceeds** C minisign performance across all operations while providing superior memory safety guarantees.
+
+### Performance Summary
+
+| Operation | C minisign | minisign-rs | Winner |
+|-----------|-----------|-------------|--------|
+| Key Generation | 3.3ms | 3.2ms | Rust (1.02x) |
+| Sign 100KB | 3.4ms | 3.5ms | C (1.02x) |
+| Sign 10MB | 16.0ms | 15.4ms | Rust (1.04x) |
+| Verify 100KB | 2.2ms | 2.2ms | Tied |
+| Verify 10MB | 15.4ms | 14.5ms | Rust (1.06x) |
+
+**Performance differences are within 6%** - effectively identical for real-world usage. See [Performance Benchmark Report](docs/benchmark-report.md) for complete analysis.
+
+### Binary Size
+
+- **C version**: 70KB (optimized with static libsodium)
+- **Rust version**: 1.1MB (includes Rust standard library)
+- Trade-off: Larger binary for memory safety and zero C dependencies
+
 ### Memory Requirements
 
-The Rust implementation has **comparable memory usage** to the C version, with the main difference being improved memory safety guarantees.
-
-#### Runtime Memory Usage
-
-**Scrypt KDF (Key Derivation)**:
+**Scrypt KDF** (key encryption/decryption):
+- Memory usage: ~128MB during operations (intentional for security)
+- Duration: ~1-2s per operation
 - Both implementations use identical parameters: N=2^20, r=8, p=1
-- Memory usage: **~128MB** during key encryption/decryption operations
-- This is intentional for security (memory-hard function prevents brute-force attacks)
-- Duration: ~1-2 seconds per operation
 
 **Ed25519 Operations** (signing/verification):
-- Minimal memory usage (<1KB) in both implementations
-- Operations complete in <1ms
-- No meaningful difference between implementations
+- Minimal memory (<1KB), operations complete in <1ms
+- No difference between implementations
 
-#### Binary Size
+### Memory Safety Advantages
 
-- **C version**: Smaller binaries (tens of KB with static libsodium)
-- **Rust version**: Larger binaries (~1-2MB with standard library)
-  - Uses `ReleaseSmall` optimization for minimal size
-  - Debug symbols stripped in releases
-  - Trade-off for memory safety and no C dependencies
-
-#### Memory Safety Advantages
-
-The Rust implementation provides significant memory safety improvements:
-
-- ✅ **Zero unsafe code** - 100% safe Rust eliminates entire classes of vulnerabilities
-- ✅ **Automatic cleanup** - `Zeroize` and `Drop` traits ensure secrets are wiped
+- ✅ **Zero unsafe code** - Eliminates entire classes of vulnerabilities
+- ✅ **Automatic secret cleanup** - `Zeroize` and `Drop` traits ensure secrets are wiped
 - ✅ **Memory safety verified** - Miri checks detect undefined behavior
-- ✅ **No buffer overflows** - Rust's bounds checking prevents memory corruption
-- ✅ **No use-after-free** - Ownership system guarantees memory validity
+- ✅ **No buffer overflows** - Bounds checking prevents memory corruption
+- ✅ **No use-after-free** - Ownership system guarantees validity
 
-**C Implementation**:
-- Uses libsodium's `sodium_free()` for cleanup
-- Susceptible to memory safety issues inherent to C
-
-#### Performance Summary
-
-| Operation | C minisign | minisign-rs | Notes |
-|-----------|-----------|-------------|-------|
-| Key Generation (N=2^20) | ~1-2s | ~1-2s | Dominated by scrypt |
-| Signing (prehashed) | <1ms | <1ms | Ed25519 is fast |
-| Verification | <1ms | <1ms | Identical performance |
-
-**Conclusion**: The Rust version matches C performance while providing superior memory safety guarantees.
+**Conclusion**: The Rust version provides C-level performance with superior memory safety.
 
 ## Development Guidelines
 
@@ -314,10 +308,15 @@ All workflows use caching for faster builds.
 
 ## References
 
+### Documentation
+- [Compatibility Documentation](COMPATIBILITY.md) - Byte-level C/Rust compatibility proof
+- [Performance Benchmark Report](docs/benchmark-report.md) - C vs Rust performance comparison
+- [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed analysis of both implementations
+- [Development Guidelines](CLAUDE.md) - Essential development workflow
+- [Design Document](../docs/plans/2026-01-23-rust-rewrite-design.md) - Original implementation plan
+
+### External
 - [Original minisign (C)](https://github.com/jedisct1/minisign)
-- [Design Document](../docs/plans/2026-01-23-rust-rewrite-design.md)
-- [Compatibility Documentation](COMPATIBILITY.md)
-- [Development Guidelines](CLAUDE.md)
 - [ed25519-dalek Documentation](https://docs.rs/ed25519-dalek)
 - [RustCrypto Project](https://github.com/RustCrypto)
 
