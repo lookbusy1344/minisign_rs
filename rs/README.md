@@ -1,10 +1,15 @@
 # minisign-rs
 
+[![Rust CI](https://github.com/lookbusy1344/minisign/actions/workflows/rust.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/rust.yml)
+[![CodeQL scan](https://github.com/lookbusy1344/minisign/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/codeql-analysis.yml)
+[![Coverage](https://github.com/lookbusy1344/minisign/actions/workflows/coverage.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/coverage.yml)
+[![Slow Tests](https://github.com/lookbusy1344/minisign/actions/workflows/slow-tests.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/slow-tests.yml)
+
 A pure Rust implementation of [minisign](https://jedisct1.github.io/minisign/), a dead simple tool to sign files and verify signatures.
 
 ## Project Status
 
-**Phase 7 Complete - Production Ready** - Full Rust implementation with complete C minisign compatibility.
+**Production Ready** - Full Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
@@ -46,15 +51,13 @@ A pure Rust implementation of [minisign](https://jedisct1.github.io/minisign/), 
 Release binaries are available for:
 - **Linux** (x86_64, glibc and musl)
 - **macOS** (x86_64 and ARM64)
-- **Windows** (x86_64)
-
-Download from the [releases page](https://github.com/jedisct1/minisign/releases).
+- **Windows** (x86_64 and ARM64)
 
 ### Building from Source
 
 #### Prerequisites
 
-- Rust 1.90+ (edition 2024)
+- Rust 1.93+ (edition 2024)
 - Standard build tools (cargo)
 
 #### Commands
@@ -171,7 +174,6 @@ src/
 - `base64` - Base64 encoding/decoding
 - `rand` - Cryptographic random number generation
 - `thiserror` - Library error types
-- `anyhow` - Application error handling
 - `rpassword` - Secure password input
 - `dirs` - Cross-platform directory discovery
 
@@ -219,7 +221,7 @@ cargo run -- -S -m file.txt -s key.key --password-file password.txt
 - C minisign does not support this flag
 
 #### `--allow-kdf-fallback`
-Allow scrypt KDF parameter fallback on resource-constrained systems.
+Rust version is secure by default. This flag enables a scrypt KDF parameter fallback on resource-constrained systems.
 
 **⚠️ LESS SECURE - OPT-IN ONLY**
 
