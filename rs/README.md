@@ -199,6 +199,45 @@ For detailed analysis:
 - [COMPATIBILITY.md](COMPATIBILITY.md) - Complete compatibility documentation
 - [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed comparison of both implementations
 
+### CLI Differences from C minisign
+
+This Rust implementation adds **two optional flags** not present in the original C version:
+
+#### `--password-file <FILE>`
+Read password from file instead of interactive prompt.
+
+**⚠️ TESTING ONLY - INSECURE FOR PRODUCTION USE**
+
+```bash
+# Example (testing only)
+cargo run -- -S -m file.txt -s key.key --password-file password.txt
+```
+
+- Intended for automated testing and CI environments
+- Passwords stored in plain text files are a security risk
+- Use interactive password entry for production use
+- C minisign does not support this flag
+
+#### `--allow-kdf-fallback`
+Allow scrypt KDF parameter fallback on resource-constrained systems.
+
+**⚠️ LESS SECURE - OPT-IN ONLY**
+
+```bash
+# Example (embedded/constrained systems)
+cargo run -- -G --allow-kdf-fallback
+```
+
+- **Permission flag only** - does not force fallback, only allows it
+- Fallback **only triggers if** normal 128MB allocation fails
+- When triggered: reduces memory to 512KB with weaker KDF parameters (N=2^14 instead of N=2^20)
+- **Without this flag**: operations fail immediately if 128MB cannot be allocated
+- **With this flag**: operations attempt fallback before failing
+- Prevents complete failure on memory-limited devices (embedded systems, containers)
+- C minisign does not support this flag
+
+**Recommendation**: Avoid both flags in production. Use only when necessary and understand the security trade-offs.
+
 ## Performance & Memory
 
 The Rust implementation **matches or exceeds** C minisign performance across all operations while providing superior memory safety guarantees.

@@ -396,4 +396,64 @@ mod tests {
             assert!(validate_comment("\x00\r").is_err());
         }
     }
+
+    // Property-based tests
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Property: strings with only ASCII printables and tabs should always be valid
+        #[test]
+        fn prop_printable_ascii_valid(s in "[\\x20-\\x7E\\t]*") {
+            prop_assert!(is_printable(&s).is_ok());
+        }
+
+        /// Property: strings without \r should pass validate_no_embedded_cr
+        #[test]
+        fn prop_no_cr_valid(s in "[^\r]*") {
+            prop_assert!(validate_no_embedded_cr(&s).is_ok());
+        }
+
+        /// Property: strings with \r should fail validate_no_embedded_cr
+        #[test]
+        fn prop_with_cr_invalid(
+            prefix in "[^\r]*",
+            suffix in "[^\r]*"
+        ) {
+            let s = format!("{prefix}\r{suffix}");
+            prop_assert!(validate_no_embedded_cr(&s).is_err());
+        }
+
+        /// Property: valid printable strings without \r should pass validate_comment
+        #[test]
+        fn prop_valid_comment(s in "[\\x20-\\x7E\\t]*") {
+            prop_assert!(validate_comment(&s).is_ok());
+        }
+
+        /// Property: length validation - strings up to a reasonable length should work
+        #[test]
+        fn prop_long_valid_string(s in prop::collection::vec(0x20u8..=0x7Eu8, 0..1000)) {
+            let s = String::from_utf8(s).unwrap();
+            prop_assert!(is_printable(&s).is_ok());
+        }
+
+        /// Property: strings with null bytes should fail
+        #[test]
+        fn prop_null_byte_invalid(
+            prefix in "[\\x20-\\x7E]*",
+            suffix in "[\\x20-\\x7E]*"
+        ) {
+            let s = format!("{prefix}\x00{suffix}");
+            prop_assert!(is_printable(&s).is_err());
+        }
+
+        /// Property: strings with newlines should fail
+        #[test]
+        fn prop_newline_invalid(
+            prefix in "[\\x20-\\x7E]*",
+            suffix in "[\\x20-\\x7E]*"
+        ) {
+            let s = format!("{prefix}\n{suffix}");
+            prop_assert!(is_printable(&s).is_err());
+        }
+    }
 }

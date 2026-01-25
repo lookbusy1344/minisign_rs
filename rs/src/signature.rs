@@ -55,6 +55,35 @@ pub struct SigStruct {
 
 impl SigStruct {
     /// Create a new signature structure
+    ///
+    /// # Arguments
+    ///
+    /// * `keynum` - The 8-byte key number identifier (must match the signing key)
+    /// * `signature` - The 64-byte Ed25519 signature
+    /// * `prehashed` - Whether this signature is for a prehashed message (Blake2b-512)
+    ///
+    /// # Returns
+    ///
+    /// A `SigStruct` containing the signature metadata and signature bytes
+    ///
+    /// # Prehashed Mode
+    ///
+    /// When `prehashed=true`, the signature is computed over the Blake2b-512 hash of the
+    /// file content rather than the raw content. This is useful for large files to avoid
+    /// loading them entirely into memory, though it reduces security slightly as the
+    /// signature doesn't directly authenticate the file content.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minisign::signature::SigStruct;
+    /// use minisign::crypto::{sign, generate_keypair};
+    ///
+    /// let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    /// let message = b"Hello, world!";
+    /// let signature = sign(&secret_key, message).unwrap();
+    /// let sig_struct = SigStruct::new(keynum, signature, false);
+    /// ```
     #[must_use]
     pub fn new(keynum: KeyNum, signature: Signature, prehashed: bool) -> Self {
         Self {
@@ -244,6 +273,10 @@ impl SignatureBox {
             .unwrap_or(lines[0])
             .to_string();
 
+        // Validate untrusted comment for printability and embedded carriage returns
+        // This prevents display-based attacks via control characters
+        validate_comment(&untrusted_comment)?;
+
         // Line 2: base64-encoded SigStruct
         let sig_struct_bytes = decode_base64(lines[1])?;
         let sig_struct = SigStruct::from_bytes(&sig_struct_bytes)?;
@@ -301,7 +334,8 @@ impl SignatureBox {
     /// Returns `Error::VerificationFailed` if the global signature is invalid
     pub fn verify_global_signature(&self, public_key: &PublicKey) -> Result<()> {
         // Build the data that was signed: signature bytes + trusted comment
-        let mut data = Vec::new();
+        let capacity = self.sig_struct.signature().as_bytes().len() + self.trusted_comment.len();
+        let mut data = Vec::with_capacity(capacity);
         data.extend_from_slice(self.sig_struct.signature().as_bytes());
         data.extend_from_slice(self.trusted_comment.as_bytes());
 
@@ -322,7 +356,8 @@ impl SignatureBox {
         secret_key: &SecretKey,
     ) -> Result<Self> {
         // Build the data to sign: signature bytes + trusted comment
-        let mut data = Vec::new();
+        let capacity = sig_struct.signature().as_bytes().len() + trusted_comment.len();
+        let mut data = Vec::with_capacity(capacity);
         data.extend_from_slice(sig_struct.signature().as_bytes());
         data.extend_from_slice(trusted_comment.as_bytes());
 
@@ -552,5 +587,51 @@ mod tests {
             prop_assert_eq!(sig_struct.signature().as_bytes(), deserialized.signature().as_bytes());
             prop_assert_eq!(sig_struct.is_prehashed(), deserialized.is_prehashed());
         }
+    }
+
+    #[test]
+    fn test_untrusted_comment_with_control_characters() {
+        // Create a signature box with control characters in untrusted comment
+        let sig_box = SignatureBox {
+            untrusted_comment: "test\x00null".to_string(), // Embedded null byte
+            sig_struct: SigStruct::new(
+                KeyNum([0; 8]),
+                Signature::from_bytes([0; SIGNATURE_BYTES]),
+                false,
+            ),
+            trusted_comment: "valid comment".to_string(),
+            global_signature: Signature::from_bytes([0; SIGNATURE_BYTES]),
+        };
+
+        let serialized = sig_box.to_file_contents();
+        let result = SignatureBox::from_file_contents(&serialized);
+
+        // Should fail validation due to control character
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid comment"));
+    }
+
+    #[test]
+    fn test_untrusted_comment_with_carriage_return() {
+        // Create a signature box with carriage return in untrusted comment
+        let sig_box = SignatureBox {
+            untrusted_comment: "test\rcarriage".to_string(),
+            sig_struct: SigStruct::new(
+                KeyNum([0; 8]),
+                Signature::from_bytes([0; SIGNATURE_BYTES]),
+                false,
+            ),
+            trusted_comment: "valid comment".to_string(),
+            global_signature: Signature::from_bytes([0; SIGNATURE_BYTES]),
+        };
+
+        let serialized = sig_box.to_file_contents();
+        let result = SignatureBox::from_file_contents(&serialized);
+
+        // Should fail validation due to carriage return
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        // The error message should mention either "carriage return" or just "invalid comment"
+        assert!(err_msg.contains("carriage return") || err_msg.contains("invalid comment"));
     }
 }

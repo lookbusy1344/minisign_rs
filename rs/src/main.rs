@@ -10,6 +10,7 @@ use minisign::{
 };
 use std::io::{self, Write};
 use std::process;
+use zeroize::Zeroizing;
 
 fn main() {
     let result = run();
@@ -73,9 +74,10 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         comment,
         force: cli.force,
         no_password: cli.no_password,
+        allow_kdf_fallback: cli.allow_kdf_fallback,
     };
 
-    let result = generate(&options, password.as_deref().map(str::as_bytes))?;
+    let result = generate(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
     if !cli.quiet {
         println!(
@@ -131,7 +133,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         force: cli.force,
     };
 
-    let result = sign(&options, password.as_deref().map(str::as_bytes))?;
+    let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
     if !cli.quiet {
         println!("Signature written to {}", result.signature_file);
@@ -220,7 +222,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
         force: cli.force,
     };
 
-    let result = recreate(&options, password.as_deref().map(str::as_bytes))?;
+    let result = recreate(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
     if !cli.quiet {
         println!(
@@ -262,12 +264,13 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let options = ChangeOptions {
         secret_key_file,
         remove_password: cli.no_password && new_password.is_none(),
+        allow_kdf_fallback: cli.allow_kdf_fallback,
     };
 
     let result = change(
         &options,
-        current_password.as_deref().map(str::as_bytes),
-        new_password.as_deref().map(str::as_bytes),
+        current_password.as_ref().map(|p| p.as_bytes()),
+        new_password.as_ref().map(|p| p.as_bytes()),
     )?;
 
     if !cli.quiet {
@@ -283,7 +286,12 @@ fn is_interactive() -> bool {
 }
 
 /// Prompt for password using rpassword or read from file
-fn prompt_password(prompt: &str, password_file: Option<&std::path::Path>) -> Result<String> {
+///
+/// Returns a `Zeroizing<String>` that automatically clears the password from memory when dropped.
+fn prompt_password(
+    prompt: &str,
+    password_file: Option<&std::path::Path>,
+) -> Result<Zeroizing<String>> {
     // If password file is provided, read from it
     if let Some(path) = password_file {
         #[cfg(not(debug_assertions))]
@@ -292,8 +300,8 @@ fn prompt_password(prompt: &str, password_file: Option<&std::path::Path>) -> Res
         );
         let password = std::fs::read_to_string(path)
             .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
-        // Trim trailing newline if present
-        return Ok(password.trim_end().to_string());
+        // Trim trailing newline if present and wrap in Zeroizing
+        return Ok(Zeroizing::new(password.trim_end().to_string()));
     }
 
     // Check if we're in an interactive environment
@@ -309,5 +317,7 @@ fn prompt_password(prompt: &str, password_file: Option<&std::path::Path>) -> Res
         .flush()
         .map_err(|e| Error::Io(format!("Failed to flush stdout: {e}")))?;
 
-    rpassword::read_password().map_err(|e| Error::Io(format!("Failed to read password: {e}")))
+    rpassword::read_password()
+        .map(Zeroizing::new)
+        .map_err(|e| Error::Io(format!("Failed to read password: {e}")))
 }

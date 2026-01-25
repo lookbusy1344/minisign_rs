@@ -2,12 +2,12 @@
 //!
 //! This module implements the core signing logic for minisign.
 
+use super::file_utils::load_secret_key;
 use crate::{
     Result,
     constants::MAX_MESSAGE_SIZE_BYTES,
     crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
     errors::Error,
-    keys::SeckeyStruct,
     signature::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
@@ -98,13 +98,6 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     })
 }
 
-/// Load a secret key from a file
-fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
-    let contents =
-        std::fs::read_to_string(path.as_ref()).map_err(|e| Error::file_read(path.as_ref(), e))?;
-    SeckeyStruct::from_file_contents(&contents)
-}
-
 /// Create a signature for a message
 fn create_signature(
     secret_key: &SecretKey,
@@ -172,7 +165,8 @@ fn create_signature(
 
 /// Create the data that the global signature signs
 fn create_global_signature_data(sig_struct: &SigStruct, trusted_comment: &str) -> Vec<u8> {
-    let mut data = Vec::new();
+    let capacity = sig_struct.signature().as_bytes().len() + trusted_comment.len();
+    let mut data = Vec::with_capacity(capacity);
     data.extend_from_slice(sig_struct.signature().as_bytes());
     data.extend_from_slice(trusted_comment.as_bytes());
     data
@@ -243,7 +237,7 @@ mod tests {
     use super::*;
     use crate::{
         crypto::{blake2b_512, verify as crypto_verify},
-        keys::PubkeyStruct,
+        keys::{PubkeyStruct, SeckeyStruct},
     };
     use std::fs;
     use tempfile::TempDir;
@@ -349,6 +343,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - tests use secure defaults
         )
         .unwrap();
 

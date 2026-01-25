@@ -2,17 +2,14 @@
 //!
 //! This module implements keypair generation for minisign.
 
+use super::file_utils::{write_public_key_file, write_secret_key_file};
 use crate::{
     Result,
     crypto::generate_keypair,
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
 };
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 // Scrypt parameters matching libsodium SENSITIVE level
 const SCRYPT_LOG_N: u8 = 20; // N = 2^20 = 1,048,576
@@ -35,6 +32,8 @@ pub struct GenerateOptions {
     pub force: bool,
     /// Create unencrypted key (no password)
     pub no_password: bool,
+    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    pub allow_kdf_fallback: bool,
 }
 
 /// Result of key generation
@@ -114,6 +113,7 @@ fn generate_with_log_n(
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            options.allow_kdf_fallback,
         )?
     };
 
@@ -159,74 +159,6 @@ fn ensure_parent_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Write a secret key file with atomic creation and appropriate permissions
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-/// On Unix systems, sets mode 0600 (read/write for owner only).
-fn write_secret_key_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    // Set restrictive permissions on Unix systems (before writing)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600); // Read/write for owner only
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
-}
-
-/// Write a public key file with atomic creation
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-fn write_public_key_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,6 +179,7 @@ mod tests {
             comment: Some("Test key".to_string()),
             force: false,
             no_password: false,
+            allow_kdf_fallback: false,
         };
 
         let password = b"testpassword";
@@ -286,6 +219,7 @@ mod tests {
             comment: Some("Fast test key".to_string()),
             force: false,
             no_password: false,
+            allow_kdf_fallback: false,
         };
 
         let password = b"testpassword";
@@ -324,6 +258,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None).expect("generation should succeed");
@@ -353,6 +288,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: false, // Password required
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None);
@@ -376,6 +312,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None);
@@ -399,6 +336,7 @@ mod tests {
             comment: None,
             force: true,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         generate(&options, None).expect("should overwrite with force=true");
@@ -421,6 +359,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         generate(&options, None).expect("should create parent directories");
@@ -445,6 +384,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         generate(&options, None).expect("generation should succeed");
@@ -484,6 +424,7 @@ mod tests {
             comment: Some("Roundtrip test".to_string()),
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         let result = generate(&options, None).expect("generation should succeed");
@@ -515,6 +456,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         // Should fail due to existing file (atomic check)
@@ -542,6 +484,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         // Should fail due to existing file (atomic check)
@@ -570,6 +513,7 @@ mod tests {
             comment: None,
             force: false,
             no_password: true,
+            allow_kdf_fallback: false,
         };
 
         // Should fail (doesn't matter which file is checked first)

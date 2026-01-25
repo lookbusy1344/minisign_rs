@@ -181,10 +181,10 @@ pub fn generate_keypair() -> Result<(SecretKey, PublicKey, KeyNum)> {
 ///
 /// # Errors
 ///
-/// Returns `Error::Other` if the key is malformed
+/// Returns `Error::InvalidSecretKey` if the key is malformed
 pub fn sign(secret_key: &SecretKey, message: &[u8]) -> Result<Signature> {
     let signing_key = SigningKey::from_keypair_bytes(secret_key.as_bytes())
-        .map_err(|e| Error::other(format!("invalid secret key: {e}")))?;
+        .map_err(|e| Error::InvalidSecretKey(e.to_string()))?;
     let signature = signing_key.sign(message);
     Ok(Signature::from_bytes(signature.to_bytes()))
 }
@@ -273,7 +273,7 @@ pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
     loop {
         let n = reader
             .read(&mut buffer)
-            .map_err(|e| Error::other(format!("failed to read data: {e}")))?;
+            .map_err(|e| Error::Io(format!("failed to read data for hashing: {e}")))?;
         if n == 0 {
             break;
         }

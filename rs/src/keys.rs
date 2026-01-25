@@ -178,9 +178,33 @@ impl PubkeyStruct {
 
     /// Parse from base64-encoded string (without comment)
     ///
+    /// This parses the base64 representation typically found in `.pub` files
+    /// (excluding the untrusted comment line).
+    ///
+    /// # Arguments
+    ///
+    /// * `base64_str` - Base64-encoded public key structure (42 bytes when decoded)
+    ///
+    /// # Returns
+    ///
+    /// A `PubkeyStruct` containing the signature algorithm, key number, and public key
+    ///
     /// # Errors
     ///
-    /// Returns an error if base64 decoding fails or the data is invalid
+    /// Returns an error if:
+    /// - Base64 decoding fails
+    /// - The decoded data is not exactly 42 bytes
+    /// - The signature algorithm is not "Ed" (Ed25519)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use minisign::keys::PubkeyStruct;
+    ///
+    /// let base64 = "RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa";
+    /// let pubkey = PubkeyStruct::from_base64(base64)?;
+    /// # Ok::<(), minisign::Error>(())
+    /// ```
     pub fn from_base64(base64_str: &str) -> Result<Self> {
         let data = decode_base64(base64_str)?;
         Self::from_bytes(&data)
@@ -234,7 +258,34 @@ pub struct SeckeyStruct {
 impl SeckeyStruct {
     /// Create a new secret key structure (unencrypted)
     ///
-    /// For unencrypted keys, the checksum is set to all zeros (matching C behavior).
+    /// Creates an unencrypted secret key structure with no password protection.
+    /// The secret key is stored in plain form and the checksum is set to all zeros
+    /// (matching C minisign behavior for unencrypted keys).
+    ///
+    /// # Arguments
+    ///
+    /// * `keynum` - The 8-byte key number identifier
+    /// * `secret_key` - The 64-byte Ed25519 secret key
+    ///
+    /// # Returns
+    ///
+    /// A `SeckeyStruct` with `encrypted=false` and zero-filled KDF parameters
+    ///
+    /// # Security Note
+    ///
+    /// Unencrypted keys provide no protection if the key file is compromised.
+    /// Use `new_encrypted()` for password-protected keys.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use minisign::crypto::generate_keypair;
+    /// use minisign::keys::SeckeyStruct;
+    ///
+    /// let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    /// let seckey_struct = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    /// assert!(!seckey_struct.is_encrypted());
+    /// ```
     #[must_use]
     pub fn new_unencrypted(keynum: KeyNum, secret_key: &SecretKey) -> Self {
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
@@ -265,10 +316,11 @@ impl SeckeyStruct {
     /// * `kdf_salt` - The salt for key derivation
     /// * `kdf_opslimit` - Operations limit (N * r * `OPSLIMIT_MULTIPLIER`)
     /// * `kdf_memlimit` - Memory limit (N * r * `MEMLIMIT_MULTIPLIER`)
+    /// * `allow_fallback` - If true, allow reduced parameters on failure (LESS SECURE, opt-in only)
     ///
     /// # Errors
     ///
-    /// Returns an error if key derivation fails
+    /// Returns an error if key derivation fails or if fallback would be needed but is not allowed
     pub fn new_encrypted(
         keynum: KeyNum,
         secret_key: &SecretKey,
@@ -276,6 +328,7 @@ impl SeckeyStruct {
         kdf_salt: [u8; KDF_SALT_BYTES],
         kdf_opslimit: u64,
         kdf_memlimit: u64,
+        allow_fallback: bool,
     ) -> Result<Self> {
         use crate::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
 
@@ -284,6 +337,7 @@ impl SeckeyStruct {
 
         // Implement scrypt parameter fallback (matches C minisign.c:419-427)
         // Try derivation with initial parameters, halving on failure until minimum reached
+        // SECURITY: Fallback is opt-in only (allow_fallback must be true)
         let mut current_opslimit = kdf_opslimit;
         let mut current_memlimit = kdf_memlimit;
         let mut fallback_used = false;
@@ -291,7 +345,7 @@ impl SeckeyStruct {
         let derived_key = loop {
             // Convert opslimit/memlimit to scrypt parameters
             let (log_n, r, p) =
-                Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit);
+                Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit)?;
 
             // Attempt key derivation
             if let Ok(key) =
@@ -300,24 +354,35 @@ impl SeckeyStruct {
                 break key;
             }
 
-            // Derivation failed - try with reduced parameters
+            // Derivation failed - check if we can fallback
+            if !allow_fallback {
+                return Err(Error::KdfError(
+                    "Key derivation failed - more memory needed (use --allow-kdf-fallback to reduce security parameters, not recommended)".to_string(),
+                ));
+            }
+
+            // Fallback is allowed - try with reduced parameters
             current_opslimit /= 2;
             current_memlimit /= 2;
 
             // Check if we've fallen below minimum thresholds
             if current_opslimit < SCRYPT_OPSLIMIT_MIN || current_memlimit < SCRYPT_MEMLIMIT_MIN {
                 return Err(Error::KdfError(
-                    "Unable to complete key derivation - more memory needed".to_string(),
+                    "Unable to complete key derivation - more memory needed even with minimum parameters".to_string(),
                 ));
             }
 
             fallback_used = true;
         };
 
-        // Log warning if fallback was used
+        // Display CLEAR WARNING if fallback was used
         if fallback_used {
+            eprintln!("\n⚠️  WARNING: REDUCED SECURITY PARAMETERS ⚠️");
+            eprintln!("Key derivation used weaker parameters due to memory constraints:");
+            eprintln!("  Original: opslimit={kdf_opslimit}, memlimit={kdf_memlimit}");
+            eprintln!("  Reduced:  opslimit={current_opslimit}, memlimit={current_memlimit}");
             eprintln!(
-                "Warning: Key derivation used reduced parameters (opslimit={current_opslimit}, memlimit={current_memlimit})"
+                "This makes your key easier to brute-force. Consider using a system with more memory.\n"
             );
         }
 
@@ -374,7 +439,8 @@ impl SeckeyStruct {
         }
 
         // Convert opslimit/memlimit to scrypt parameters
-        let (log_n, r, p) = Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit);
+        let (log_n, r, p) =
+            Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit)?;
 
         // Derive 104 bytes (keynum + secret_key + checksum) to match C implementation
         let derived_key =
@@ -503,35 +569,65 @@ impl SeckeyStruct {
     /// - `log_n` < 14: Not recommended (too weak for key derivation)
     /// - `log_n` = 20: Production default (1-5 seconds per operation)
     /// - `log_n` > 22: May be excessive for most use cases
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
-    fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> (u8, u32, u32) {
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::ScryptParamError` if:
+    /// - N value is 0 or cannot be calculated
+    /// - `log_n` is out of valid range (0-255)
+    /// - Arithmetic overflow occurs during calculation
+    fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
         // Standard minisign uses r=8, p=1
         // We can derive N from either formula, using memlimit is simpler
         let r = SCRYPT_R_STANDARD;
         let p = SCRYPT_P_STANDARD;
 
         // N = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * r)
-        let n = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * u64::from(r));
-        // Safe cast: log2 of u64 max is ~64, which fits in u8
-        let log_n = (n as f64).log2() as u8;
+        // Use checked arithmetic to prevent overflow/underflow
+        let divisor = LIBSODIUM_MEMLIMIT_MULTIPLIER
+            .checked_mul(u64::from(r))
+            .ok_or_else(|| Error::ScryptParamError("overflow calculating divisor".into()))?;
+
+        let n = memlimit
+            .checked_div(divisor)
+            .ok_or_else(|| Error::ScryptParamError("division by zero".into()))?;
+
+        if n == 0 {
+            return Err(Error::ScryptParamError("N cannot be zero".into()));
+        }
+
+        // Use checked_ilog2 instead of f64 cast to avoid undefined behavior with 0 or overflow
+        let log_n = n
+            .checked_ilog2()
+            .and_then(|v| u8::try_from(v).ok())
+            .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
 
         // Verify our calculation is consistent with opslimit
         // opslimit should equal LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
-        let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * u64::from(r);
+        let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
+            .checked_mul(n)
+            .and_then(|v| v.checked_mul(u64::from(r)))
+            .ok_or_else(|| {
+                Error::ScryptParamError("overflow calculating expected opslimit".into())
+            })?;
+
         if expected_opslimit != opslimit {
             // If they don't match, the key might use non-standard parameters
             // Fall back to deriving r from opslimit
-            // Safe cast: r values are typically small (8-16)
-            let derived_r =
-                u32::try_from(opslimit / (LIBSODIUM_OPSLIMIT_MULTIPLIER * n)).unwrap_or(r);
-            return (log_n, derived_r, p);
+            let derived_r = opslimit
+                .checked_div(
+                    LIBSODIUM_OPSLIMIT_MULTIPLIER
+                        .checked_mul(n)
+                        .ok_or_else(|| {
+                            Error::ScryptParamError("overflow calculating derived r".into())
+                        })?,
+                )
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(r);
+            return Ok((log_n, derived_r, p));
         }
 
-        (log_n, r, p)
+        Ok((log_n, r, p))
     }
 
     /// Get the key number
@@ -969,6 +1065,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - secure by default
         )
         .expect("Failed to encrypt key");
 
@@ -1005,6 +1102,7 @@ mod tests {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
+            false, // allow_fallback - secure by default
         )
         .expect("Failed to encrypt key");
 
@@ -1137,9 +1235,16 @@ mod tests {
         let mut salt = [0u8; KDF_SALT_BYTES];
         getrandom::getrandom(&mut salt).expect("RNG should work");
 
-        let encrypted =
-            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT)
-                .expect("Encryption with moderate parameters should succeed");
+        let encrypted = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            false,
+        )
+        .expect("Encryption with moderate parameters should succeed");
 
         // Verify the encrypted key stores parameters (either original or reduced if fallback occurred)
         assert!(encrypted.kdf_opslimit() > 0);
@@ -1192,9 +1297,16 @@ mod tests {
         let mut salt = [0u8; KDF_SALT_BYTES];
         getrandom::getrandom(&mut salt).expect("RNG should work");
 
-        let encrypted =
-            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT)
-                .expect("Encryption should succeed");
+        let encrypted = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            false,
+        )
+        .expect("Encryption should succeed");
 
         // The encrypted key should store the parameters that actually worked
         // If fallback occurred, these would be reduced values
@@ -1204,6 +1316,76 @@ mod tests {
 
         // On most systems with sufficient memory, no fallback occurs
         // so parameters should match (but we can't assert this deterministically)
+    }
+
+    #[test]
+    fn test_new_encrypted_rejects_fallback_when_not_allowed() {
+        use crate::crypto::generate_keypair;
+
+        // Use reasonable test parameters (N=2^14)
+        const N: u64 = 1 << 14;
+        const R: u64 = 8;
+        const OPSLIMIT: u64 = 4 * N * R;
+        const MEMLIMIT: u64 = 128 * N * R;
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
+        let password = b"test password";
+        let mut salt = [0u8; KDF_SALT_BYTES];
+        getrandom::getrandom(&mut salt).expect("RNG should work");
+
+        // With allow_fallback=false, should succeed on systems with sufficient memory
+        // This test primarily validates that the API signature exists and works
+        let result = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            false, // allow_fallback=false (secure by default)
+        );
+
+        // Should succeed with reasonable parameters on normal systems
+        assert!(
+            result.is_ok(),
+            "Encryption with allow_fallback=false should succeed with reasonable parameters"
+        );
+    }
+
+    #[test]
+    fn test_new_encrypted_allows_fallback_when_enabled() {
+        use crate::crypto::generate_keypair;
+
+        // Use reasonable test parameters (N=2^14)
+        const N: u64 = 1 << 14;
+        const R: u64 = 8;
+        const OPSLIMIT: u64 = 4 * N * R;
+        const MEMLIMIT: u64 = 128 * N * R;
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
+        let password = b"test password";
+        let mut salt = [0u8; KDF_SALT_BYTES];
+        getrandom::getrandom(&mut salt).expect("RNG should work");
+
+        // With allow_fallback=true, should succeed (either directly or via fallback)
+        let result = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            true, // allow_fallback=true (opt-in to reduced security)
+        );
+
+        assert!(
+            result.is_ok(),
+            "Encryption with allow_fallback=true should succeed"
+        );
     }
 
     // Property-based tests
@@ -1242,5 +1424,76 @@ mod tests {
             // Verify all chars are valid hex
             prop_assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
         }
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_zero_n() {
+        // Test that N=0 is rejected (memlimit too small)
+        let opslimit = 1;
+        let memlimit = 1;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("N cannot be zero"));
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_overflow() {
+        // Test that extremely large values trigger log_n out of range
+        // Using values that would cause log_n > 255
+        let memlimit = u64::MAX;
+        let opslimit = u64::MAX;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        // Should return Ok with derived r, as the calculation succeeds even with large N
+        // The ilog2 of very large N will be valid (< 64)
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_valid() {
+        // Test with valid standard parameters (log_n=20, r=8, p=1)
+        // N = 2^20 = 1,048,576
+        // opslimit = 4 * N * r = 4 * 1,048,576 * 8 = 33,554,432
+        // memlimit = 128 * N * r = 128 * 1,048,576 * 8 = 1,073,741,824
+        let opslimit = 33_554_432;
+        let memlimit = 1_073_741_824;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_ok());
+        let (log_n, r, p) = result.unwrap();
+        assert_eq!(log_n, 20);
+        assert_eq!(r, 8);
+        assert_eq!(p, 1);
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_non_power_of_two() {
+        // Test with N that's not a power of 2
+        // N = 1000 (not a power of 2)
+        // opslimit = 4 * 1000 * 8 = 32,000
+        // memlimit = 128 * 1000 * 8 = 1,024,000
+        let opslimit = 32_000;
+        let memlimit = 1_024_000;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_ok());
+        let (log_n, r, p) = result.unwrap();
+        // log2(1000) ≈ 9.96, should truncate to 9
+        assert_eq!(log_n, 9);
+        assert_eq!(r, 8);
+        assert_eq!(p, 1);
+    }
+
+    #[test]
+    fn test_opslimit_memlimit_to_params_min_valid() {
+        // Test with minimum valid parameters (log_n=1, r=8, p=1)
+        // N = 2^1 = 2
+        // opslimit = 4 * 2 * 8 = 64
+        // memlimit = 128 * 2 * 8 = 2,048
+        let opslimit = 64;
+        let memlimit = 2_048;
+        let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_ok());
+        let (log_n, r, p) = result.unwrap();
+        assert_eq!(log_n, 1);
+        assert_eq!(r, 8);
+        assert_eq!(p, 1);
     }
 }

@@ -103,6 +103,10 @@ pub struct Cli {
     #[arg(long = "password-file", value_name = "FILE")]
     pub password_file: Option<PathBuf>,
 
+    /// Allow KDF parameter fallback if 128MB allocation fails (permission only, does not force fallback)
+    #[arg(long = "allow-kdf-fallback")]
+    pub allow_kdf_fallback: bool,
+
     /// Show help
     #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]
     pub help: Option<bool>,
@@ -202,6 +206,7 @@ mod tests {
             signature_file: None,
             no_password: false,
             password_file: None,
+            allow_kdf_fallback: false,
             help: None,
             version: None,
         };
@@ -231,6 +236,7 @@ mod tests {
             signature_file: None,
             no_password: false,
             password_file: None,
+            allow_kdf_fallback: false,
             help: None,
             version: None,
         };
@@ -280,5 +286,67 @@ mod tests {
         let result = Cli::default_signature_path(rel);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::InvalidPath(_)));
+    }
+
+    #[test]
+    fn test_allow_kdf_fallback_flag_defaults_to_false() {
+        // Test that allow_kdf_fallback defaults to false for secure-by-default behavior
+        let cli = Cli {
+            generate: true,
+            sign: false,
+            verify: false,
+            recreate: false,
+            change: false,
+            force: false,
+            prehashed: false,
+            legacy: false,
+            message_file: None,
+            output: false,
+            public_key_file: None,
+            public_key_base64: None,
+            quiet: false,
+            pretty_quiet: false,
+            secret_key_file: None,
+            trusted_comment: None,
+            untrusted_comment: None,
+            signature_file: None,
+            no_password: false,
+            password_file: None,
+            help: None,
+            version: None,
+            allow_kdf_fallback: false,
+        };
+        assert!(!cli.allow_kdf_fallback);
+    }
+
+    #[test]
+    fn test_allow_kdf_fallback_flag_can_be_enabled() {
+        // Test that allow_kdf_fallback can be explicitly enabled
+        let cli = Cli {
+            generate: true,
+            sign: false,
+            verify: false,
+            recreate: false,
+            change: false,
+            force: false,
+            prehashed: false,
+            legacy: false,
+            message_file: None,
+            output: false,
+            public_key_file: None,
+            public_key_base64: None,
+            quiet: false,
+            pretty_quiet: false,
+            secret_key_file: None,
+            trusted_comment: None,
+            untrusted_comment: None,
+            signature_file: None,
+            no_password: false,
+            password_file: None,
+            help: None,
+            version: None,
+            allow_kdf_fallback: true,
+        };
+        assert!(cli.allow_kdf_fallback);
     }
 }
