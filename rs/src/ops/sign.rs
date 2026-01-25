@@ -7,7 +7,10 @@ use crate::{
     crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
     errors::Error,
     keys::SeckeyStruct,
-    signature::{SigStruct, SignatureBox},
+    signature::{
+        SigStruct, SignatureBox, COMMENTMAXBYTES, COMMENT_PREFIX_SIZE, TRUSTEDCOMMENTMAXBYTES,
+        TRUSTED_COMMENT_PREFIX_SIZE,
+    },
 };
 use std::path::Path;
 
@@ -142,6 +145,17 @@ fn create_signature(
         || "signature from minisign secret key".to_string(),
         String::from,
     );
+
+    // Validate comment lengths (matches C implementation behavior)
+    if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
+        eprintln!(
+            "Warning: comment too long. This breaks compatibility with signify."
+        );
+    }
+
+    if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
+        return Err(Error::Other("Trusted comment too long".to_string()));
+    }
 
     // Create global signature (signs: signature_bytes || trusted_comment)
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
@@ -502,5 +516,90 @@ mod tests {
         let hash = blake2b_512_stream(file).unwrap();
         crypto_verify(&public_key, &hash, sig_box.sig_struct().signature())
             .expect("signature should verify");
+    }
+
+    #[test]
+    fn test_trusted_comment_too_long() {
+        use crate::crypto::generate_keypair;
+        use std::fs;
+
+        let temp_dir = TempDir::new().unwrap();
+        let message_path = temp_dir.path().join("message.txt");
+        fs::write(&message_path, b"test").unwrap();
+
+        let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
+
+        // Create a trusted comment that exceeds the limit
+        // TRUSTEDCOMMENTMAXBYTES = 8192, TRUSTED_COMMENT_PREFIX_SIZE = 18
+        // So limit is 8192 - 18 = 8174 bytes
+        let too_long_comment = "a".repeat(8174);
+
+        let result = create_signature(
+            &secret_key,
+            keynum,
+            message_path.to_str().unwrap(),
+            false,
+            Some(&too_long_comment),
+            None,
+        );
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::Other(_)));
+    }
+
+    #[test]
+    fn test_trusted_comment_at_limit() {
+        use crate::crypto::generate_keypair;
+        use std::fs;
+
+        let temp_dir = TempDir::new().unwrap();
+        let message_path = temp_dir.path().join("message.txt");
+        fs::write(&message_path, b"test").unwrap();
+
+        let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
+
+        // Create a trusted comment just under the limit (should succeed)
+        let at_limit_comment = "a".repeat(8173);
+
+        let result = create_signature(
+            &secret_key,
+            keynum,
+            message_path.to_str().unwrap(),
+            false,
+            Some(&at_limit_comment),
+            None,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_untrusted_comment_too_long_warns() {
+        use crate::crypto::generate_keypair;
+        use std::fs;
+
+        let temp_dir = TempDir::new().unwrap();
+        let message_path = temp_dir.path().join("message.txt");
+        fs::write(&message_path, b"test").unwrap();
+
+        let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
+
+        // Create an untrusted comment that exceeds the limit
+        // COMMENTMAXBYTES = 1024, COMMENT_PREFIX_SIZE = 20
+        // So limit is 1024 - 20 = 1004 bytes
+        let too_long_comment = "a".repeat(1004);
+
+        // Should succeed but emit warning (warning goes to stderr, we can't easily capture it in test)
+        let result = create_signature(
+            &secret_key,
+            keynum,
+            message_path.to_str().unwrap(),
+            false,
+            None,
+            Some(&too_long_comment),
+        );
+
+        // Should still succeed (only warning, not error)
+        assert!(result.is_ok());
     }
 }

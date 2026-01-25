@@ -13,6 +13,18 @@ use crate::formats::{decode_base64, encode_base64};
 /// Size of the signature structure in bytes
 pub const SIG_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + SIGNATURE_BYTES; // 74 bytes
 
+/// Maximum length for untrusted comments (matches C implementation)
+pub const COMMENTMAXBYTES: usize = 1024;
+
+/// Maximum length for trusted comments (matches C implementation)
+pub const TRUSTEDCOMMENTMAXBYTES: usize = 8192;
+
+/// Size of "untrusted comment: " prefix in C (includes null terminator)
+pub const COMMENT_PREFIX_SIZE: usize = 20;
+
+/// Size of "trusted comment: " prefix in C (includes null terminator)
+pub const TRUSTED_COMMENT_PREFIX_SIZE: usize = 18;
+
 /// Signature algorithm identifier for normal mode
 const SIG_ALG_NORMAL: &[u8; 2] = b"Ed";
 
