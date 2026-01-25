@@ -22,7 +22,7 @@ pub const SECKEY_STRUCT_SIZE: usize =
 
 /// Size of encrypted blob (keynum + secret key + checksum)
 /// Matches C minisign: sizeof(seckey_struct->keynum_sk) = 8 + 64 + 32 = 104 bytes
-const ENCRYPTED_BLOB_SIZE: usize = KEYNUM_BYTES + SECRET_KEY_BYTES + CHECKSUM_BYTES; // 104 bytes
+pub const ENCRYPTED_BLOB_SIZE: usize = KEYNUM_BYTES + SECRET_KEY_BYTES + CHECKSUM_BYTES; // 104 bytes
 
 /// Signature algorithm identifier
 const SIG_ALG: &[u8; 2] = b"Ed";
@@ -1123,29 +1123,23 @@ mod tests {
     fn test_scrypt_fallback_with_moderate_parameters() {
         use crate::crypto::generate_keypair;
 
-        // Generate a test keypair
-        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
-
         // Test encryption with moderate parameters that should work on most systems
         // log_N = 15 (N = 32768), r = 8, p = 1
         // opslimit = 4 * 32768 * 8 = 1,048,576
         // memlimit = 128 * 32768 * 8 = 33,554,432 (32 MB)
+        const OPSLIMIT: u64 = 1_048_576; // Moderate parameters
+        const MEMLIMIT: u64 = 33_554_432; // 32 MB
+
+        // Generate a test keypair
+        let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
         let password = b"test password";
         let mut salt = [0u8; KDF_SALT_BYTES];
         getrandom::getrandom(&mut salt).expect("RNG should work");
 
-        const OPSLIMIT: u64 = 1_048_576; // Moderate parameters
-        const MEMLIMIT: u64 = 33_554_432; // 32 MB
-
-        let encrypted = SeckeyStruct::new_encrypted(
-            keynum,
-            &secret_key,
-            password,
-            salt,
-            OPSLIMIT,
-            MEMLIMIT,
-        )
-        .expect("Encryption with moderate parameters should succeed");
+        let encrypted =
+            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT)
+                .expect("Encryption with moderate parameters should succeed");
 
         // Verify the encrypted key stores parameters (either original or reduced if fallback occurred)
         assert!(encrypted.kdf_opslimit() > 0);
