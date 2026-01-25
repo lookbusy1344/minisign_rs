@@ -155,7 +155,6 @@ mod tests {
 
     #[test]
     fn test_change_password_fast() {
-
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted key with fast parameters (N=2^14)
@@ -210,7 +209,6 @@ mod tests {
 
     #[test]
     fn test_remove_password_from_encrypted_key() {
-
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted key with fast parameters
@@ -292,7 +290,6 @@ mod tests {
 
     #[test]
     fn test_change_without_old_password_fails() {
-
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted key
@@ -332,7 +329,6 @@ mod tests {
 
     #[test]
     fn test_change_with_wrong_old_password_fails() {
-
         let temp_dir = TempDir::new().unwrap();
 
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");

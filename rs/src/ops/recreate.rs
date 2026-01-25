@@ -158,7 +158,6 @@ mod tests {
 
     #[test]
     fn test_recreate_from_encrypted_key_fast() {
-
         let temp_dir = TempDir::new().unwrap();
 
         // Generate a test keypair with fast encryption (N=2^14)
@@ -204,7 +203,6 @@ mod tests {
 
     #[test]
     fn test_recreate_without_password_fails() {
-
         let temp_dir = TempDir::new().unwrap();
 
         // Create an encrypted secret key
@@ -247,7 +245,6 @@ mod tests {
 
     #[test]
     fn test_recreate_wrong_password_fails() {
-
         let temp_dir = TempDir::new().unwrap();
 
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
