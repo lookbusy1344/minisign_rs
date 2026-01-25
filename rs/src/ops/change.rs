@@ -2,8 +2,8 @@
 //!
 //! This module implements changing or removing the password on a secret key.
 
-use crate::{Result, errors::Error, keys::SeckeyStruct};
 use super::file_utils::{load_secret_key, write_secret_key_file};
+use crate::{Result, errors::Error, keys::SeckeyStruct};
 use std::path::PathBuf;
 
 // Scrypt parameters matching libsodium SENSITIVE level

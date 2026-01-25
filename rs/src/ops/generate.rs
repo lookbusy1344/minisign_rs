@@ -2,13 +2,13 @@
 //!
 //! This module implements keypair generation for minisign.
 
+use super::file_utils::{write_public_key_file, write_secret_key_file};
 use crate::{
     Result,
     crypto::generate_keypair,
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
 };
-use super::file_utils::{write_public_key_file, write_secret_key_file};
 use std::path::{Path, PathBuf};
 
 // Scrypt parameters matching libsodium SENSITIVE level

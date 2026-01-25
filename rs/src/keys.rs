@@ -327,12 +327,12 @@ impl SeckeyStruct {
         // Display CLEAR WARNING if fallback was used
         if fallback_used {
             eprintln!("\n⚠️  WARNING: REDUCED SECURITY PARAMETERS ⚠️");
-            eprintln!(
-                "Key derivation used weaker parameters due to memory constraints:"
-            );
+            eprintln!("Key derivation used weaker parameters due to memory constraints:");
             eprintln!("  Original: opslimit={kdf_opslimit}, memlimit={kdf_memlimit}");
             eprintln!("  Reduced:  opslimit={current_opslimit}, memlimit={current_memlimit}");
-            eprintln!("This makes your key easier to brute-force. Consider using a system with more memory.\n");
+            eprintln!(
+                "This makes your key easier to brute-force. Consider using a system with more memory.\n"
+            );
         }
 
         // Create combined blob: keynum + secret_key + checksum (zeroized on drop)
@@ -388,7 +388,8 @@ impl SeckeyStruct {
         }
 
         // Convert opslimit/memlimit to scrypt parameters
-        let (log_n, r, p) = Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit)?;
+        let (log_n, r, p) =
+            Self::opslimit_memlimit_to_params(self.kdf_opslimit, self.kdf_memlimit)?;
 
         // Derive 104 bytes (keynum + secret_key + checksum) to match C implementation
         let derived_key =
@@ -555,15 +556,21 @@ impl SeckeyStruct {
         let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
             .checked_mul(n)
             .and_then(|v| v.checked_mul(u64::from(r)))
-            .ok_or_else(|| Error::ScryptParamError("overflow calculating expected opslimit".into()))?;
+            .ok_or_else(|| {
+                Error::ScryptParamError("overflow calculating expected opslimit".into())
+            })?;
 
         if expected_opslimit != opslimit {
             // If they don't match, the key might use non-standard parameters
             // Fall back to deriving r from opslimit
             let derived_r = opslimit
-                .checked_div(LIBSODIUM_OPSLIMIT_MULTIPLIER.checked_mul(n).ok_or_else(|| {
-                    Error::ScryptParamError("overflow calculating derived r".into())
-                })?)
+                .checked_div(
+                    LIBSODIUM_OPSLIMIT_MULTIPLIER
+                        .checked_mul(n)
+                        .ok_or_else(|| {
+                            Error::ScryptParamError("overflow calculating derived r".into())
+                        })?,
+                )
                 .and_then(|v| u32::try_from(v).ok())
                 .unwrap_or(r);
             return Ok((log_n, derived_r, p));
@@ -1177,9 +1184,16 @@ mod tests {
         let mut salt = [0u8; KDF_SALT_BYTES];
         getrandom::getrandom(&mut salt).expect("RNG should work");
 
-        let encrypted =
-            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT, false)
-                .expect("Encryption with moderate parameters should succeed");
+        let encrypted = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            false,
+        )
+        .expect("Encryption with moderate parameters should succeed");
 
         // Verify the encrypted key stores parameters (either original or reduced if fallback occurred)
         assert!(encrypted.kdf_opslimit() > 0);
@@ -1232,9 +1246,16 @@ mod tests {
         let mut salt = [0u8; KDF_SALT_BYTES];
         getrandom::getrandom(&mut salt).expect("RNG should work");
 
-        let encrypted =
-            SeckeyStruct::new_encrypted(keynum, &secret_key, password, salt, OPSLIMIT, MEMLIMIT, false)
-                .expect("Encryption should succeed");
+        let encrypted = SeckeyStruct::new_encrypted(
+            keynum,
+            &secret_key,
+            password,
+            salt,
+            OPSLIMIT,
+            MEMLIMIT,
+            false,
+        )
+        .expect("Encryption should succeed");
 
         // The encrypted key should store the parameters that actually worked
         // If fallback occurred, these would be reduced values

@@ -2,6 +2,7 @@
 //!
 //! This module implements the core signing logic for minisign.
 
+use super::file_utils::load_secret_key;
 use crate::{
     Result,
     constants::MAX_MESSAGE_SIZE_BYTES,
@@ -13,7 +14,6 @@ use crate::{
     },
     validation::validate_comment,
 };
-use super::file_utils::load_secret_key;
 use std::{fs::OpenOptions, io::Write, path::Path};
 
 /// Options for signing files

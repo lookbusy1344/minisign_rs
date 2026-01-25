@@ -288,7 +288,10 @@ fn is_interactive() -> bool {
 /// Prompt for password using rpassword or read from file
 ///
 /// Returns a `Zeroizing<String>` that automatically clears the password from memory when dropped.
-fn prompt_password(prompt: &str, password_file: Option<&std::path::Path>) -> Result<Zeroizing<String>> {
+fn prompt_password(
+    prompt: &str,
+    password_file: Option<&std::path::Path>,
+) -> Result<Zeroizing<String>> {
     // If password file is provided, read from it
     if let Some(path) = password_file {
         #[cfg(not(debug_assertions))]
