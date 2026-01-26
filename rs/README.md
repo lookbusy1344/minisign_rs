@@ -29,21 +29,23 @@ We aim for 100% command line compatibility with the C version, with a few extra 
 
 ### Test Coverage
 
-- **159 total tests** covering all operations and CLI behavior
-- **107 unit tests** covering all crypto operations, key handling, and file formats
-- **16 CLI integration tests** using assert_cmd for end-to-end validation
+- **310 total tests** covering all operations and CLI behavior
+- **214 unit tests** covering all crypto operations, key handling, and file formats
+- **40 CLI integration tests** using assert_cmd for end-to-end validation
 - **7 compatibility tests** verifying interoperability with C minisign
-- **12 cross-binary tests** ensuring full C minisign compatibility
+- **18 cross-binary tests** ensuring full C minisign compatibility
 - **6 edge case tests** for unicode, symlinks, and large files
+- **8 fuzzing tests** using proptest for property-based testing
+- **6 concurrent access tests** for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** using optimized scrypt parameters (~9 seconds)
-- **Slow test suite** with production scrypt parameters (~16 seconds)
+- **Fast test suite** using optimized scrypt parameters (~10 seconds)
+- **Slow test suite** with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **~5,100 lines** of well-documented Rust code
+- **~8,600 lines** of well-documented Rust code
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
@@ -70,13 +72,13 @@ Release binaries are available for:
 # Build the project
 cargo build --release
 
-# Run tests (fast - 148 tests, ~9 seconds)
+# Run tests (fast - 299 tests, ~10 seconds)
 cargo test
 
-# Run slow security tests (11 tests, ~16 seconds)
+# Run slow security tests (11 tests, ~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (159 tests, ~25 seconds)
+# Run all tests (310 tests, ~21 seconds)
 cargo test && cargo test -- --ignored
 
 # Check code quality
@@ -305,19 +307,19 @@ See `tests/fixtures/keys/README.md` for complete details.
 
 The project uses a dual testing strategy for operations involving scrypt:
 
-- **Fast tests** (148 tests, default): Use N=2^14 (~50ms per operation)
+- **Fast tests** (299 tests, default): Use N=2^14 (~50ms per operation)
 - **Slow tests** (11 tests, `#[ignore]`): Use N=2^20 (~1-5s per operation)
 
-Fast tests provide rapid feedback during development, while slow tests verify production security parameters work correctly. With recent performance improvements, slow tests now complete in ~16 seconds.
+Fast tests provide rapid feedback during development, while slow tests verify production security parameters work correctly. With recent performance improvements, slow tests now complete in ~11 seconds.
 
 ```bash
-# Run only fast tests (default, ~9 seconds)
+# Run only fast tests (default, ~10 seconds)
 cargo test
 
-# Run slow security tests (~16 seconds)
+# Run slow security tests (~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (~25 seconds)
+# Run all tests (~21 seconds)
 cargo test && cargo test -- --ignored
 ```
 
@@ -328,18 +330,23 @@ cargo test && cargo test -- --ignored
 ```
 src/
 ├── lib.rs          # Public API exports
-├── main.rs         # CLI entry point (Phase 6 - WIP)
+├── main.rs         # CLI entry point
+├── cli.rs          # Command-line interface
+├── constants.rs    # Centralized size and parameter constants
 ├── crypto.rs       # Ed25519, Blake2b, Scrypt wrappers
 ├── keys.rs         # Key types, generation, encryption
 ├── signature.rs    # Signature creation and verification
-├── formats.rs      # Base64, binary serialization
+├── formats.rs      # Binary and base64 encoding/decoding
+├── validation.rs   # Comment and input validation (C compatibility)
 ├── errors.rs       # Error types with thiserror
 └── ops/            # High-level operations
-    ├── generate.rs # Key generation
-    ├── sign.rs     # File signing
-    ├── verify.rs   # Signature verification
-    ├── recreate.rs # Public key recovery
-    └── change.rs   # Password management
+    ├── generate.rs    # Key generation
+    ├── sign.rs        # File signing
+    ├── verify.rs      # Signature verification
+    ├── recreate.rs    # Public key recovery
+    ├── change.rs      # Password management
+    ├── inspect.rs     # Security auditing
+    └── file_utils.rs  # File I/O utilities
 ```
 
 ### Design Principles
@@ -619,10 +626,10 @@ cargo fmt
 # 2. Run clippy (pedantic mode)
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 
-# 3. Run fast test suite (~9 seconds)
+# 3. Run fast test suite (~10 seconds)
 cargo test
 
-# 4. Run slow security tests (~16 seconds)
+# 4. Run slow security tests (~11 seconds)
 cargo test -- --ignored
 
 # 5. Verify no unsafe code or unwraps in production paths
