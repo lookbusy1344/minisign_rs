@@ -18,7 +18,37 @@ const VERSION: &str = git_version!(
 #[derive(Debug, Parser)]
 #[command(name = "minisign_rs")]
 #[command(version = VERSION)]
-#[command(about = concat!("minisign_rs ", env!("CARGO_PKG_VERSION"), " - A dead simple Rust tool to sign files and verify signatures"), long_about = None)]
+#[command(about = concat!("minisign_rs ", env!("CARGO_PKG_VERSION"), " - A dead simple Rust tool to sign files and verify signatures"))]
+#[command(long_about = concat!("minisign_rs ", env!("CARGO_PKG_VERSION"), " - A dead simple Rust tool to sign files and verify signatures\n\n\
+    Usage:\n\
+    minisign_rs -G [-f] [-p pubkey_file] [-s seckey_file] [-W]\n\
+    minisign_rs -R [-s seckey_file] [-p pubkey_file]\n\
+    minisign_rs -K [-s seckey_file] [-W]\n\
+    minisign_rs -I [-s seckey_file | -p pubkey_file]\n\
+    minisign_rs -S [-l] [-x sig_file] [-s seckey_file] [-c untrusted_comment]\n                \
+                [-t trusted_comment] -m file\n\
+    minisign_rs -V [-H] [-x sig_file] [-p pubkey_file | -P pubkey] [-o] [-q] -m file\n\n\
+    -G                generate a new key pair\n\
+    -R                recreate a public key file from a secret key file\n\
+    -K                change/remove the password of the secret key\n\
+    -I                inspect a key file and display security parameters\n\
+    -S                sign files\n\
+    -V                verify that a signature is valid for a given file\n\
+    -H                require input to be prehashed\n\
+    -l                sign using the legacy format\n\
+    -m <file>         file to sign/verify\n\
+    -o                combined with -V, output the file content after verification\n\
+    -p <pubkey_file>  public key file (default: ./minisign.pub)\n\
+    -P <pubkey>       public key, as a base64 string\n\
+    -s <seckey_file>  secret key file (default: ~/.minisign/minisign.key)\n\
+    -W                do not encrypt/decrypt the secret key with a password\n\
+    -x <sigfile>      signature file (default: <file>.minisig)\n\
+    -c <comment>      add a one-line untrusted comment\n\
+    -t <comment>      add a one-line trusted comment\n\
+    -q                quiet mode, suppress output\n\
+    -Q                pretty quiet mode, only print the trusted comment\n\
+    -f                force. Combined with -G, overwrite a previous key pair\n\
+    -v                display version number"))]
 #[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]
 #[allow(clippy::struct_excessive_bools)]

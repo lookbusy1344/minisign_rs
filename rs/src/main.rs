@@ -34,7 +34,7 @@ fn run() -> Result<()> {
     // Determine which action to perform
     let action = cli
         .action()
-        .ok_or_else(|| Error::Usage("No action specified. Use -G, -S, -V, -R, or -C".into()))?;
+        .ok_or_else(|| Error::Usage("No action specified. Use -G, -S, -V, -R, -K, or -I".into()))?;
 
     match action {
         Action::Generate => handle_generate(&cli),
