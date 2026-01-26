@@ -5,7 +5,9 @@
 [![Coverage](https://github.com/lookbusy1344/minisign/actions/workflows/coverage.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/coverage.yml)
 [![Slow Tests](https://github.com/lookbusy1344/minisign/actions/workflows/slow-tests.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/slow-tests.yml)
 
-A pure Rust implementation of [minisign](https://jedisct1.github.io/minisign/), a dead simple tool to sign files and verify signatures.
+A pure Rust implementation of the classic C project [minisign](https://jedisct1.github.io/minisign/), a dead simple tool to sign files and verify signatures.
+
+We aim for 100% command line compatibility with the C version, with a few extra switches for enhanced security and usability.
 
 ## Project Status
 
@@ -59,7 +61,7 @@ Release binaries are available for:
 
 #### Prerequisites
 
-- Rust 1.93+ (edition 2024)
+- Rust 1.93+ (edition 2024) - released January 2026
 - Standard build tools (cargo)
 
 #### Commands
