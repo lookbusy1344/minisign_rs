@@ -85,6 +85,35 @@ cargo fmt
 cargo test test_sign_verify_roundtrip
 ```
 
+## Configuration
+
+### Environment Variables
+
+#### `MINISIGN_CONFIG_DIR`
+
+Override the default configuration directory for secret keys.
+
+**Default behavior:**
+- Unix/Linux/macOS: `~/.minisign/minisign.key`
+- Windows: `%USERPROFILE%\.minisign\minisign.key`
+
+**With `MINISIGN_CONFIG_DIR` set:**
+```bash
+# Set custom config directory
+export MINISIGN_CONFIG_DIR=/opt/secure/minisign
+
+# Secret key will now be at: /opt/secure/minisign/minisign.key
+cargo run -- -G
+```
+
+**Use cases:**
+- Custom security policies requiring keys in specific directories
+- Multi-user systems with centralized key management
+- Containerized environments with mounted volumes
+- Compatibility with C minisign deployments using this variable
+
+**Compatibility:** This environment variable is also supported by the C implementation of minisign, ensuring consistent behavior across both versions.
+
 ## Testing
 
 ### Quick Testing with Fixtures

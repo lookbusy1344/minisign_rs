@@ -395,13 +395,7 @@ fn test_concurrent_different_files() {
     // Verify all files were created
     assert_eq!(results.len(), num_threads);
     for (secret_key, public_key) in results {
-        assert!(
-            secret_key.exists(),
-            "Secret key file should exist"
-        );
-        assert!(
-            public_key.exists(),
-            "Public key file should exist"
-        );
+        assert!(secret_key.exists(), "Secret key file should exist");
+        assert!(public_key.exists(), "Public key file should exist");
     }
 }

@@ -158,9 +158,14 @@ impl Cli {
     }
 
     /// Get the default secret key path based on platform
+    ///
+    /// Checks the `MINISIGN_CONFIG_DIR` environment variable first.
+    /// Falls back to `~/.minisign/` if not set.
     #[must_use]
     pub fn default_secret_key_path() -> PathBuf {
-        if let Some(home) = dirs::home_dir() {
+        if let Ok(config_dir) = std::env::var("MINISIGN_CONFIG_DIR") {
+            PathBuf::from(config_dir).join("minisign.key")
+        } else if let Some(home) = dirs::home_dir() {
             home.join(".minisign").join("minisign.key")
         } else {
             PathBuf::from(".minisign.key")
@@ -405,5 +410,48 @@ mod tests {
             force_weak_kdf: false,
         };
         assert!(cli.allow_kdf_fallback);
+    }
+
+    #[test]
+    fn test_minisign_config_dir_override() {
+        use std::env;
+
+        // SAFETY: This is a test-only function that sets env var for testing.
+        // The test is single-threaded and cleans up after itself.
+        unsafe {
+            env::set_var("MINISIGN_CONFIG_DIR", "/custom/config/path");
+        }
+
+        let secret_path = Cli::default_secret_key_path();
+
+        // Should use the custom path from env var
+        assert_eq!(
+            secret_path,
+            PathBuf::from("/custom/config/path").join("minisign.key")
+        );
+
+        // SAFETY: Clean up the env var we set above
+        unsafe {
+            env::remove_var("MINISIGN_CONFIG_DIR");
+        }
+    }
+
+    #[test]
+    fn test_minisign_config_dir_fallback_to_home() {
+        use std::env;
+
+        // SAFETY: Ensure env var is not set for this test
+        unsafe {
+            env::remove_var("MINISIGN_CONFIG_DIR");
+        }
+
+        let secret_path = Cli::default_secret_key_path();
+
+        // Should fall back to home directory
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(secret_path, home.join(".minisign").join("minisign.key"));
+        } else {
+            assert_eq!(secret_path, PathBuf::from(".minisign.key"));
+        }
     }
 }
