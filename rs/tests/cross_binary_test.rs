@@ -1053,7 +1053,7 @@ fn test_cross_encrypted_change_password_c_to_rust() {
 
     // Change password with Rust
     rust_minisign()
-        .arg("-C")
+        .arg("-K")
         .arg("-s")
         .arg(&secret_key)
         .arg("--password-file")
