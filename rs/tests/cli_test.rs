@@ -818,3 +818,384 @@ fn test_force_weak_kdf_creates_usable_key() {
         .assert()
         .success();
 }
+
+// TDD Tests for long argument names
+// These tests verify that long argument names work identically to short names
+
+#[test]
+fn test_help_long_name() {
+    minisign_cmd()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "A dead simple Rust tool to sign files",
+        ));
+}
+
+#[test]
+fn test_generate_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .arg("--generate")
+        .arg("-f")
+        .arg("-W")
+        .arg("--secretkey-path")
+        .arg(&secret_key)
+        .arg("--publickey-path")
+        .arg(&public_key)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("secret key was saved"));
+
+    assert!(secret_key.exists());
+    assert!(public_key.exists());
+}
+
+#[test]
+fn test_sign_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("--sign")
+        .arg("-W")
+        .arg("--input")
+        .arg(&message_file)
+        .arg("--secretkey-path")
+        .arg(&secret_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Signature written"));
+}
+
+#[test]
+fn test_verify_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("--verify")
+        .arg("--input")
+        .arg(&message_file)
+        .arg("--publickey-path")
+        .arg(&public_key)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("verified"));
+}
+
+#[test]
+fn test_recreate_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let recreated_key = temp_dir.path().join("recreated.pub");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("--recreate")
+        .arg("-W")
+        .arg("--secretkey-path")
+        .arg(&secret_key)
+        .arg("--publickey-path")
+        .arg(&recreated_key)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Public key recreated"));
+}
+
+#[test]
+fn test_change_password_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("--change-password")
+        .arg("-W")
+        .arg("--secretkey-path")
+        .arg(&secret_key)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_legacy_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("-S")
+        .arg("--legacy")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_quiet_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    let output = minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("--quiet")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    assert!(output.is_empty());
+}
+
+#[test]
+fn test_trusted_comment_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("--trusted-comment")
+        .arg("Custom comment")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_untrusted_comment_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("--untrusted-comment")
+        .arg("Untrusted comment")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_publickey_string_long_name() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .assert()
+        .success();
+
+    let pubkey_contents = fs::read_to_string(&public_key).expect("Failed to read public key");
+    let pubkey_base64 = pubkey_contents
+        .lines()
+        .nth(1)
+        .expect("Public key should have second line");
+
+    minisign_cmd()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("--publickey")
+        .arg(pubkey_base64)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_short_and_long_names_equivalent() {
+    // Verify that short and long argument names produce identical behavior
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Generate with short names
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Sign with long names
+    minisign_cmd()
+        .arg("--sign")
+        .arg("-W")
+        .arg("--input")
+        .arg(&message_file)
+        .arg("--secretkey-path")
+        .arg(&secret_key)
+        .assert()
+        .success();
+
+    // Verify with mixed short and long names
+    minisign_cmd()
+        .arg("--verify")
+        .arg("--input")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("verified"));
+}

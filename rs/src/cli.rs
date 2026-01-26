@@ -24,23 +24,23 @@ const VERSION: &str = git_version!(
 #[allow(clippy::struct_excessive_bools)]
 pub struct Cli {
     /// Generate a new keypair
-    #[arg(short = 'G', group = "action")]
+    #[arg(short = 'G', long = "generate", group = "action")]
     pub generate: bool,
 
     /// Sign files
-    #[arg(short = 'S', group = "action")]
+    #[arg(short = 'S', long = "sign", group = "action")]
     pub sign: bool,
 
     /// Verify a signature
-    #[arg(short = 'V', group = "action")]
+    #[arg(short = 'V', long = "verify", group = "action")]
     pub verify: bool,
 
     /// Recreate a public key from a secret key
-    #[arg(short = 'R', group = "action")]
+    #[arg(short = 'R', long = "recreate", group = "action")]
     pub recreate: bool,
 
     /// Change or remove password from a secret key
-    #[arg(short = 'C', group = "action")]
+    #[arg(short = 'K', long = "change-password", group = "action")]
     pub change: bool,
 
     /// Inspect a key file and display security parameters
@@ -56,27 +56,27 @@ pub struct Cli {
     pub prehashed: bool,
 
     /// Legacy mode (sign only)
-    #[arg(short = 'l')]
+    #[arg(short = 'l', long = "legacy")]
     pub legacy: bool,
 
     /// Message file (required for sign and verify)
-    #[arg(short = 'm', value_name = "FILE")]
+    #[arg(short = 'm', long = "input", value_name = "FILE")]
     pub message_file: Option<PathBuf>,
 
     /// Output verification result to stdout
-    #[arg(short = 'o')]
+    #[arg(short = 'o', long = "output")]
     pub output: bool,
 
     /// Public key file
-    #[arg(short = 'p', value_name = "FILE")]
+    #[arg(short = 'p', long = "publickey-path", value_name = "FILE")]
     pub public_key_file: Option<PathBuf>,
 
     /// Public key as base64 string
-    #[arg(short = 'P', value_name = "PUBLIC_KEY")]
+    #[arg(short = 'P', long = "publickey", value_name = "PUBLIC_KEY")]
     pub public_key_base64: Option<String>,
 
     /// Quiet mode (minimal output)
-    #[arg(short = 'q')]
+    #[arg(short = 'q', long = "quiet")]
     pub quiet: bool,
 
     /// Pretty quiet mode (trusted comment only)
@@ -84,15 +84,15 @@ pub struct Cli {
     pub pretty_quiet: bool,
 
     /// Secret key file
-    #[arg(short = 's', value_name = "FILE")]
+    #[arg(short = 's', long = "secretkey-path", value_name = "FILE")]
     pub secret_key_file: Option<PathBuf>,
 
     /// Trusted comment
-    #[arg(short = 't', value_name = "COMMENT")]
+    #[arg(short = 't', long = "trusted-comment", value_name = "COMMENT")]
     pub trusted_comment: Option<String>,
 
     /// Untrusted comment
-    #[arg(short = 'c', value_name = "COMMENT")]
+    #[arg(short = 'c', long = "untrusted-comment", value_name = "COMMENT")]
     pub untrusted_comment: Option<String>,
 
     /// Signature file

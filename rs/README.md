@@ -87,6 +87,163 @@ cargo fmt
 cargo test test_sign_verify_roundtrip
 ```
 
+## Usage
+
+### Command-Line Options
+
+minisign-rs provides a simple, intuitive command-line interface with both short and long option names for better usability.
+
+#### Actions
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-G` | `--generate` | Generate a new keypair |
+| `-S` | `--sign` | Sign files |
+| `-V` | `--verify` | Verify a signature |
+| `-R` | `--recreate` | Recreate a public key from a secret key |
+| `-K` | `--change-password` | Change or remove password from a secret key |
+| `-I` | `--inspect` | Inspect a key file and display security parameters |
+
+#### Key and File Options
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-s <FILE>` | `--secretkey-path <FILE>` | Secret key file path |
+| `-p <FILE>` | `--publickey-path <FILE>` | Public key file path |
+| `-P <STRING>` | `--publickey <STRING>` | Public key as BASE64-encoded string |
+| `-m <FILE>` | `--input <FILE>` | Input file (message to sign/verify) |
+| `-x <FILE>` | | Signature file (default: `<file>.minisig`) |
+
+#### Comment Options
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-t <STRING>` | `--trusted-comment <STRING>` | Add a trusted comment to the signature |
+| `-c <STRING>` | `--untrusted-comment <STRING>` | Add an untrusted comment to the signature |
+
+#### Mode Options
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-l` | `--legacy` | Create a legacy signature (non-prehashed) |
+| `-H` | | Sign or verify a prehashed file |
+| `-q` | `--quiet` | Quiet mode (minimal output) |
+| `-Q` | | Pretty quiet mode (show only trusted comment) |
+| `-f` | | Force overwrite of existing files |
+| `-o` | `--output` | Output verification result to stdout |
+| `-W` | | Do not use password (generate and change only) |
+
+#### Additional Options
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-h` | `--help` | Display help message and exit |
+| `-v` | `--version` | Show version information and exit |
+| | `--password-file <FILE>` | Read password from file (testing only - insecure) |
+| | `--allow-kdf-fallback` | Allow KDF parameter fallback on low-memory systems |
+
+### Common Usage Examples
+
+#### Generate a new keypair
+
+```bash
+# Interactive (prompts for password)
+minisign_rs -G
+
+# With custom paths
+minisign_rs --generate --secretkey-path mykey.key --publickey-path mykey.pub
+
+# Without password protection
+minisign_rs -G -W
+
+# Force overwrite existing keys
+minisign_rs -G -f
+```
+
+#### Sign a file
+
+```bash
+# Sign with default keys
+minisign_rs --sign --input file.txt
+
+# Sign with custom key
+minisign_rs -S -m file.txt -s custom.key
+
+# Sign with custom comment
+minisign_rs -S -m file.txt --trusted-comment "v1.0.0 release"
+
+# Sign in legacy mode (non-prehashed)
+minisign_rs -S -m file.txt --legacy
+
+# Sign without password (for unencrypted keys)
+minisign_rs -S -m file.txt -W
+```
+
+#### Verify a signature
+
+```bash
+# Verify with default public key
+minisign_rs --verify --input file.txt
+
+# Verify with specific public key
+minisign_rs -V -m file.txt -p key.pub
+
+# Verify using base64 public key
+minisign_rs -V -m file.txt --publickey RWQwpZXcv6r8MS48...
+
+# Verify in quiet mode
+minisign_rs -V -m file.txt --quiet
+```
+
+#### Recreate public key from secret key
+
+```bash
+# Recreate using default paths
+minisign_rs --recreate
+
+# Recreate with custom paths
+minisign_rs -R --secretkey-path mykey.key --publickey-path recovered.pub
+```
+
+#### Change password
+
+```bash
+# Change password on default key
+minisign_rs --change-password
+
+# Change password on specific key
+minisign_rs -K -s mykey.key
+
+# Remove password
+minisign_rs -K -W
+```
+
+#### Inspect key security
+
+```bash
+# Inspect default secret key
+minisign_rs --inspect
+
+# Inspect specific key
+minisign_rs -I -s mykey.key
+
+# Inspect public key
+minisign_rs -I --publickey-path key.pub
+```
+
+### Long vs Short Options
+
+All commonly used flags now support long option names for improved readability and script maintainability:
+
+```bash
+# These commands are equivalent:
+minisign_rs -S -m file.txt -s key.key -t "v1.0"
+minisign_rs --sign --input file.txt --secretkey-path key.key --trusted-comment "v1.0"
+
+# Mix and match as preferred:
+minisign_rs --sign -m file.txt --secretkey-path key.key -t "v1.0"
+```
+
 ## Configuration
 
 ### Environment Variables
