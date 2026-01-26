@@ -7,7 +7,7 @@
 
 A pure Rust implementation of the classic C project [minisign](https://jedisct1.github.io/minisign/), a dead simple tool to sign files and verify signatures.
 
-We aim for 100% command line compatibility with the C version, with a few extra switches for enhanced security and usability.
+We aim for 100% compatibility with the C/Zig version, with a few extra switches for enhanced security and usability.
 
 ## Project Status
 
@@ -94,6 +94,8 @@ cargo test test_sign_verify_roundtrip
 ### Command-Line Options
 
 minisign-rs provides a simple, intuitive command-line interface with both short and long option names for better usability.
+
+These reflect zig-minisign where it differs from classic C implementation. https://github.com/jedisct1/zig-minisign
 
 #### Actions
 

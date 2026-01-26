@@ -4,9 +4,9 @@ A pure Rust implementation of the classic C project [minisign](https://jedisct1.
 
 [Rust project is in the `rs` folder](rs/)
 
-We aim for 100% command line compatibility with the C version, with a few extra switches for enhanced security and usability.
+We aim for 100% compatibility with the C/Zig version, with a few extra switches for enhanced security and usability.
 
-The root contains the original C/Zig code while the Rust implementation is in the [`rs/` directory](rs/).
+The root folder contains the original C/Zig code while the Rust implementation is in the [`rs/` directory](rs/).
 
 The remainer of this document is from the original forked minisign project:
 
