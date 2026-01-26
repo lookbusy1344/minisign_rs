@@ -676,6 +676,7 @@ All workflows use caching for faster builds.
 - [Compatibility Documentation](COMPATIBILITY.md) - Byte-level C/Rust compatibility proof
 - [Performance Benchmark Report](docs/benchmark-report.md) - C vs Rust performance comparison
 - [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed analysis of both implementations
+- [rsign2 Comparison](docs/rsign2-comparison.md) - Comprehensive comparison with rsign2 Rust implementation
 - [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) - Security implications of weak KDF parameters
 - [Development Guidelines](CLAUDE.md) - Essential development workflow
 - [Design Document](../docs/plans/2026-01-23-rust-rewrite-design.md) - Original implementation plan
