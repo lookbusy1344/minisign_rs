@@ -8,7 +8,7 @@ use git_version::git_version;
 use std::path::{Path, PathBuf};
 
 const VERSION: &str = git_version!(
-    args = ["--abbrev=7", "--always"],
+    args = ["--tags", "--abbrev=7", "--always"],
     prefix = concat!(env!("CARGO_PKG_VERSION"), " ("),
     suffix = ")",
     fallback = "unknown"

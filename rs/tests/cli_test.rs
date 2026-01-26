@@ -569,6 +569,9 @@ fn test_version_includes_commit_hash() {
             .split('-')
             .next_back()
             .is_some_and(|hash| hash.starts_with('g') && hash.len() >= 8)
+    } else if in_parens.starts_with('v') && in_parens.contains('.') {
+        // Tag only format (e.g., "v0.2.0")
+        true
     } else {
         // Pure hex hash (legacy format)
         in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit())
