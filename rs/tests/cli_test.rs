@@ -38,7 +38,33 @@ fn test_version_flag() {
         .arg("-v")
         .assert()
         .success()
-        .stdout(predicate::str::contains("minisign"));
+        .stdout(predicate::str::contains("minisign_rs"));
+}
+
+#[test]
+fn test_help_shows_correct_app_name() {
+    let output = minisign_cmd()
+        .arg("-h")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&output);
+
+    // Should show "minisign_rs" in the header, not just "minisign"
+    assert!(
+        stdout.contains("minisign_rs"),
+        "Help output should contain 'minisign_rs' but got:\n{stdout}"
+    );
+
+    // The first line should start with "minisign_rs", not "minisign"
+    let first_line = stdout.lines().next().unwrap_or("");
+    assert!(
+        first_line.starts_with("minisign_rs"),
+        "First line should start with 'minisign_rs' but got: {first_line}"
+    );
 }
 
 #[test]

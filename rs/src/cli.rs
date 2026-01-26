@@ -16,9 +16,9 @@ const VERSION: &str = git_version!(
 
 /// A dead simple Rust tool to sign files and verify signatures
 #[derive(Debug, Parser)]
-#[command(name = "minisign")]
+#[command(name = "minisign_rs")]
 #[command(version = VERSION)]
-#[command(about = concat!("minisign ", env!("CARGO_PKG_VERSION"), " - A dead simple Rust tool to sign files and verify signatures"), long_about = None)]
+#[command(about = concat!("minisign_rs ", env!("CARGO_PKG_VERSION"), " - A dead simple Rust tool to sign files and verify signatures"), long_about = None)]
 #[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]
 #[allow(clippy::struct_excessive_bools)]
