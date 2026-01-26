@@ -241,7 +241,7 @@ This Rust implementation adds **security enhancements** and **optional flags** n
 #### `-I/--inspect`
 Inspect a key file and display its security parameters (KDF configuration, strength rating).
 
-**✅ SECURITY ENHANCEMENT - RECOMMENDED**
+**✅ SECURITY ENHANCEMENT**
 
 ```bash
 # Inspect a secret key
