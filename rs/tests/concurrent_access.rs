@@ -397,11 +397,11 @@ fn test_concurrent_different_files() {
     for (secret_key, public_key) in results {
         assert!(
             secret_key.exists(),
-            "Secret key {secret_key:?} should exist"
+            "Secret key file should exist"
         );
         assert!(
             public_key.exists(),
-            "Public key {public_key:?} should exist"
+            "Public key file should exist"
         );
     }
 }
