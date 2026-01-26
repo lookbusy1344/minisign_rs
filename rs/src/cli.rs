@@ -22,8 +22,7 @@ minisign_rs -G [-f] [-p pubkey_file] [-s seckey_file] [-W]\n\
 minisign_rs -R [-s seckey_file] [-p pubkey_file]\n\
 minisign_rs -K [-s seckey_file] [-W]\n\
 minisign_rs -I [-s seckey_file | -p pubkey_file]\n\
-minisign_rs -S [-l] [-x sig_file] [-s seckey_file] [-c untrusted_comment]\n\
-                [-t trusted_comment] -m file\n\
+minisign_rs -S [-l] [-x sig_file] [-s seckey_file] [-c untrusted_comment] [-t trusted_comment] -m file\n\
 minisign_rs -V [-H] [-x sig_file] [-p pubkey_file | -P pubkey] [-o] [-q] -m file\n\n\
 -G                generate a new key pair\n\
 -R                recreate a public key file from a secret key file\n\
