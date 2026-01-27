@@ -29,9 +29,9 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **310 total tests** covering all operations and CLI behavior
-- **214 unit tests** covering all crypto operations, key handling, and file formats
-- **40 CLI integration tests** using assert_cmd for end-to-end validation
+- **320 total tests** covering all operations and CLI behavior
+- **217 unit tests** covering all crypto operations, key handling, and file formats
+- **42 CLI integration tests** using assert_cmd for end-to-end validation
 - **7 compatibility tests** verifying interoperability with C minisign
 - **18 cross-binary tests** ensuring full C minisign compatibility
 - **6 edge case tests** for unicode, symlinks, and large files
@@ -45,7 +45,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **~8,600 lines** of well-documented Rust code
+- **~8,800 lines** of well-documented Rust code (11,546 total with comments)
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
@@ -66,19 +66,23 @@ Release binaries are available for:
 - Rust 1.93+ (edition 2024) - released January 2026
 - Standard build tools (cargo)
 
+**For testing (optional):**
+- Original C minisign (for compatibility tests): `brew install minisign`
+- All tests except compatibility tests will run without C minisign installed
+
 #### Commands
 
 ```bash
 # Build the project
 cargo build --release
 
-# Run tests (fast - 299 tests, ~10 seconds)
+# Run tests (fast - 309 tests, ~10 seconds)
 cargo test
 
 # Run slow security tests (11 tests, ~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (310 tests, ~21 seconds)
+# Run all tests (320 tests, ~21 seconds)
 cargo test && cargo test -- --ignored
 
 # Check code quality
@@ -228,11 +232,14 @@ minisign_rs -K -W
 # Inspect default secret key
 minisign_rs --inspect
 
-# Inspect specific key
+# Inspect specific secret key
 minisign_rs -I -s mykey.key
 
-# Inspect public key
-minisign_rs -I --publickey-path key.pub
+# Inspect public key file
+minisign_rs -I -p key.pub
+
+# Inspect public key from command line (base64)
+minisign_rs -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ```
 
 ### Long vs Short Options
@@ -279,6 +286,18 @@ cargo run -- -G
 
 ## Testing
 
+### Test Requirements
+
+**Required:**
+- Rust 1.93+ and cargo (for all tests)
+
+**Optional (for full test suite):**
+- **C minisign** (for compatibility and cross-binary tests): `brew install minisign`
+  - Without C minisign: ~313 tests run (skips 7 compatibility tests)
+  - With C minisign: All 320 tests run
+
+Most development can be done without C minisign installed. Install it only when you need to verify cross-compatibility or run the full test suite.
+
 ### Quick Testing with Fixtures
 
 The `tests/fixtures` directory contains pre-generated keys and test files for quick testing:
@@ -309,7 +328,7 @@ See `tests/fixtures/keys/README.md` for complete details.
 
 The project uses a dual testing strategy for operations involving scrypt:
 
-- **Fast tests** (299 tests, default): Use N=2^14 (~50ms per operation)
+- **Fast tests** (309 tests, default): Use N=2^14 (~50ms per operation)
 - **Slow tests** (11 tests, `#[ignore]`): Use N=2^20 (~1-5s per operation)
 
 Fast tests provide rapid feedback during development, while slow tests verify production security parameters work correctly. With recent performance improvements, slow tests now complete in ~11 seconds.
@@ -415,13 +434,20 @@ cargo run -- -I -s key.key
 
 # Inspect using default key location
 cargo run -- -I
+
+# Inspect a public key file
+cargo run -- -I -p key.pub
+
+# Inspect a public key from command line (-P flag)
+cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ```
 
 - Displays security level (High/Medium/Low/None)
 - Shows exact KDF parameters (N, r, p, opslimit, memlimit)
 - Calculates weakness multiplier for fallback keys
 - Provides recommendations for weak keys
-- Works with both secret and public keys
+- Works with both secret and public keys (file paths or base64 strings)
+- Shows inspection source (file path, command-line literal, or default)
 - Fully compatible with C-generated keys
 - C minisign does not provide this capability
 
@@ -504,14 +530,21 @@ cargo run -- -I
 # Inspect a specific secret key
 cargo run -- -I -s path/to/key.key
 
-# Inspect a public key
+# Inspect a public key file
 cargo run -- -I -p path/to/key.pub
+
+# Inspect a public key from command line (base64 string)
+cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ```
+
+**Note:** The inspect command now displays the source being inspected (file path or command-line literal) to avoid confusion when using default keys or base64 strings.
 
 #### Example Output
 
 **Production-strength key:**
 ```
+Inspecting: /Users/name/.minisign/minisign.key (default)
+
 Security Level: HIGH ✓
 
 Key Information:
@@ -526,6 +559,8 @@ Key Information:
 
 **Weak key (created with fallback):**
 ```
+Inspecting: path/to/weak.key
+
 Security Level: LOW 🔥
 
 Key Information:
@@ -543,6 +578,8 @@ Key Information:
 
 **Unencrypted key:**
 ```
+Inspecting: path/to/unencrypted.key
+
 Security Level: NONE (UNENCRYPTED) ⚠
 
 Key Information:
@@ -551,6 +588,15 @@ Key Information:
 
 ⚠️  WARNING: This key is stored in plaintext.
    Anyone with file access can use it without a password.
+```
+
+**Public key from command line:**
+```
+Inspecting: public key from command line (-P)
+
+Key Information:
+├─ Key ID: RWQwpZXcv6r8MS...
+└─ Type: Ed25519 Public Key
 ```
 
 #### Security Levels
