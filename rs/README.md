@@ -673,6 +673,14 @@ The Rust implementation **matches or exceeds** C minisign performance across all
 - Minimal memory (<1KB), operations complete in <1ms
 - No difference between implementations
 
+**File Signing/Verification Modes**:
+- **Prehashed mode** (default for files >1GB): Streaming operation, minimal memory regardless of file size
+- **Legacy/non-prehashed mode** (`--legacy` flag): Loads entire file into memory
+  - File size limit: 1GB maximum
+  - Memory usage: Equals file size (e.g., 900MB file requires 900MB RAM)
+  - **Recommendation**: Use prehashed mode (default) for large files or memory-constrained systems
+  - **Note**: On systems with limited RAM, signing/verifying large files in legacy mode may cause out-of-memory errors
+
 ### Memory Safety Advantages
 
 - ✅ **Zero unsafe code** - Eliminates entire classes of vulnerabilities
