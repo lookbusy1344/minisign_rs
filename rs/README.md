@@ -539,6 +539,13 @@ cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 
 **Note:** The inspect command now displays the source being inspected (file path or command-line literal) to avoid confusion when using default keys or base64 strings.
 
+#### Public vs Secret Keys
+
+**Important:** Public keys do not contain security information. KDF parameters (scrypt opslimit/memlimit) are only stored in secret key files because they're used for password-based encryption. When inspecting a public key (via `-p` file or `-P` base64 string), only the key ID and type are displayed - this is by design, not a limitation.
+
+- **Secret keys** (.key files): Show full security details including KDF parameters, encryption status, and security level
+- **Public keys** (.pub files or base64): Show only key ID and type - no KDF or security information available
+
 #### Example Output
 
 **Production-strength key:**
@@ -597,6 +604,21 @@ Inspecting: public key from command line (-P)
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
 └─ Type: Ed25519 Public Key
+
+Note: Public keys do not contain KDF parameters or security information.
+      Only secret keys (.key files) store encryption and KDF data.
+```
+
+**Public key from file:**
+```
+Inspecting: path/to/key.pub
+
+Key Information:
+├─ Key ID: RWQwpZXcv6r8MS...
+└─ Type: Ed25519 Public Key
+
+Note: Public keys do not contain KDF parameters or security information.
+      Only secret keys (.key files) store encryption and KDF data.
 ```
 
 #### Security Levels
