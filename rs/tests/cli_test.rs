@@ -627,6 +627,9 @@ fn test_inspect_production_key() {
         .arg("tests/fixtures/keys/test.key")
         .assert()
         .success()
+        .stdout(predicate::str::contains(
+            "Inspecting: tests/fixtures/keys/test.key",
+        ))
         .stdout(predicate::str::contains("Security Level: HIGH"))
         .stdout(predicate::str::contains("opslimit: 33554432"))
         .stdout(predicate::str::contains("memlimit: 1073741824"))
@@ -643,6 +646,9 @@ fn test_inspect_unencrypted_key() {
         .arg("tests/fixtures/keys/unencrypted.key")
         .assert()
         .success()
+        .stdout(predicate::str::contains(
+            "Inspecting: tests/fixtures/keys/unencrypted.key",
+        ))
         .stdout(predicate::str::contains("Security Level: NONE"))
         .stdout(predicate::str::contains("Encrypted: No"))
         .stdout(predicate::str::contains(
@@ -659,6 +665,9 @@ fn test_inspect_public_key() {
         .arg("tests/fixtures/keys/test.pub")
         .assert()
         .success()
+        .stdout(predicate::str::contains(
+            "Inspecting: tests/fixtures/keys/test.pub",
+        ))
         .stdout(predicate::str::contains("Key ID:"))
         .stdout(predicate::str::contains("Ed25519 Public Key"));
 }
@@ -685,8 +694,9 @@ fn test_inspect_uses_default_secret_key_path() {
     let success = output.status.success();
 
     if success {
-        // If default key exists, should show key information
+        // If default key exists, should show the inspecting line with "(default)"
         let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Inspecting:") && stdout.contains("(default)"));
         assert!(stdout.contains("Key Information:"));
     } else {
         // If default key doesn't exist, should show file read error
@@ -697,14 +707,16 @@ fn test_inspect_uses_default_secret_key_path() {
 
 #[test]
 fn test_inspect_public_key_base64() {
-    // BUG: This test demonstrates that -I -P <base64> incorrectly reads the secret key
-    // instead of parsing the public key base64 string
+    // Test that -I -P <base64> correctly inspects the public key from command line
     minisign_cmd()
         .arg("-I")
         .arg("-P")
         .arg("RWTa4nmE9BYWyPMkgjyqrmh+smzESa8GEX0SnJzS2MIWbR1lL79TJ/8b")
         .assert()
         .success()
+        .stdout(predicate::str::contains(
+            "Inspecting: public key from command line (-P)",
+        ))
         .stdout(predicate::str::contains("Ed25519 Public Key"))
         .stdout(predicate::str::contains("KDF").not()); // Public keys don't have KDF params
 }

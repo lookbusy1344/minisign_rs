@@ -288,28 +288,37 @@ fn handle_change(cli: &Cli) -> Result<()> {
 fn handle_inspect(cli: &Cli) -> Result<()> {
     use minisign::ops::inspect::{KeyType, SecurityLevel, inspect_base64};
 
-    // Get the inspection result
+    // Determine the source and get the inspection result
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
-    let result = if let Some(ref sk_file) = cli.secret_key_file {
+    let (result, source_description) = if let Some(ref sk_file) = cli.secret_key_file {
+        let path = sk_file.to_string_lossy().to_string();
         let options = InspectOptions {
-            key_file: sk_file.to_string_lossy().to_string(),
+            key_file: path.clone(),
         };
-        inspect(&options)?
+        (inspect(&options)?, format!("Inspecting: {path}"))
     } else if let Some(ref pk_file) = cli.public_key_file {
+        let path = pk_file.to_string_lossy().to_string();
         let options = InspectOptions {
-            key_file: pk_file.to_string_lossy().to_string(),
+            key_file: path.clone(),
         };
-        inspect(&options)?
+        (inspect(&options)?, format!("Inspecting: {path}"))
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
         // Inspect public key from base64 string
-        inspect_base64(pk_base64)?
+        (
+            inspect_base64(pk_base64)?,
+            "Inspecting: public key from command line (-P)".to_string(),
+        )
     } else {
         // Default to secret key path
+        let path = Cli::default_secret_key_path().to_string_lossy().to_string();
         let options = InspectOptions {
-            key_file: Cli::default_secret_key_path().to_string_lossy().to_string(),
+            key_file: path.clone(),
         };
-        inspect(&options)?
+        (inspect(&options)?, format!("Inspecting: {path} (default)"))
     };
+
+    // Display the source
+    println!("{source_description}\n");
 
     // Display security level prominently first (for secret keys)
     if let Some(security_level) = result.security_level {
