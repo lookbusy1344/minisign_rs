@@ -21,9 +21,15 @@ pub fn decode_base64(data: impl AsRef<[u8]>) -> Result<Vec<u8>> {
 ///
 /// # Panics
 ///
-/// Panics if the slice is shorter than 8 bytes
+/// Panics if the slice is shorter than 8 bytes.
+/// Callers MUST validate length before calling this function.
 #[must_use]
 pub fn read_u64_le(bytes: &[u8]) -> u64 {
+    debug_assert!(
+        bytes.len() >= 8,
+        "read_u64_le requires at least 8 bytes, got {}",
+        bytes.len()
+    );
     let mut buf = [0u8; 8];
     buf.copy_from_slice(&bytes[..8]);
     u64::from_le_bytes(buf)
@@ -33,8 +39,14 @@ pub fn read_u64_le(bytes: &[u8]) -> u64 {
 ///
 /// # Panics
 ///
-/// Panics if the slice is shorter than 8 bytes
+/// Panics if the slice is shorter than 8 bytes.
+/// Callers MUST validate length before calling this function.
 pub fn write_u64_le(bytes: &mut [u8], value: u64) {
+    debug_assert!(
+        bytes.len() >= 8,
+        "write_u64_le requires at least 8 bytes, got {}",
+        bytes.len()
+    );
     bytes[..8].copy_from_slice(&value.to_le_bytes());
 }
 
@@ -42,9 +54,15 @@ pub fn write_u64_le(bytes: &mut [u8], value: u64) {
 ///
 /// # Panics
 ///
-/// Panics if the slice is shorter than 2 bytes
+/// Panics if the slice is shorter than 2 bytes.
+/// Callers MUST validate length before calling this function.
 #[must_use]
 pub fn read_u16_le(bytes: &[u8]) -> u16 {
+    debug_assert!(
+        bytes.len() >= 2,
+        "read_u16_le requires at least 2 bytes, got {}",
+        bytes.len()
+    );
     let mut buf = [0u8; 2];
     buf.copy_from_slice(&bytes[..2]);
     u16::from_le_bytes(buf)
@@ -54,8 +72,14 @@ pub fn read_u16_le(bytes: &[u8]) -> u16 {
 ///
 /// # Panics
 ///
-/// Panics if the slice is shorter than 2 bytes
+/// Panics if the slice is shorter than 2 bytes.
+/// Callers MUST validate length before calling this function.
 pub fn write_u16_le(bytes: &mut [u8], value: u16) {
+    debug_assert!(
+        bytes.len() >= 2,
+        "write_u16_le requires at least 2 bytes, got {}",
+        bytes.len()
+    );
     bytes[..2].copy_from_slice(&value.to_le_bytes());
 }
 
@@ -179,14 +203,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "index")]
+    #[should_panic(expected = "read_u64_le requires at least 8 bytes")]
     fn test_read_u64_le_short_buffer() {
         let buf = [0u8; 7];
         let _ = read_u64_le(&buf);
     }
 
     #[test]
-    #[should_panic(expected = "index")]
+    #[should_panic(expected = "write_u64_le requires at least 8 bytes")]
     fn test_write_u64_le_short_buffer() {
         let mut buf = [0u8; 7];
         write_u64_le(&mut buf, 42);
