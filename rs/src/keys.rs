@@ -381,7 +381,7 @@ impl SeckeyStruct {
 
         // Display CLEAR WARNING if fallback was used
         if fallback_used {
-            eprintln!("\n⚠️  WARNING: REDUCED SECURITY PARAMETERS ⚠️");
+            eprintln!("\n*** WARNING: REDUCED SECURITY PARAMETERS ***");
             eprintln!("Key derivation used weaker parameters due to memory constraints:");
             eprintln!("  Original: opslimit={kdf_opslimit}, memlimit={kdf_memlimit}");
             eprintln!("  Reduced:  opslimit={current_opslimit}, memlimit={current_memlimit}");
@@ -444,7 +444,7 @@ impl SeckeyStruct {
 
         // Warn if key was created with weak KDF parameters (fallback)
         if self.is_weak_kdf() {
-            eprintln!("\n⚠️  WARNING: WEAK KEY DETECTED ⚠️");
+            eprintln!("\n*** WARNING: WEAK KEY DETECTED ***");
             eprintln!("This key was created with reduced security parameters.");
             eprintln!("It is easier to brute-force than a production-strength key.");
             eprintln!("Consider regenerating this key on a system with more memory.");
@@ -1529,7 +1529,7 @@ mod tests {
         let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
         assert!(result.is_ok());
         let (log_n, r, p) = result.unwrap();
-        // log2(1000) ≈ 9.96, should truncate to 9
+        // log2(1000) ~= 9.96, should truncate to 9
         assert_eq!(log_n, 9);
         assert_eq!(r, 8);
         assert_eq!(p, 1);

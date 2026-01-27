@@ -426,7 +426,7 @@ This Rust implementation adds **security enhancements** and **optional flags** n
 #### `-I/--inspect`
 Inspect a key file and display its security parameters (KDF configuration, strength rating).
 
-**✅ SECURITY ENHANCEMENT**
+**[SECURITY ENHANCEMENT]**
 
 ```bash
 # Inspect a secret key
@@ -456,7 +456,7 @@ See [Inspecting Key Security](#inspecting-key-security) for detailed usage.
 #### `--password-file <FILE>`
 Read password from file instead of interactive prompt.
 
-**⚠️ TESTING ONLY - INSECURE FOR PRODUCTION USE**
+**[WARNING: TESTING ONLY - INSECURE FOR PRODUCTION USE]**
 
 ```bash
 # Example (testing only)
@@ -471,7 +471,7 @@ cargo run -- -S -m file.txt -s key.key --password-file password.txt
 #### `--allow-kdf-fallback`
 Rust version is secure by default. This flag enables a scrypt KDF parameter fallback on resource-constrained systems.
 
-**⚠️ LESS SECURE - OPT-IN ONLY**
+**[WARNING: LESS SECURE - OPT-IN ONLY]**
 
 ```bash
 # Example (embedded/constrained systems)
@@ -490,7 +490,7 @@ cargo run -- -G --allow-kdf-fallback
 
 #### `--force-weak-kdf` (Debug Builds Only)
 
-**🔥 DEBUG ONLY - INTENTIONALLY INSECURE 🔥**
+**[CRITICAL: DEBUG ONLY - INTENTIONALLY INSECURE]**
 
 Forces creation of weak KDF parameters (N=2^17, 8x easier to brute-force) for testing purposes.
 
@@ -552,7 +552,7 @@ cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ```
 Inspecting: /Users/name/.minisign/minisign.key (default)
 
-Security Level: HIGH ✓
+Security Level: HIGH [OK]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
@@ -568,7 +568,7 @@ Key Information:
 ```
 Inspecting: path/to/weak.key
 
-Security Level: LOW 🔥
+Security Level: LOW [CRITICAL]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
@@ -580,20 +580,20 @@ Key Information:
    ├─ Creation: Fallback (reduced parameters)
    └─ Brute-force resistance: 8x weaker than production strength
 
-⚠️  RECOMMENDATION: Regenerate this key on a system with ≥2GB RAM for full security.
+*** RECOMMENDATION: Regenerate this key on a system with >=2GB RAM for full security.
 ```
 
 **Unencrypted key:**
 ```
 Inspecting: path/to/unencrypted.key
 
-Security Level: NONE (UNENCRYPTED) ⚠
+Security Level: NONE (UNENCRYPTED) [WARNING]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
 └─ Encrypted: No
 
-⚠️  WARNING: This key is stored in plaintext.
+*** WARNING: This key is stored in plaintext.
    Anyone with file access can use it without a password.
 ```
 
@@ -625,10 +625,10 @@ Note: Public keys do not contain KDF parameters or security information.
 
 The inspect command classifies keys into four security levels:
 
-- **HIGH** ✓: Production parameters (N=2^20, 1024 MB) - full security
-- **MEDIUM** ⚠: 1-2 fallbacks (N=2^19-18, 256-512 MB) - 2-4x weaker
-- **LOW** 🔥: 3+ fallbacks (N≤2^17, ≤128 MB) - 8x+ weaker
-- **NONE** ⚠: Unencrypted (no password protection)
+- **HIGH [OK]**: Production parameters (N=2^20, 1024 MB) - full security
+- **MEDIUM [WARNING]**: 1-2 fallbacks (N=2^19-18, 256-512 MB) - 2-4x weaker
+- **LOW [CRITICAL]**: 3+ fallbacks (N<=2^17, <=128 MB) - 8x+ weaker
+- **NONE [WARNING]**: Unencrypted (no password protection)
 
 #### Use Cases
 
@@ -672,6 +672,14 @@ The Rust implementation **matches or exceeds** C minisign performance across all
 **Ed25519 Operations** (signing/verification):
 - Minimal memory (<1KB), operations complete in <1ms
 - No difference between implementations
+
+**File Signing/Verification Modes**:
+- **Prehashed mode** (default for files >1GB): Streaming operation, minimal memory regardless of file size
+- **Legacy/non-prehashed mode** (`--legacy` flag): Loads entire file into memory
+  - File size limit: 1GB maximum
+  - Memory usage: Equals file size (e.g., 900MB file requires 900MB RAM)
+  - **Recommendation**: Use prehashed mode (default) for large files or memory-constrained systems
+  - **Note**: On systems with limited RAM, signing/verifying large files in legacy mode may cause out-of-memory errors
 
 ### Memory Safety Advantages
 

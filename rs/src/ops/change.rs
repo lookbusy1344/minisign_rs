@@ -102,7 +102,7 @@ fn change_with_log_n(
         #[cfg(debug_assertions)]
         let (kdf_opslimit, kdf_memlimit) = if options.force_weak_kdf {
             // DEBUG ONLY: Force weak parameters (N=2^17, 8x weaker than production)
-            eprintln!("\n🔥 DEBUG WARNING: INTENTIONALLY INSECURE KEY 🔥");
+            eprintln!("\n*** DEBUG WARNING: INTENTIONALLY INSECURE KEY ***");
             eprintln!("--force-weak-kdf creates keys that are 8x easier to brute-force.");
             eprintln!("NEVER use in production. For testing purposes only.\n");
             (4_194_304_u64, 134_217_728_u64) // N=2^17, r=8

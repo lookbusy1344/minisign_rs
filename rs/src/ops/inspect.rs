@@ -14,7 +14,7 @@ pub enum SecurityLevel {
     High,
     /// Reduced parameters after 1-2 fallbacks (512-256 MB)
     Medium,
-    /// Weak parameters after 3+ fallbacks or minimum (≤128 MB)
+    /// Weak parameters after 3+ fallbacks or minimum (<=128 MB)
     Low,
     /// Unencrypted key (no KDF protection)
     None,
@@ -142,7 +142,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
     let security_level = if !is_fallback {
         SecurityLevel::High
     } else if memlimit >= 256_000_000 {
-        // ≥256 MB: 1-2 fallbacks (2-4x weaker)
+        // >=256 MB: 1-2 fallbacks (2-4x weaker)
         SecurityLevel::Medium
     } else {
         // <256 MB: 3+ fallbacks (8x+ weaker)

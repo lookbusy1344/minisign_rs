@@ -68,7 +68,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
 
     // Warn if key was created with weak KDF parameters (fallback)
     if seckey.is_weak_kdf() {
-        eprintln!("\n⚠️  WARNING: WEAK KEY DETECTED ⚠️");
+        eprintln!("\n*** WARNING: WEAK KEY DETECTED ***");
         eprintln!("This key was created with reduced security parameters.");
         eprintln!("It is easier to brute-force than a production-strength key.");
         eprintln!("Consider regenerating this key on a system with more memory.");

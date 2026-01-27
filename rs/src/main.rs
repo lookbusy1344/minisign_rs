@@ -323,10 +323,10 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     // Display security level prominently first (for secret keys)
     if let Some(security_level) = result.security_level {
         match security_level {
-            SecurityLevel::High => println!("Security Level: HIGH ✓\n"),
-            SecurityLevel::Medium => println!("Security Level: MEDIUM ⚠\n"),
-            SecurityLevel::Low => println!("Security Level: LOW 🔥\n"),
-            SecurityLevel::None => println!("Security Level: NONE (UNENCRYPTED) ⚠\n"),
+            SecurityLevel::High => println!("Security Level: HIGH [OK]\n"),
+            SecurityLevel::Medium => println!("Security Level: MEDIUM [WARNING]\n"),
+            SecurityLevel::Low => println!("Security Level: LOW [CRITICAL]\n"),
+            SecurityLevel::None => println!("Security Level: NONE (UNENCRYPTED) [WARNING]\n"),
         }
     }
 
@@ -366,7 +366,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
                 if result.security_level == Some(SecurityLevel::Low) {
                     println!();
                     println!(
-                        "⚠️  RECOMMENDATION: Regenerate this key on a system with ≥2GB RAM for full security."
+                        "*** RECOMMENDATION: Regenerate this key on a system with >=2GB RAM for full security."
                     );
                 }
             }
@@ -374,7 +374,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         KeyType::SecretUnencrypted => {
             println!("└─ Encrypted: No");
             println!();
-            println!("⚠️  WARNING: This key is stored in plaintext.");
+            println!("*** WARNING: This key is stored in plaintext.");
             println!("   Anyone with file access can use it without a password.");
         }
         KeyType::Public => {
