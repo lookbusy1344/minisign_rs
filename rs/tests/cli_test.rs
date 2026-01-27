@@ -696,6 +696,20 @@ fn test_inspect_uses_default_secret_key_path() {
 }
 
 #[test]
+fn test_inspect_public_key_base64() {
+    // BUG: This test demonstrates that -I -P <base64> incorrectly reads the secret key
+    // instead of parsing the public key base64 string
+    minisign_cmd()
+        .arg("-I")
+        .arg("-P")
+        .arg("RWTa4nmE9BYWyPMkgjyqrmh+smzESa8GEX0SnJzS2MIWbR1lL79TJ/8b")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Ed25519 Public Key"))
+        .stdout(predicate::str::contains("KDF").not()); // Public keys don't have KDF params
+}
+
+#[test]
 #[cfg(debug_assertions)]
 fn test_force_weak_kdf_creates_weak_key() {
     // Test that --force-weak-kdf creates a key with reduced parameters

@@ -87,6 +87,18 @@ pub fn inspect(options: &InspectOptions) -> Result<InspectResult> {
     ))
 }
 
+/// Inspect a public key from base64 string
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The base64 string cannot be decoded
+/// - The decoded data is not a valid public key
+pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
+    let pubkey = PubkeyStruct::from_base64(base64_str)?;
+    Ok(inspect_public_key(&pubkey))
+}
+
 // Production-strength KDF parameters (N=2^20, r=8, p=1)
 const PRODUCTION_OPSLIMIT: u64 = 33_554_432;
 const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
@@ -611,5 +623,35 @@ mod tests {
         assert_eq!(result.key_type, KeyType::Public);
         assert_eq!(result.security_level, None);
         assert!(result.kdf_info.is_none());
+    }
+
+    #[test]
+    fn test_inspect_base64_public_key() {
+        // Test inspecting a public key from base64 string
+        let base64 = "RWTa4nmE9BYWyPMkgjyqrmh+smzESa8GEX0SnJzS2MIWbR1lL79TJ/8b";
+
+        let result = super::inspect_base64(base64).unwrap();
+
+        assert_eq!(result.key_type, KeyType::Public);
+        assert_eq!(result.security_level, None);
+        assert!(result.kdf_info.is_none());
+        assert!(!result.key_id.is_empty());
+        assert!(result.key_id.starts_with("RW"));
+    }
+
+    #[test]
+    fn test_inspect_base64_invalid() {
+        // Test that invalid base64 returns an error
+        let invalid_base64 = "not-valid-base64!!!";
+        let result = super::inspect_base64(invalid_base64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_inspect_base64_wrong_format() {
+        // Test that valid base64 but wrong format returns an error
+        let wrong_format = "SGVsbG8gV29ybGQh"; // "Hello World!" in base64
+        let result = super::inspect_base64(wrong_format);
+        assert!(result.is_err());
     }
 }
