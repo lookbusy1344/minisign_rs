@@ -31,6 +31,12 @@ pub const SCRYPT_P: u32 = 1;
 pub const SCRYPT_OPSLIMIT_MIN: u64 = 32_768; // 2^15
 pub const SCRYPT_MEMLIMIT_MIN: u64 = 16_777_216; // 16 MB
 
+/// Buffer size for streaming hash operations (8 KB)
+///
+/// This buffer size provides good performance for streaming large files
+/// through Blake2b without excessive memory usage.
+const STREAM_BUFFER_SIZE: usize = 8192;
+
 /// Ed25519 secret key (64 bytes) with automatic zeroization
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SecretKey(pub [u8; SECRET_KEY_BYTES]);
@@ -268,7 +274,7 @@ pub fn blake2b_512(data: &[u8]) -> [u8; 64] {
 /// Returns an error if reading from the input fails
 pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
     let mut hasher = Blake2b512::new();
-    let mut buffer = [0u8; 8192]; // 8KB buffer
+    let mut buffer = [0u8; STREAM_BUFFER_SIZE];
 
     loop {
         let n = reader
