@@ -66,15 +66,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     // Load and decrypt the secret key
     let seckey = load_secret_key(&options.secret_key_file)?;
 
-    // Warn if key was created with weak KDF parameters (fallback)
-    if seckey.is_weak_kdf() {
-        eprintln!("\n*** WARNING: WEAK KEY DETECTED ***");
-        eprintln!("This key was created with reduced security parameters.");
-        eprintln!("It is easier to brute-force than a production-strength key.");
-        eprintln!("Consider regenerating this key on a system with more memory.");
-        eprintln!("See rs/docs/kdf-fallback-security-analysis.md for details.\n");
-    }
-
+    // Decrypt if necessary (weak KDF warning is shown by decrypt() if applicable)
     let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = password.ok_or(Error::PasswordRequired)?;
         seckey.decrypt(pwd)?
