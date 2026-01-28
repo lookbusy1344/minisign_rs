@@ -2,6 +2,17 @@
 //!
 //! This module implements validation functions that match the C implementation's
 //! behavior for validating comment strings in signature files.
+//!
+//! # Implementation Note: Inline Constants
+//!
+//! The UTF-8 validation code uses inline hex constants (e.g., `0x20`, `0x7e`, `0xc2`)
+//! rather than extracted named constants. This is intentional:
+//!
+//! - These are standard UTF-8 specification values, not arbitrary magic numbers
+//! - They're used only within the UTF-8 validation algorithm
+//! - Keeping them inline makes the algorithm more readable in context
+//! - Range expressions like `(0x20..=0x7e)` clearly communicate "printable ASCII"
+//! - Extracting them would scatter the algorithm across multiple definitions
 
 use crate::errors::{Error, Result};
 
