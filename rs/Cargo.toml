@@ -28,6 +28,7 @@ predicates = "3"
 tempfile = "3"
 proptest = "1"
 hex = "0.4"
+serial_test = "3"
 
 [[bin]]
 name = "minisign_rs"

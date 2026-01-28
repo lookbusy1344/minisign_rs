@@ -235,6 +235,7 @@ impl Cli {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_action_detection() {
@@ -336,6 +337,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_default_paths() {
         let secret_path = Cli::default_secret_key_path();
         assert!(secret_path.to_string_lossy().contains(".minisign"));
@@ -449,6 +451,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_minisign_config_dir_override() {
         use std::env;
 
@@ -473,6 +476,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_minisign_config_dir_fallback_to_home() {
         use std::env;
 
