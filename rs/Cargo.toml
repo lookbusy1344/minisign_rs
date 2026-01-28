@@ -7,28 +7,32 @@ license = "ISC"
 description = "A dead simple Rust tool to sign files and verify signatures"
 
 [dependencies]
-ed25519-dalek = { version = "2", features = ["rand_core"] }
-blake2 = "0.10"
-scrypt = "0.11"
-rand = "0.8"  # 0.9 available but causes compatibility issues
-base64 = "0.22"
-clap = { version = "4.5", features = ["derive"] }
-thiserror = "2"
-zeroize = { version = "1", features = ["derive"] }
-rpassword = "7"
-dirs = "6"
-getrandom = "0.3"
-is-terminal = "0.4"
-subtle = "2.6"
-git-version = "0.3"
+# Cryptographic dependencies - pinned with tilde (~) for patch updates only
+# This prevents unexpected changes while allowing critical security patches
+ed25519-dalek = { version = "~2.2.0", features = ["rand_core"] }
+blake2 = "~0.10.6"
+scrypt = "~0.11.0"
+zeroize = { version = "~1.8.2", features = ["derive"] }
+subtle = "~2.6.1"
+getrandom = "~0.3.4"
+
+# Other dependencies - using tilde for stability
+rand = "~0.8.5"  # 0.9 available but causes compatibility issues
+base64 = "~0.22.1"
+clap = { version = "~4.5.55", features = ["derive"] }
+thiserror = "~2.0.18"
+rpassword = "~7.4.0"
+dirs = "~6.0.0"
+is-terminal = "~0.4.17"
+git-version = "~0.3.9"
 
 [dev-dependencies]
-assert_cmd = "2"
-predicates = "3"
-tempfile = "3"
-proptest = "1"
-hex = "0.4"
-serial_test = "3"
+assert_cmd = "~2.0"
+predicates = "~3.1"
+tempfile = "~3.15"
+proptest = "~1.6"
+hex = "~0.4.3"
+serial_test = "~3.2"
 
 [[bin]]
 name = "minisign_rs"

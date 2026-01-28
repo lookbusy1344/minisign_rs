@@ -22,6 +22,15 @@ cargo test -- --ignored       # Slow security tests (~16s)
 ```
 **Note:** `cargo fmt` MUST be the last formatting step before commit to ensure consistent style.
 
+## Security Auditing
+**Run periodically (weekly or before releases):**
+```bash
+cargo audit                   # Check for known vulnerabilities in dependencies
+```
+Install with: `cargo install cargo-audit`
+
+After dependency updates, always run full test suite and audit.
+
 ## Key Locations
 ```
 src/
@@ -51,6 +60,18 @@ tests/
 - `subtle` - Constant-time comparisons
 
 Do not add other crypto libs.
+
+## Dependency Management
+**All dependencies use tilde requirements** (`~x.y.z`) to allow only patch updates.
+This prevents unexpected breaking changes while still receiving critical security patches.
+
+Example: `~2.2.0` allows `2.2.x` but blocks `2.3.0`
+
+When updating dependencies:
+1. Review changelogs for breaking changes
+2. Update version in Cargo.toml
+3. Run full test suite including slow tests
+4. Run `cargo audit` to check for vulnerabilities
 
 ## Documentation
 - `README.md` - User docs
