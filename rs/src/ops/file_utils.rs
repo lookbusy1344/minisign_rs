@@ -5,6 +5,10 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
+/// Unix file permissions for secret key files (read/write for owner only)
+#[cfg(unix)]
+const SECRET_KEY_FILE_PERMISSIONS: u32 = 0o600;
+
 /// Load a secret key from a file
 ///
 /// # Errors
@@ -55,7 +59,7 @@ pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600); // Read/write for owner only
+        options.mode(SECRET_KEY_FILE_PERMISSIONS);
     }
 
     let mut file = options.open(path).map_err(|e| {
