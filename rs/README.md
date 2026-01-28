@@ -168,6 +168,22 @@ minisign_rs -G -W
 minisign_rs -G -f
 ```
 
+**Password Strength Recommendations:**
+
+When generating password-protected keys, use a strong password:
+
+- **Minimum**: 16 characters with mixed case, numbers, and symbols
+- **Recommended**: 20+ character passphrase or randomly generated password
+- **Best**: Use a password manager to generate and store a unique 32+ character password
+
+While minisign-rs uses strong key derivation parameters (scrypt N=2^20, requiring ~1GB memory and 1-5 seconds per attempt), weak passwords still significantly reduce security. An attacker with your encrypted key file can perform offline brute-force attacks.
+
+**Examples of weak passwords to avoid:**
+- Dictionary words ("password", "minisign")
+- Personal information (names, dates, addresses)
+- Simple patterns ("123456", "qwerty", "abc123")
+- Short passwords (<12 characters)
+
 #### Sign a file
 
 ```bash
