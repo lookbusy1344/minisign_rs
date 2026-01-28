@@ -19,27 +19,27 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: minisign_rs
-            asset_name: minisign-linux-x86_64
+            asset_name: minisign_rs-linux-x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             artifact_name: minisign_rs
-            asset_name: minisign-linux-x86_64-musl
+            asset_name: minisign_rs-linux-x86_64-musl
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: minisign_rs
-            asset_name: minisign-macos-x86_64
+            asset_name: minisign_rs-macos-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: minisign_rs
-            asset_name: minisign-macos-aarch64
+            asset_name: minisign_rs-macos-aarch64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: minisign_rs.exe
-            asset_name: minisign-windows-x86_64.exe
+            asset_name: minisign_rs-win-x86_64.exe
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             artifact_name: minisign_rs.exe
-            asset_name: minisign-windows-aarch64.exe
+            asset_name: minisign_rs-win-aarch64.exe
 
     defaults:
       run:
