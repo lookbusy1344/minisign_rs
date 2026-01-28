@@ -127,7 +127,7 @@ impl KeyNum {
     /// Returns an error if the system random number generator fails
     pub fn generate() -> Result<Self> {
         let mut bytes = [0u8; KEYNUM_BYTES];
-        getrandom::getrandom(&mut bytes).map_err(|e| Error::RngError(e.to_string()))?;
+        getrandom::fill(&mut bytes).map_err(|e| Error::RngError(e.to_string()))?;
         Ok(Self(bytes))
     }
 

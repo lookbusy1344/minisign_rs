@@ -148,7 +148,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpassword";
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -194,7 +194,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"testpassword";
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -236,7 +236,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"correctpassword";
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;

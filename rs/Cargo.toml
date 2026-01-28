@@ -17,7 +17,7 @@ thiserror = "1"
 zeroize = { version = "1", features = ["derive"] }
 rpassword = "7"
 dirs = "6"
-getrandom = "0.2"
+getrandom = "0.3"
 is-terminal = "0.4"
 subtle = "2.6.1"
 git-version = "0.3"

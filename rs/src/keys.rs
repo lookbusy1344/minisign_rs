@@ -1287,7 +1287,7 @@ mod tests {
 
         let password = b"test password";
         let mut salt = [0u8; KDF_SALT_BYTES];
-        getrandom::getrandom(&mut salt).expect("RNG should work");
+        getrandom::fill(&mut salt).expect("RNG should work");
 
         let encrypted = SeckeyStruct::new_encrypted(
             keynum,
@@ -1349,7 +1349,7 @@ mod tests {
 
         let password = b"test password";
         let mut salt = [0u8; KDF_SALT_BYTES];
-        getrandom::getrandom(&mut salt).expect("RNG should work");
+        getrandom::fill(&mut salt).expect("RNG should work");
 
         let encrypted = SeckeyStruct::new_encrypted(
             keynum,
@@ -1387,7 +1387,7 @@ mod tests {
 
         let password = b"test password";
         let mut salt = [0u8; KDF_SALT_BYTES];
-        getrandom::getrandom(&mut salt).expect("RNG should work");
+        getrandom::fill(&mut salt).expect("RNG should work");
 
         // With allow_fallback=false, should succeed on systems with sufficient memory
         // This test primarily validates that the API signature exists and works
@@ -1423,7 +1423,7 @@ mod tests {
 
         let password = b"test password";
         let mut salt = [0u8; KDF_SALT_BYTES];
-        getrandom::getrandom(&mut salt).expect("RNG should work");
+        getrandom::fill(&mut salt).expect("RNG should work");
 
         // With allow_fallback=true, should succeed (either directly or via fallback)
         let result = SeckeyStruct::new_encrypted(

@@ -96,7 +96,7 @@ fn change_with_log_n(
 
         // Generate new salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
+        getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
         #[cfg(debug_assertions)]
@@ -167,7 +167,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let old_password = b"oldpassword";
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -225,7 +225,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"password";
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -313,7 +313,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"password";
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -355,7 +355,7 @@ mod tests {
         let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
         let password = b"correctpassword";
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
 
         let n = 1u64 << 14;
         let r = 8u64;
@@ -462,7 +462,7 @@ mod tests {
 
         // Create a normal production-strength key
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).unwrap();
+        getrandom::fill(&mut kdf_salt).unwrap();
         let seckey = SeckeyStruct::new_encrypted(
             keynum,
             &secret_key,

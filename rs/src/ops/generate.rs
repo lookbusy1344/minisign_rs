@@ -102,7 +102,7 @@ fn generate_with_log_n(
 
         // Generate random salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        getrandom::getrandom(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
+        getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
         #[cfg(debug_assertions)]
