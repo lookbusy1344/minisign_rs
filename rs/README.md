@@ -271,6 +271,82 @@ minisign_rs --sign --input file.txt --secretkey-path key.key --trusted-comment "
 minisign_rs --sign -m file.txt --secretkey-path key.key -t "v1.0"
 ```
 
+## Signature File Format
+
+When you sign a file, minisign creates a `.minisig` file containing the signature. This file always has exactly 4 lines:
+
+1. **Untrusted comment**: A human-readable comment (not cryptographically protected)
+2. **Signature data**: Base64-encoded signature of the file (104 bytes encoded)
+3. **Trusted comment**: A cryptographically verified comment (protected by the global signature)
+4. **Global signature**: Base64-encoded signature of the signature data + trusted comment (64 bytes encoded)
+
+### Example
+
+```
+untrusted comment: signature from minisign secret key
+RUTiTQTzgPA5DzP/wOBLB7dRwO6ESwgfRtf3ENYre99SWbTGqW3tkHFyRb9CURsRUTiTQTzgPA5DzPQek7H3dORUTiTQTzgPA5DzP0nas=
+trusted comment: This is a trusted comment 28 Jan 19:41 from RS version of minisign_rs
+jJMOhmlCCf8IXYx5GF0078887Qwl0Om17hYjkI2RUTiTQTzgPA5DzP0sd04pph8pI2XYtQ9EtIuERUTiTQTzgP==
+```
+
+### Line-by-Line Breakdown
+
+#### Line 1: Untrusted Comment
+```
+untrusted comment: signature from minisign secret key
+```
+
+- Can contain any text (user-customizable with `-c` flag)
+- **Not cryptographically verified** - can be modified without detection
+- Use case: Human-readable context about the signature
+- Should not be trusted for authenticity decisions
+
+#### Line 2: Signature Data
+```
+RUTiTQTzgPA5DzP/wOBLB7dRwO6ESwgfRtf3ENYre99SWbTGqW3tkHFyRb9CURsRUTiTQTzgPA5DzPQek7H3dORUTiTQTzgPA5DzP0nas=
+```
+
+- Base64-encoded signature (104 bytes total when decoded)
+- Contains:
+  - 2-byte signature algorithm ID
+  - 8-byte key ID (matches the public key)
+  - 64-byte Ed25519 signature of the file
+  - 30 bytes of additional metadata
+- This is what cryptographically binds the signature to the file
+
+#### Line 3: Trusted Comment
+```
+trusted comment: This is a trusted comment 28 Jan 19:41 from RS version of minisign_rs
+```
+
+- Can contain any text (user-customizable with `-t` flag)
+- **Cryptographically verified** - protected by the global signature (line 4)
+- Default includes timestamp: `timestamp:TIMESTAMP`
+- Recommended for version numbers, release notes, or verified metadata
+- Tampering with this line will cause verification to fail
+
+#### Line 4: Global Signature
+```
+jJMOhmlCCf8IXYx5GF0078887Qwl0Om17hYjkI2RUTiTQTzgPA5DzP0sd04pph8pI2XYtQ9EtIuERUTiTQTzgP==
+```
+
+- Base64-encoded Ed25519 signature (64 bytes when decoded)
+- Signs: (Line 2 signature data) + (Line 3 trusted comment)
+- This is what makes the trusted comment cryptographically verifiable
+- Provides two-tier signature verification:
+  1. Line 2 verifies the file hasn't been modified
+  2. Line 4 verifies the trusted comment hasn't been modified
+
+### Security Model
+
+The two-tier signature system provides:
+
+1. **File authenticity**: Line 2 signature proves the file was signed by the key holder
+2. **Comment authenticity**: Line 4 signature proves the trusted comment came from the key holder
+3. **Comment flexibility**: Line 1 untrusted comment can be changed for local annotation without breaking verification
+
+**Important**: Only the trusted comment (line 3) is cryptographically protected. Never make security decisions based on the untrusted comment (line 1).
+
 ## Configuration
 
 ### Environment Variables
