@@ -10,7 +10,7 @@ description = "A dead simple Rust tool to sign files and verify signatures"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 blake2 = "0.10"
 scrypt = "0.11"
-rand = "0.8"
+rand = "0.8"  # 0.9 available but causes compatibility issues
 base64 = "0.22"
 clap = { version = "4.5", features = ["derive"] }
 thiserror = "2"
