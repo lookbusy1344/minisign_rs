@@ -73,6 +73,10 @@ pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
 
+    // Ensure data is durably written to disk before returning success
+    // This prevents data loss if the system crashes immediately after key generation
+    file.sync_all().map_err(|e| Error::file_write(path, e))?;
+
     Ok(())
 }
 
@@ -115,6 +119,9 @@ pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool
 
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
+
+    // Ensure data is durably written to disk before returning success
+    file.sync_all().map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
 }
