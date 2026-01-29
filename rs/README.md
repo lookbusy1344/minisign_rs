@@ -283,27 +283,27 @@ When you sign a file, minisign creates a `.minisig` file containing the signatur
 ### Example
 
 ```
-untrusted comment: signature from minisign secret key
-RUTiTQTzgPA5DzP/wOBLB7dRwO6ESwgfRtf3ENYre99SWbTGqW3tkHFyRb9CURsRUTiTQTzgPA5DzPQek7H3dORUTiTQTzgPA5DzP0nas=
-trusted comment: This is a trusted comment 28 Jan 19:41 from RS version of minisign_rs
-jJMOhmlCCf8IXYx5GF0078887Qwl0Om17hYjkI2RUTiTQTzgPA5DzP0sd04pph8pI2XYtQ9EtIuERUTiTQTzgP==
+untrusted comment: created with -c, --untrusted-comment this is not protected by any signatures
+RUTiTgPA5DzP/wOBQTz ==== SIGNATURE OF EXTERNAL FILE ==== LB7dRwO6ESwgfRtf3ENYreCURsRUT==
+trusted comment: This is a trusted comment created with -t, --trusted-comment and protected by the global signature below
+XYMOhmlCCf8IXYx5GF0 ==== GLOBAL SIGNATURE OF WHOLE FILE ==== 078887I2RUTiTQTzgPA5DzP0s==
 ```
 
 ### Line-by-Line Breakdown
 
 #### Line 1: Untrusted Comment
 ```
-untrusted comment: signature from minisign secret key
+untrusted comment: created with -c, --untrusted-comment this is not protected by any signatures
 ```
 
-- Can contain any text (user-customizable with `-c` flag)
+- Can contain any text (user-customizable with `-c` or `--untrusted-comment`)
 - **Not cryptographically verified** - can be modified without detection
 - Use case: Human-readable context about the signature
-- Should not be trusted for authenticity decisions
+- Should **not be trusted** for authenticity decisions
 
-#### Line 2: Signature Data
+#### Line 2: Signature of external file
 ```
-RUTiTQTzgPA5DzP/wOBLB7dRwO6ESwgfRtf3ENYre99SWbTGqW3tkHFyRb9CURsRUTiTQTzgPA5DzPQek7H3dORUTiTQTzgPA5DzP0nas=
+RUTiTgPA5DzP/wOBQTz ==== SIGNATURE OF EXTERNAL FILE ==== LB7dRwO6ESwgfRtf3ENYreCURsRUT==
 ```
 
 - Base64-encoded signature (104 bytes total when decoded)
@@ -316,18 +316,18 @@ RUTiTQTzgPA5DzP/wOBLB7dRwO6ESwgfRtf3ENYre99SWbTGqW3tkHFyRb9CURsRUTiTQTzgPA5DzPQe
 
 #### Line 3: Trusted Comment
 ```
-trusted comment: This is a trusted comment 28 Jan 19:41 from RS version of minisign_rs
+trusted comment: This is a trusted comment created with -t, --trusted-comment and protected by the global signature below
 ```
 
-- Can contain any text (user-customizable with `-t` flag)
+- Can contain any text (user-customizable with `-t` or `--trusted-comment` flag)
 - **Cryptographically verified** - protected by the global signature (line 4)
 - Default includes timestamp: `timestamp:TIMESTAMP`
 - Recommended for version numbers, release notes, or verified metadata
-- Tampering with this line will cause verification to fail
+- Tampering with this line will cause verification to fail thanks to the global signature
 
-#### Line 4: Global Signature
+#### Line 4: Global Signature of whole minisig file
 ```
-jJMOhmlCCf8IXYx5GF0078887Qwl0Om17hYjkI2RUTiTQTzgPA5DzP0sd04pph8pI2XYtQ9EtIuERUTiTQTzgP==
+XYMOhmlCCf8IXYx5GF0 ==== GLOBAL SIGNATURE OF WHOLE FILE ==== 078887I2RUTiTQTzgPA5DzP0s==
 ```
 
 - Base64-encoded Ed25519 signature (64 bytes when decoded)
@@ -335,7 +335,7 @@ jJMOhmlCCf8IXYx5GF0078887Qwl0Om17hYjkI2RUTiTQTzgPA5DzP0sd04pph8pI2XYtQ9EtIuERUTi
 - This is what makes the trusted comment cryptographically verifiable
 - Provides two-tier signature verification:
   1. Line 2 verifies the file hasn't been modified
-  2. Line 4 verifies the trusted comment hasn't been modified
+  2. Line 4 verifies the whole minisig file hasn't been modified
 
 ### Security Model
 
