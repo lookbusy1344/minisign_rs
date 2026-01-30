@@ -950,3 +950,263 @@ fn test_circular_symlink_handling() {
         "Should fail gracefully with circular symlink"
     );
 }
+
+/// Test comments with zero-width joiners (ZWJ)
+///
+/// Zero-width joiners can be used to create alternative representations
+/// of characters. This test ensures they're handled correctly.
+#[test]
+fn test_unicode_zero_width_joiners() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Zero-width joiner (U+200D) between characters
+    let zwj_comment = "Test\u{200D}Comment";
+    assert!(zwj_comment.len() > zwj_comment.chars().count()); // Multi-byte
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some(zwj_comment.to_string()),
+        untrusted_comment: None,
+        force: true,
+    };
+
+    let result = sign(&sign_opts, None).expect("Should sign with ZWJ in comment");
+    assert!(result.trusted_comment.contains('\u{200D}'));
+}
+
+/// Test comments with right-to-left (RTL) override characters
+///
+/// RTL override characters can change text display direction, potentially
+/// causing confusion or spoofing attacks in comment display.
+#[test]
+fn test_unicode_rtl_override() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Right-to-left override (U+202E)
+    let rtl_comment = "Test\u{202E}Override";
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some(rtl_comment.to_string()),
+        untrusted_comment: None,
+        force: true,
+    };
+
+    let result = sign(&sign_opts, None).expect("Should sign with RTL override");
+    assert!(result.trusted_comment.contains('\u{202E}'));
+
+    // Verify signature works despite RTL
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify signature with RTL comment");
+}
+
+/// Test comments with homoglyphs (visually similar characters)
+///
+/// Homoglyphs can be used for spoofing. This test ensures they're stored
+/// and retrieved correctly without normalization.
+#[test]
+fn test_unicode_homoglyphs() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Cyrillic 'а' (U+0430) looks like Latin 'a' (U+0061)
+    // Greek 'ο' (U+03BF) looks like Latin 'o' (U+006F)
+    let homoglyph_comment = "Test with Cyrillic а and Greek ο";
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some(homoglyph_comment.to_string()),
+        untrusted_comment: None,
+        force: true,
+    };
+
+    let result = sign(&sign_opts, None).expect("Should sign with homoglyphs");
+
+    // Verify exact preservation (no Unicode normalization)
+    assert_eq!(result.trusted_comment, homoglyph_comment);
+    assert!(result.trusted_comment.contains('а')); // Cyrillic а
+    assert!(result.trusted_comment.contains('ο')); // Greek ο
+}
+
+/// Test multi-byte characters at exact byte limit
+///
+/// This tests the interaction between byte limits and multi-byte UTF-8
+/// encoding to ensure proper boundary handling.
+#[test]
+fn test_unicode_multibyte_at_byte_limit() {
+    use minisign::constants::{TRUSTED_COMMENT_PREFIX_SIZE, TRUSTEDCOMMENTMAXBYTES};
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Create comment that's just under limit with ASCII, then add multi-byte char
+    let max_bytes = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1;
+
+    // Fill with ASCII 'a' characters, leaving room for one 3-byte character
+    let ascii_part = "a".repeat(max_bytes - 3);
+
+    // Add a 3-byte UTF-8 character (Euro sign: €, U+20AC = 0xE2 0x82 0xAC)
+    let comment_with_multibyte = format!("{ascii_part}€");
+
+    // Should be exactly at the byte limit
+    assert_eq!(comment_with_multibyte.len(), max_bytes);
+    assert!(comment_with_multibyte.chars().count() < comment_with_multibyte.len());
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some(comment_with_multibyte.clone()),
+        untrusted_comment: None,
+        force: true,
+    };
+
+    let result = sign(&sign_opts, None).expect("Should sign with multi-byte char at byte limit");
+    assert_eq!(result.trusted_comment, comment_with_multibyte);
+}
+
+/// Test comment that exceeds byte limit when last character is multi-byte
+///
+/// Ensures that adding a multi-byte character that would exceed the limit
+/// is properly rejected.
+#[test]
+fn test_unicode_multibyte_exceeds_limit() {
+    use minisign::constants::{TRUSTED_COMMENT_PREFIX_SIZE, TRUSTEDCOMMENTMAXBYTES};
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Create comment at max length with ASCII, then add 2-byte character
+    let max_bytes = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1;
+    let ascii_part = "a".repeat(max_bytes);
+
+    // Add a 2-byte UTF-8 character (Latin small letter e with acute: é, U+00E9)
+    let too_long_comment = format!("{ascii_part}é");
+
+    // Should exceed byte limit
+    assert!(too_long_comment.len() > max_bytes);
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some(too_long_comment),
+        untrusted_comment: None,
+        force: true,
+    };
+
+    let result = sign(&sign_opts, None);
+    assert!(
+        result.is_err(),
+        "Should reject comment exceeding byte limit with multi-byte char"
+    );
+}

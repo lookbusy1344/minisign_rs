@@ -285,13 +285,25 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 ---
 
-### TEST-6: No Unicode Edge Case Tests (🟡 Medium)
+### TEST-6: No Unicode Edge Case Tests (🟡 Medium) ✅ COMPLETED
+
+**Status:** Tests added in commit [pending]
 
 **Issue:** Comment validation tests UTF-8 but missing:
 - Comments with zero-width joiners
 - Comments with RTL override characters
 - Comments with homoglyphs
 - Comments at exactly the byte limit but with multi-byte characters
+
+**Resolution:** Added five comprehensive Unicode edge case tests:
+- `test_unicode_zero_width_joiners` - Tests Zero-Width Joiner (U+200D) characters
+- `test_unicode_rtl_override` - Tests Right-to-Left Override (U+202E) characters
+- `test_unicode_homoglyphs` - Tests visually similar characters (Cyrillic 'а', Greek 'ο') without normalization
+- `test_unicode_multibyte_at_byte_limit` - Tests 3-byte UTF-8 character (€) at exact byte limit
+- `test_unicode_multibyte_exceeds_limit` - Tests rejection when multi-byte character exceeds limit
+
+These tests verify correct handling of potentially problematic Unicode characters and
+proper byte-vs-character-count handling at limits.
 
 ---
 
@@ -509,8 +521,8 @@ const SECKEY_KDF_ALG_OFFSET: usize = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE
 | ID | Issue | Effort | Priority | Status |
 |----|-------|--------|----------|--------|
 | QUALITY-1 | Centralize scrypt constants | 30 min | 🟡 Medium | ✅ Fixed (c065da3) |
-| SEC-2 | Document unencrypted checksum | 15 min | 🟡 Medium | ✅ Done |
-| TEST-6 | Unicode edge case tests | 1 hr | 🟡 Medium | ⏳ Pending |
+| SEC-2 | Document unencrypted checksum | 15 min | 🟡 Medium | ✅ Done (37da80a) |
+| TEST-6 | Unicode edge case tests | 1 hr | 🟡 Medium | ✅ Done |
 | QUALITY-4 | Simplify UTF-8 validation | 30 min | 🔵 Low | ⏳ Pending |
 | QUALITY-2 | Standardize error messages | 1 hr | 🔵 Low | ⏳ Pending |
 
