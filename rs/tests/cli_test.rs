@@ -1254,3 +1254,45 @@ fn test_short_and_long_names_equivalent() {
         .success()
         .stdout(predicate::str::contains("verified"));
 }
+
+#[test]
+fn test_force_long_option() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    // Generate initial keypair
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Generate again without force should fail
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .failure();
+
+    // Generate with --force (long option) should succeed
+    minisign_cmd()
+        .arg("-G")
+        .arg("--force")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+}

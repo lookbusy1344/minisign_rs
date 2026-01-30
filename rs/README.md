@@ -137,7 +137,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-H` | | Sign or verify a prehashed file |
 | `-q` | `--quiet` | Quiet mode (minimal output) |
 | `-Q` | | Pretty quiet mode (show only trusted comment) |
-| `-f` | | Force overwrite of existing files |
+| `-f` | `--force` | Force overwrite of existing files |
 | `-o` | `--output` | Output verification result to stdout |
 | `-W` | | Do not use password (generate and change only) |
 

@@ -43,7 +43,7 @@ minisign_rs -V [-H] [-x sig_file] [-p pubkey_file | -P pubkey] [-o] [-q] -m file
 -t <comment>      add a one-line trusted comment\n\
 -q                quiet mode, suppress output\n\
 -Q                pretty quiet mode, only print the trusted comment\n\
--f                force. Combined with -G, overwrite a previous key pair\n\
+-f, --force       force. Combined with -G, overwrite a previous key pair\n\
 -v                display version number\n\n\
 {{usage-heading}} {{usage}}\n\n\
 {{all-args}}"
@@ -84,7 +84,7 @@ pub struct Cli {
     pub inspect: bool,
 
     /// Force overwrite existing files
-    #[arg(short = 'f')]
+    #[arg(short = 'f', long = "force")]
     pub force: bool,
 
     /// Sign or verify a prehashed file
