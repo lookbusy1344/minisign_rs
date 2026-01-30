@@ -106,7 +106,7 @@ use crate::constants::{
 /// - 10-41: `public_key` (32 bytes)
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PubkeyStruct {
-    pub keynum: KeyNum, // pub(crate) for unit tests
+    pub keynum: KeyNum,        // pub(crate) for unit tests
     pub public_key: PublicKey, // pub(crate) for unit tests
 }
 
@@ -276,7 +276,7 @@ pub struct SeckeyStruct {
     pub keynum: KeyNum, // pub(crate) for unit tests
     encrypted_keynum: [u8; KEYNUM_BYTES],
     pub secret_key_encrypted: [u8; SECRET_KEY_BYTES], // pub(crate) for unit tests
-    pub checksum: [u8; CHECKSUM_BYTES], // pub(crate) for unit tests
+    pub checksum: [u8; CHECKSUM_BYTES],               // pub(crate) for unit tests
 }
 
 impl SeckeyStruct {
@@ -584,7 +584,8 @@ impl SeckeyStruct {
 
     /// Compute the checksum (Blake2b-256 of keynum + `secret_key`)
     #[must_use]
-    pub fn compute_checksum( // pub for unit tests
+    pub fn compute_checksum(
+        // pub for unit tests
         keynum: KeyNum,
         secret_key: &[u8; SECRET_KEY_BYTES],
     ) -> [u8; CHECKSUM_BYTES] {
@@ -660,7 +661,8 @@ impl SeckeyStruct {
     /// - N value is 0 or cannot be calculated
     /// - `log_n` is out of valid range (0-255)
     /// - Arithmetic overflow occurs during calculation
-    pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> { // pub(crate) for unit tests
+    pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
+        // pub(crate) for unit tests
         // Standard minisign uses r=8, p=1
         // We can derive N from either formula, using memlimit is simpler
         let r = SCRYPT_R;
@@ -925,4 +927,3 @@ impl std::fmt::Debug for SeckeyStruct {
             .finish()
     }
 }
-

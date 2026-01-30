@@ -1,6 +1,6 @@
-use minisign::keys::*;
 use minisign::crypto::*;
 use minisign::errors::*;
+use minisign::keys::*;
 use rand::Rng;
 use std::fs;
 
@@ -21,8 +21,7 @@ fn test_parse_c_generated_public_key() {
         .expect("Failed to read test.pub fixture");
 
     // Parse the public key
-    let pubkey =
-        PubkeyStruct::from_file_contents(&contents).expect("Failed to parse public key");
+    let pubkey = PubkeyStruct::from_file_contents(&contents).expect("Failed to parse public key");
 
     // Verify structure - the actual values depend on the generated key,
     // but we can check that parsing succeeds and produces valid data
@@ -37,8 +36,7 @@ fn test_parse_c_generated_encrypted_secret_key() {
         .expect("Failed to read test.key fixture");
 
     // Parse the secret key structure
-    let seckey =
-        SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+    let seckey = SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
 
     // Verify it's encrypted
     assert!(seckey.is_encrypted(), "Expected key to be encrypted");
@@ -82,13 +80,11 @@ fn test_public_key_serialization_roundtrip() {
     let contents = fs::read_to_string("tests/fixtures/keys/test.pub")
         .expect("Failed to read test.pub fixture");
 
-    let original =
-        PubkeyStruct::from_file_contents(&contents).expect("Failed to parse public key");
+    let original = PubkeyStruct::from_file_contents(&contents).expect("Failed to parse public key");
 
     // Serialize to bytes and parse back
     let bytes = original.to_bytes();
-    let roundtrip =
-        PubkeyStruct::from_bytes(&bytes).expect("Failed to parse roundtripped bytes");
+    let roundtrip = PubkeyStruct::from_bytes(&bytes).expect("Failed to parse roundtripped bytes");
 
     // Verify they're identical
     assert_eq!(original.keynum().as_bytes(), roundtrip.keynum().as_bytes());
@@ -104,13 +100,11 @@ fn test_secret_key_serialization_roundtrip() {
     let contents = fs::read_to_string("tests/fixtures/keys/test.key")
         .expect("Failed to read test.key fixture");
 
-    let original =
-        SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+    let original = SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
 
     // Serialize to bytes and parse back
     let bytes = original.to_bytes();
-    let roundtrip =
-        SeckeyStruct::from_bytes(&bytes).expect("Failed to parse roundtripped bytes");
+    let roundtrip = SeckeyStruct::from_bytes(&bytes).expect("Failed to parse roundtripped bytes");
 
     // Verify they're identical
     assert_eq!(original.is_encrypted(), roundtrip.is_encrypted());
@@ -139,8 +133,8 @@ fn test_public_key_file_format_roundtrip() {
     assert!(file_contents.ends_with('\n'));
 
     // Parse back
-    let parsed = PubkeyStruct::from_file_contents(&file_contents)
-        .expect("Failed to parse file contents");
+    let parsed =
+        PubkeyStruct::from_file_contents(&file_contents).expect("Failed to parse file contents");
 
     assert_eq!(pubkey.keynum().as_bytes(), parsed.keynum().as_bytes());
     assert_eq!(
@@ -298,8 +292,7 @@ fn test_decrypt_c_generated_encrypted_key() {
     let contents = fs::read_to_string("tests/fixtures/keys/test.key")
         .expect("Failed to read test.key fixture");
 
-    let seckey =
-        SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+    let seckey = SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
 
     assert!(seckey.is_encrypted());
 
@@ -323,8 +316,7 @@ fn test_decrypt_c_generated_encrypted_key_wrong_password() {
     let contents = fs::read_to_string("tests/fixtures/keys/test.key")
         .expect("Failed to read test.key fixture");
 
-    let seckey =
-        SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+    let seckey = SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
 
     // Try with wrong password
     let result = seckey.decrypt(b"wrong_password");
@@ -340,8 +332,7 @@ fn test_get_c_generated_unencrypted_key() {
     let contents = fs::read_to_string("tests/fixtures/keys/unencrypted.key")
         .expect("Failed to read unencrypted.key fixture");
 
-    let seckey =
-        SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+    let seckey = SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
 
     assert!(!seckey.is_encrypted());
 

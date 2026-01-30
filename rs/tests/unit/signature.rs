@@ -1,5 +1,5 @@
-use minisign::signature::*;
 use minisign::crypto::*;
+use minisign::signature::*;
 #[test]
 fn test_sig_struct_size() {
     assert_eq!(SIG_STRUCT_SIZE, 74);

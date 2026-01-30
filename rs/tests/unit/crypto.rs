@@ -37,9 +37,8 @@ fn test_secret_key_debug() {
 fn test_blake2b_256_known_vector() {
     // Test vector: empty input (Blake2b-256)
     let hash = blake2b_256(b"");
-    let expected =
-        hex::decode("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8")
-            .expect("invalid hex");
+    let expected = hex::decode("0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8")
+        .expect("invalid hex");
     assert_eq!(hash.as_slice(), expected.as_slice());
 }
 
@@ -47,9 +46,8 @@ fn test_blake2b_256_known_vector() {
 fn test_blake2b_256_hello() {
     // Test vector: "hello" (Blake2b-256)
     let hash = blake2b_256(b"hello");
-    let expected =
-        hex::decode("324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf")
-            .expect("invalid hex");
+    let expected = hex::decode("324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf")
+        .expect("invalid hex");
     assert_eq!(hash.as_slice(), expected.as_slice());
 }
 
