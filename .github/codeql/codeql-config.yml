@@ -17,9 +17,8 @@ query-filters:
   - exclude:
       id: rust/hardcoded-credentials
       tags: test
-  # Blanket suppression for hard-coded-cryptographic-value
-  # All current alerts are test code with hardcoded passwords/salts in #[cfg(test)] modules
-  # CodeQL cannot distinguish #[cfg(test)] blocks from production code, so we disable entirely
-  # Real issues will be caught in code review (project uses strict TDD and security practices)
   - exclude:
       id: rust/hard-coded-cryptographic-value
+      paths:
+        - rs/tests/**
+        - '**/test*.rs'
