@@ -3,6 +3,7 @@
 //! Tests for boundary conditions and unusual inputs
 
 use minisign::ops::{
+    change::{ChangeOptions, change},
     generate::{GenerateOptions, generate},
     sign::{SignOptions, sign},
     verify::{PublicKeySource, VerifyOptions, verify},
@@ -317,4 +318,159 @@ fn test_symlink_handling() {
         quiet: true,
     };
     verify(&verify_opts2).expect("Should verify real file with symlink signature");
+}
+
+/// Test generating a key with an empty password
+#[test]
+fn test_generate_key_with_empty_password() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    // Generate key with empty password
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: false, // Password is required
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: true, // Use weak KDF for faster test
+    };
+
+    // Empty password should work
+    generate(&gen_opts, Some(b"")).expect("Should generate key with empty password");
+
+    // Verify the key was created
+    assert!(secret_key.exists(), "Secret key should be created");
+    assert!(public_key.exists(), "Public key should be created");
+
+    // Sign with the key using empty password
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+
+    // Should be able to sign with empty password
+    sign(&sign_opts, Some(b"")).expect("Should sign with empty password");
+
+    // Verify the signature
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify signature created with empty password");
+}
+
+/// Test changing password from non-empty to empty
+#[test]
+fn test_change_password_to_empty() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    // Generate key with non-empty password
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: false,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: true,
+    };
+    generate(&gen_opts, Some(b"original_password")).expect("Failed to generate key");
+
+    // Change password to empty
+    let change_opts = ChangeOptions {
+        secret_key_file: secret_key.clone(),
+        remove_password: false, // Not removing, just changing
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: true,
+    };
+
+    change(&change_opts, Some(b"original_password"), Some(b""))
+        .expect("Should change password to empty");
+
+    // Sign with empty password
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    fs::write(&message_file, b"Test").expect("Failed to write message");
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+
+    sign(&sign_opts, Some(b"")).expect("Should sign with new empty password");
+}
+
+/// Test changing password from empty to non-empty
+#[test]
+fn test_change_password_from_empty() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    // Generate key with empty password
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: false,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: true,
+    };
+    generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
+
+    // Change from empty password to non-empty
+    let change_opts = ChangeOptions {
+        secret_key_file: secret_key.clone(),
+        remove_password: false,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: true,
+    };
+
+    change(&change_opts, Some(b""), Some(b"new_password"))
+        .expect("Should change from empty to non-empty password");
+
+    // Sign with new password
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    fs::write(&message_file, b"Test").expect("Failed to write message");
+
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+
+    sign(&sign_opts, Some(b"new_password")).expect("Should sign with new non-empty password");
 }
