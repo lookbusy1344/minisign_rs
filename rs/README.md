@@ -29,17 +29,17 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **320 total tests** covering all operations and CLI behavior
-- **217 unit tests** covering all crypto operations, key handling, and file formats
-- **42 CLI integration tests** using assert_cmd for end-to-end validation
-- **7 compatibility tests** verifying interoperability with C minisign
-- **18 cross-binary tests** ensuring full C minisign compatibility
-- **6 edge case tests** for unicode, symlinks, and large files
-- **8 fuzzing tests** using proptest for property-based testing
-- **6 concurrent access tests** for multi-process safety
+- **366 total tests** covering all operations and CLI behavior
+- Comprehensive unit tests covering all crypto operations, key handling, and file formats
+- CLI integration tests using assert_cmd for end-to-end validation
+- Compatibility tests verifying interoperability with C minisign
+- Cross-binary tests ensuring full C minisign compatibility
+- Edge case tests for unicode, symlinks, and large files
+- Fuzzing tests using proptest for property-based testing
+- Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** using optimized scrypt parameters (~10 seconds)
-- **Slow test suite** with production scrypt parameters (~11 seconds)
+- **Fast test suite** (355 tests) using optimized scrypt parameters (~10 seconds)
+- **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
@@ -76,13 +76,13 @@ Release binaries are available for:
 # Build the project
 cargo build --release
 
-# Run tests (fast - 309 tests, ~10 seconds)
+# Run tests (fast - 355 tests, ~10 seconds)
 cargo test
 
 # Run slow security tests (11 tests, ~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (320 tests, ~21 seconds)
+# Run all tests (366 tests, ~21 seconds)
 cargo test && cargo test -- --ignored
 
 # Check code quality
@@ -385,8 +385,8 @@ cargo run -- -G
 
 **Optional (for full test suite):**
 - **C minisign** (for compatibility and cross-binary tests): `brew install minisign`
-  - Without C minisign: ~313 tests run (skips 7 compatibility tests)
-  - With C minisign: All 320 tests run
+  - Without C minisign: ~359 tests run (skips 7 compatibility tests)
+  - With C minisign: All 366 tests run
 
 Most development can be done without C minisign installed. Install it only when you need to verify cross-compatibility or run the full test suite.
 
@@ -420,7 +420,7 @@ See `tests/fixtures/keys/README.md` for complete details.
 
 The project uses a dual testing strategy for operations involving scrypt:
 
-- **Fast tests** (309 tests, default): Use N=2^14 (~50ms per operation)
+- **Fast tests** (355 tests, default): Use N=2^14 (~50ms per operation)
 - **Slow tests** (11 tests, `#[ignore]`): Use N=2^20 (~1-5s per operation)
 
 Fast tests provide rapid feedback during development, while slow tests verify production security parameters work correctly. With recent performance improvements, slow tests now complete in ~11 seconds.
