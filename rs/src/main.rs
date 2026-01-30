@@ -10,6 +10,7 @@ use minisign::{
 };
 use std::io::{self, Write};
 use std::process;
+use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
 fn main() {
@@ -447,8 +448,9 @@ fn prompt_password_with_confirmation(
     let password1 = prompt_password("Password: ", None)?;
     let password2 = prompt_password("Password (one more time): ", None)?;
 
-    // Compare passwords (constant-time comparison via byte equality)
-    if password1.as_bytes() != password2.as_bytes() {
+    // Compare passwords (constant-time comparison to prevent timing attacks)
+    let passwords_match: bool = password1.as_bytes().ct_eq(password2.as_bytes()).into();
+    if !passwords_match {
         return Err(Error::PasswordMismatch);
     }
 
