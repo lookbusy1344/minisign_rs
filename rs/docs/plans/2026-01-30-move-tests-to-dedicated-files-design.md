@@ -56,13 +56,20 @@ Each unit test file will import from the main crate using `use minisign_rs::*;` 
 
 ## Migration Phases
 
-### Phase 1: Core Cryptography (3 files, ~1,314 lines)
+### Phase 1: Core Cryptography (3 files, ~1,314 lines) ✅ COMPLETED
 
-- `crypto.rs` - 17 tests, ~272 lines (derive_key, blake2b, signing primitives)
-- `keys.rs` - 37 tests, ~790 lines (key encryption, parsing, serialization)
-- `signature.rs` - 15 tests, ~252 lines (signature parsing, validation)
+- ✅ `crypto.rs` - 17 tests, ~272 lines (derive_key, blake2b, signing primitives)
+- ✅ `keys.rs` - 37 tests, ~790 lines (key encryption, parsing, serialization)
+- ✅ `signature.rs` - 15 tests, ~252 lines (signature parsing, validation)
 
 **Rationale:** These are the foundation - all other modules depend on them. Moving these first ensures crypto correctness is maintained.
+
+**Completion Notes:**
+- All 69 unit tests (17+37+15) successfully moved to `tests/unit/`
+- Made necessary items `pub` for external testing (fields, methods)
+- All tests passing (66 passed, 3 ignored slow tests)
+- Zero clippy warnings
+- Completed commits: 774d507, d582c5d, 107ba8a
 
 ### Phase 2: Operations (6 files, ~2,356 lines)
 
