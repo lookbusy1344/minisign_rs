@@ -97,6 +97,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
         println!();
+        // codeql[rust/cleartext-logging] - Public key is meant to be shared, not sensitive
         println!("minisign_rs -Vm <file> -P {}", result.public_key_base64);
     }
 
@@ -144,6 +145,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
     if !cli.quiet {
+        // codeql[rust/cleartext-logging] - Logging file path, not sensitive data
         println!("Signature written to {}", result.signature_file);
     }
 
@@ -336,16 +338,20 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     }
 
     // Display key information
+    // codeql[rust/cleartext-logging] - Logging non-sensitive key metadata only
     println!("Key Information:");
+    // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
     println!("├─ Key ID: {}", result.key_id);
 
     match result.key_type {
         KeyType::SecretEncrypted => {
             println!("├─ Encrypted: Yes");
+            // codeql[rust/cleartext-logging] - Logging algorithm name, not sensitive data
             println!("├─ KDF Algorithm: Scrypt");
 
             if let Some(kdf) = result.kdf_info {
                 println!("└─ KDF Parameters:");
+                // codeql[rust/cleartext-logging] - KDF parameters are public metadata, not sensitive
                 println!(
                     "   ├─ opslimit: {} (N=2^{}, r={}, p={})",
                     kdf.opslimit, kdf.log_n, kdf.r, kdf.p
@@ -359,6 +365,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
                 if kdf.is_fallback {
                     println!("   ├─ Creation: Fallback (reduced parameters)");
                     if let Some(multiplier) = kdf.weakness_multiplier {
+                        // codeql[rust/cleartext-logging] - Logging security strength metadata, not sensitive data
                         println!(
                             "   └─ Brute-force resistance: {multiplier}x weaker than production strength"
                         );
