@@ -11,7 +11,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ## Project Status
 
-**Production Ready** - Full Rust implementation with complete C minisign compatibility.
+**Version 1.0.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
@@ -45,7 +45,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **~8,800 lines** of well-documented Rust code (11,546 total with comments)
+- **9,647 lines** of well-documented Rust code (13,921 total with comments)
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
