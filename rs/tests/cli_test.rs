@@ -53,17 +53,16 @@ fn test_help_shows_correct_app_name() {
 
     let stdout = String::from_utf8_lossy(&output);
 
-    // Should show "minisign_rs" in the header, not just "minisign"
+    // Auto-generated help should show "minisign_rs" in the Usage line
     assert!(
-        stdout.contains("minisign_rs"),
-        "Help output should contain 'minisign_rs' but got:\n{stdout}"
+        stdout.contains("Usage: minisign_rs"),
+        "Help output should contain 'Usage: minisign_rs' but got:\n{stdout}"
     );
 
-    // The first line should start with "minisign_rs", not "minisign"
-    let first_line = stdout.lines().next().unwrap_or("");
+    // Should show the description
     assert!(
-        first_line.starts_with("minisign_rs"),
-        "First line should start with 'minisign_rs' but got: {first_line}"
+        stdout.contains("A dead simple Rust tool to sign files"),
+        "Help output should contain description but got:\n{stdout}"
     );
 }
 
@@ -611,11 +610,13 @@ fn test_version_includes_commit_hash() {
 
 #[test]
 fn test_help_shows_version() {
+    // The auto-generated help shows --version option, not the actual version number
     minisign_cmd()
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
+        .stdout(predicate::str::contains("--version"))
+        .stdout(predicate::str::contains("Show version"));
 }
 
 #[test]

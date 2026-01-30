@@ -14,48 +14,10 @@ const VERSION: &str = git_version!(
     fallback = "unknown"
 );
 
-fn help_template() -> String {
-    format!(
-        "minisign_rs {VERSION} - A dead simple Rust tool to sign files and verify signatures\n\n\
-Usage:\n\
-minisign_rs -G [-f] [-p pubkey_file] [-s seckey_file] [-W]\n\
-minisign_rs -R [-s seckey_file] [-p pubkey_file]\n\
-minisign_rs -K [-s seckey_file] [-W]\n\
-minisign_rs -I [-s seckey_file | -p pubkey_file]\n\
-minisign_rs -S [-l] [-x sig_file] [-s seckey_file] [-c untrusted_comment] [-t trusted_comment] -m file\n\
-minisign_rs -V [-H] [-x sig_file] [-p pubkey_file | -P pubkey] [-o] [-q] -m file\n\n\
--G, --generate    generate a new key pair\n\
--R, --recreate    recreate a public key file from a secret key file\n\
--K, --change-password  change/remove the password of the secret key\n\
--I, --inspect     inspect a key file and display security parameters\n\
--S, --sign        sign files\n\
--V, --verify      verify that a signature is valid for a given file\n\
--H, --prehashed   require input to be prehashed\n\
--l, --legacy      sign using the legacy format\n\
--m, --input <file>  file to sign/verify\n\
--o, --output      combined with -V, output the file content after verification\n\
--p, --publickey-path <pubkey_file>  public key file (default: ./minisign.pub)\n\
--P, --publickey <pubkey>  public key, as a base64 string\n\
--s, --secretkey-path <seckey_file>  secret key file (default: ~/.minisign/minisign.key)\n\
--W, --no-password do not encrypt/decrypt the secret key with a password\n\
--x, --signature <sigfile>  signature file (default: <file>.minisig)\n\
--c, --untrusted-comment <comment>  add a one-line untrusted comment\n\
--t, --trusted-comment <comment>  add a one-line trusted comment\n\
--q, --quiet       quiet mode, suppress output\n\
--Q, --pretty-quiet  pretty quiet mode, only print the trusted comment\n\
--f, --force       force. Combined with -G, overwrite a previous key pair\n\
--h, --help        display this help message\n\
--v, --version     display version number\n\n\
-{{usage-heading}} {{usage}}\n\n\
-{{all-args}}"
-    )
-}
-
 /// A dead simple Rust tool to sign files and verify signatures
 #[derive(Debug, Parser)]
 #[command(name = "minisign_rs")]
 #[command(version = VERSION)]
-#[command(help_template = help_template())]
 #[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]
 #[allow(clippy::struct_excessive_bools)]
