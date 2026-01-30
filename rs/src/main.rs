@@ -96,7 +96,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
         println!();
-        println!("minisign -Vm <file> -P {}", result.keynum_hex);
+        println!("minisign_rs -Vm <file> -P {}", result.public_key_base64);
     }
 
     Ok(())

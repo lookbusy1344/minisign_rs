@@ -7,6 +7,7 @@ use crate::{
     Result,
     crypto::generate_keypair,
     errors::Error,
+    formats::encode_base64,
     keys::{PubkeyStruct, SeckeyStruct},
 };
 use std::path::{Path, PathBuf};
@@ -49,6 +50,8 @@ pub struct GenerateResult {
     pub public_key_file: PathBuf,
     /// The keynum in hexadecimal format
     pub keynum_hex: String,
+    /// The full public key in base64 format (for -P flag)
+    pub public_key_base64: String,
 }
 
 /// Generate a new keypair
@@ -169,10 +172,14 @@ fn generate_with_log_n(
     let pubkey_contents = pubkey.to_file_contents(&comment);
     write_public_key_file(&options.public_key_file, &pubkey_contents, options.force)?;
 
+    // Encode the public key for command-line usage
+    let public_key_base64 = encode_base64(pubkey.to_bytes());
+
     Ok(GenerateResult {
         secret_key_file: options.secret_key_file.clone(),
         public_key_file: options.public_key_file.clone(),
         keynum_hex,
+        public_key_base64,
     })
 }
 
