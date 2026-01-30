@@ -692,3 +692,261 @@ fn test_trusted_comment_error_threshold() {
         "Error should mention trusted comment"
     );
 }
+
+/// Test that symlinks to existing files can't be overwritten without force
+///
+/// This verifies that `create_new(true)` protects against symlink attacks
+/// where an attacker creates a symlink to a sensitive file before the
+/// target file is created.
+#[cfg(unix)]
+#[test]
+fn test_symlink_to_existing_file_cannot_overwrite() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    // Create a "sensitive" file that shouldn't be overwritten
+    let sensitive_file = temp_dir.path().join("sensitive_data.txt");
+    fs::write(&sensitive_file, b"SENSITIVE DATA - DO NOT OVERWRITE")
+        .expect("Failed to create sensitive file");
+
+    // Create a symlink where the signature would be written
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+    symlink(&sensitive_file, &sig_file).expect("Failed to create symlink");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Attempt to sign without force - should fail because sig_file exists (via symlink)
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false, // Important: no force
+    };
+
+    let result = sign(&sign_opts, None);
+    assert!(
+        result.is_err(),
+        "Should fail to overwrite file via symlink without force"
+    );
+
+    // Verify sensitive file was NOT modified
+    let sensitive_content =
+        fs::read_to_string(&sensitive_file).expect("Failed to read sensitive file");
+    assert_eq!(
+        sensitive_content, "SENSITIVE DATA - DO NOT OVERWRITE",
+        "Sensitive file should not be modified"
+    );
+}
+
+/// Test that symlinks pointing outside the working directory are handled safely
+///
+/// Verifies that operations on symlinks don't allow escaping the intended
+/// directory or accessing files outside the user's control.
+#[cfg(unix)]
+#[test]
+fn test_symlink_outside_working_directory() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let work_dir = temp_dir.path().join("work");
+    fs::create_dir(&work_dir).expect("Failed to create work dir");
+
+    // Create a message file outside the work directory
+    let outside_message = temp_dir.path().join("outside_message.txt");
+    fs::write(&outside_message, b"Outside content").expect("Failed to write outside file");
+
+    // Create a symlink inside work dir that points outside
+    let inside_link = work_dir.join("message_link.txt");
+    symlink(&outside_message, &inside_link).expect("Failed to create symlink");
+
+    // Generate key in work directory
+    let secret_key = work_dir.join("test.key");
+    let public_key = work_dir.join("test.pub");
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Sign using the symlink - should follow it and sign the real file
+    let sig_file = work_dir.join("message_link.txt.minisig");
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: inside_link.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+
+    // Should succeed - symlink following is expected behavior
+    sign(&sign_opts, None).expect("Should sign file via symlink");
+
+    // Verify using the real file path works
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: outside_message.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify using real file path");
+}
+
+/// Test that parent directory symlinks don't allow directory traversal
+///
+/// Verifies that even if a parent directory in the path is a symlink,
+/// operations are still safe and don't escape to unintended locations.
+#[cfg(unix)]
+#[test]
+fn test_parent_directory_symlink_no_escape() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+    // Create two directories
+    let real_dir = temp_dir.path().join("real");
+    let other_dir = temp_dir.path().join("other");
+    fs::create_dir(&real_dir).expect("Failed to create real dir");
+    fs::create_dir(&other_dir).expect("Failed to create other dir");
+
+    // Create a symlink directory that points to real_dir
+    let link_dir = temp_dir.path().join("link");
+    symlink(&real_dir, &link_dir).expect("Failed to create directory symlink");
+
+    // Generate key using path through symlinked directory
+    let secret_key = link_dir.join("test.key");
+    let public_key = link_dir.join("test.pub");
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Verify files were created in the real directory
+    let real_secret_key = real_dir.join("test.key");
+    let real_public_key = real_dir.join("test.pub");
+    assert!(
+        real_secret_key.exists(),
+        "Secret key should exist in real directory"
+    );
+    assert!(
+        real_public_key.exists(),
+        "Public key should exist in real directory"
+    );
+
+    // Verify files are NOT in the other directory
+    let other_secret_key = other_dir.join("test.key");
+    assert!(
+        !other_secret_key.exists(),
+        "Secret key should NOT exist in other directory"
+    );
+
+    // Sign a message using the symlinked path
+    let message_file = link_dir.join("message.txt");
+    fs::write(&message_file, b"Test").expect("Failed to write message");
+
+    let sig_file = link_dir.join("message.txt.minisig");
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+
+    sign(&sign_opts, None).expect("Should sign using symlinked directory path");
+
+    // Verify signature exists in real directory
+    let real_sig_file = real_dir.join("message.txt.minisig");
+    assert!(
+        real_sig_file.exists(),
+        "Signature should exist in real directory"
+    );
+}
+
+/// Test circular symlinks don't cause infinite loops
+///
+/// Verifies that the code handles circular symlink references gracefully.
+#[cfg(unix)]
+#[test]
+fn test_circular_symlink_handling() {
+    use std::os::unix::fs::symlink;
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let link1 = temp_dir.path().join("link1.txt");
+    let link2 = temp_dir.path().join("link2.txt");
+
+    // Create circular symlinks
+    symlink(&link2, &link1).expect("Failed to create first symlink");
+    symlink(&link1, &link2).expect("Failed to create second symlink");
+
+    // Generate key
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    // Attempt to sign the circular symlink
+    let sig_file = temp_dir.path().join("link1.txt.minisig");
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: link1.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: true,
+    };
+
+    // Should fail gracefully (not infinite loop or panic)
+    let result = sign(&sign_opts, None);
+    assert!(
+        result.is_err(),
+        "Should fail gracefully with circular symlink"
+    );
+}

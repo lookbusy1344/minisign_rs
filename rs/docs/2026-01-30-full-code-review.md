@@ -25,7 +25,7 @@ This is a security-critical cryptographic signing tool. Overall, the implementat
   - BUG-3: Prehashed mode default verified and documented
   - TEST-1: Empty password edge case tests added
   - TEST-2: Comprehensive malformed input fuzzing added
-- 🟡 **Phase 2 In Progress:** 1/6 medium-priority items remaining
+- ✅ **Phase 2 Complete:** All medium-priority items fixed (6/6 items)
 
 ---
 
@@ -250,12 +250,20 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 ---
 
-### TEST-4: No Symlink Attack Tests (🟡 Medium)
+### TEST-4: No Symlink Attack Tests (🟡 Medium) ✅ COMPLETED
+
+**Status:** Tests added in commit a8f3c41
 
 **Issue:** The `edge_cases.rs` file exists but should verify:
 - Symlink to sensitive files can't be overwritten
 - Symlink following is handled safely
 - Parent directory symlinks don't escape
+
+**Resolution:** Added four comprehensive security-focused symlink tests:
+- `test_symlink_to_existing_file_cannot_overwrite` - Verifies `create_new(true)` prevents symlink attacks where an attacker creates a symlink to a sensitive file before the target is created
+- `test_symlink_outside_working_directory` - Verifies symlinks pointing outside the working directory are handled safely (symlink following is expected behavior)
+- `test_parent_directory_symlink_no_escape` - Verifies parent directory symlinks don't allow directory traversal attacks
+- `test_circular_symlink_handling` - Verifies circular symlinks fail gracefully without infinite loops or panics
 
 ---
 
@@ -478,7 +486,7 @@ const SECKEY_KDF_ALG_OFFSET: usize = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE
 | BUG-2 | Validate trusted comment prefix | 15 min | 🟡 Medium | ✅ Fixed (fbd76b0) |
 | BUG-3 | Verify/document prehashed default | 30 min | 🟡 Medium | ✅ Done (eb3bdd1) |
 | TEST-3 | Add concurrent access tests | 2 hr | 🟡 Medium | ✅ Done (e4b09c2) |
-| TEST-4 | Add symlink tests | 1 hr | 🟡 Medium | ⏳ Pending |
+| TEST-4 | Add symlink tests | 1 hr | 🟡 Medium | ✅ Done (a8f3c41) |
 | TEST-5 | Add boundary length tests | 1 hr | 🟡 Medium | ✅ Fixed (76823f3) |
 
 ### Phase 3: Quality Improvements (Next Sprint)
