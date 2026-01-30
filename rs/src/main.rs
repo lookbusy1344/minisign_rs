@@ -10,6 +10,7 @@ use minisign::{
 };
 use std::io::{self, Write};
 use std::process;
+use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
 fn main() {
@@ -134,7 +135,9 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         signature_file: Some(signature_file.to_string_lossy().to_string()),
         trusted_comment: cli.trusted_comment.clone(),
         untrusted_comment: cli.untrusted_comment.clone(),
-        prehashed: !cli.legacy, // Legacy mode means non-prehashed
+        // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
+        // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
+        prehashed: !cli.legacy,
         force: cli.force,
     };
 
@@ -401,7 +404,6 @@ fn prompt_password(
 ) -> Result<Zeroizing<String>> {
     // If password file is provided, read from it
     if let Some(path) = password_file {
-        #[cfg(not(debug_assertions))]
         eprintln!(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
@@ -447,8 +449,9 @@ fn prompt_password_with_confirmation(
     let password1 = prompt_password("Password: ", None)?;
     let password2 = prompt_password("Password (one more time): ", None)?;
 
-    // Compare passwords (constant-time comparison via byte equality)
-    if password1.as_bytes() != password2.as_bytes() {
+    // Compare passwords (constant-time comparison to prevent timing attacks)
+    let passwords_match: bool = password1.as_bytes().ct_eq(password2.as_bytes()).into();
+    if !passwords_match {
         return Err(Error::PasswordMismatch);
     }
 

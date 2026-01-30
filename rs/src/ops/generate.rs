@@ -5,20 +5,15 @@
 use super::file_utils::{write_public_key_file, write_secret_key_file};
 use crate::{
     Result,
+    constants::{
+        LIBSODIUM_MEMLIMIT_MULTIPLIER, LIBSODIUM_OPSLIMIT_MULTIPLIER, SCRYPT_LOG_N, SCRYPT_R,
+    },
     crypto::generate_keypair,
     errors::Error,
     formats::encode_base64,
     keys::{PubkeyStruct, SeckeyStruct},
 };
 use std::path::{Path, PathBuf};
-
-// Scrypt parameters matching libsodium SENSITIVE level
-const SCRYPT_LOG_N: u8 = 20; // N = 2^20 = 1,048,576
-const SCRYPT_R: u32 = 8;
-
-// Libsodium formula constants
-const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
-const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
 
 /// Options for key generation
 #[derive(Debug, Clone)]

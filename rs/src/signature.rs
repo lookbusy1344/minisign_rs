@@ -281,10 +281,14 @@ impl SignatureBox {
         let sig_struct_bytes = decode_base64(lines[1])?;
         let sig_struct = SigStruct::from_bytes(&sig_struct_bytes)?;
 
-        // Line 3: trusted comment
+        // Line 3: trusted comment (must have prefix for C compatibility)
         let trusted_comment = lines[2]
             .strip_prefix("trusted comment: ")
-            .unwrap_or(lines[2])
+            .ok_or_else(|| {
+                Error::InvalidSignatureFormat(
+                    "trusted comment must start with \"trusted comment: \"".to_string(),
+                )
+            })?
             .to_string();
 
         // Validate trusted comment for printability and embedded carriage returns

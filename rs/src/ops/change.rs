@@ -3,16 +3,15 @@
 //! This module implements changing or removing the password on a secret key.
 
 use super::file_utils::{load_secret_key, write_secret_key_file};
-use crate::{Result, errors::Error, keys::SeckeyStruct};
+use crate::{
+    Result,
+    constants::{
+        LIBSODIUM_MEMLIMIT_MULTIPLIER, LIBSODIUM_OPSLIMIT_MULTIPLIER, SCRYPT_LOG_N, SCRYPT_R,
+    },
+    errors::Error,
+    keys::SeckeyStruct,
+};
 use std::path::PathBuf;
-
-// Scrypt parameters matching libsodium SENSITIVE level
-const SCRYPT_LOG_N: u8 = 20; // N = 2^20 = 1,048,576
-const SCRYPT_R: u32 = 8;
-
-// Libsodium formula constants
-const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
-const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
 
 /// Options for changing secret key password
 #[derive(Debug, Clone)]

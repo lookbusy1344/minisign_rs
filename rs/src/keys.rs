@@ -2,6 +2,32 @@
 //!
 //! This module implements the binary formats for public and secret keys
 //! as defined in the minisign specification.
+//!
+//! ## Checksum Behavior
+//!
+//! **Important:** Unencrypted secret keys use an all-zeros checksum rather than
+//! a computed Blake2b-256 hash. This matches the C minisign implementation but
+//! means **unencrypted keys have no integrity check**.
+//!
+//! ### Implications
+//!
+//! - **Encrypted keys:** Checksum is computed over the unencrypted secret key and
+//!   verified after decryption, protecting against corruption or tampering
+//! - **Unencrypted keys:** Checksum is set to all zeros (`[0u8; 32]`) and not verified,
+//!   meaning corrupted unencrypted key files will load without error
+//!
+//! ### Rationale
+//!
+//! This behavior preserves exact compatibility with the C implementation. Since
+//! unencrypted keys are typically only used for testing or automation where security
+//! is already compromised, the lack of integrity checking is acceptable. For
+//! production use, always use encrypted keys (with `--password`).
+//!
+//! ### Migration Note
+//!
+//! Changing this behavior would break compatibility with C minisign. Any future
+//! enhancement to add checksums for unencrypted keys would require a new key format
+//! version or file format extension.
 
 use crate::Result;
 use crate::crypto::{
@@ -67,12 +93,10 @@ const SECKEY_CHECKSUM_SIZE: usize = CHECKSUM_BYTES;
 // Libsodium KDF formula constants
 // opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
 // memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r
-const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
-const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
-
-// Standard scrypt parameters used by minisign
-const SCRYPT_R_STANDARD: u32 = 8;
-const SCRYPT_P_STANDARD: u32 = 1;
+// Import libsodium multipliers and scrypt parameters from centralized location
+use crate::constants::{
+    LIBSODIUM_MEMLIMIT_MULTIPLIER, LIBSODIUM_OPSLIMIT_MULTIPLIER, SCRYPT_P, SCRYPT_R,
+};
 
 /// Public key file structure (42 bytes)
 ///
@@ -277,8 +301,13 @@ impl SeckeyStruct {
     ///
     /// # Security Note
     ///
-    /// Unencrypted keys provide no protection if the key file is compromised.
-    /// Use `new_encrypted()` for password-protected keys.
+    /// Unencrypted keys have two significant limitations:
+    /// 1. **No encryption:** Keys are stored in plaintext with no password protection
+    /// 2. **No integrity check:** The checksum is set to all zeros (not computed),
+    ///    meaning corrupted key files will load without error
+    ///
+    /// This matches C minisign behavior for compatibility. For production use,
+    /// always use `new_encrypted()` for password-protected keys with integrity verification.
     ///
     /// # Examples
     ///
@@ -505,9 +534,10 @@ impl SeckeyStruct {
             return Err(Error::PasswordRequired);
         }
 
-        // Note: For unencrypted keys, the checksum field is typically all zeros
-        // and is not validated. The checksum is only used for encrypted keys
-        // to detect wrong passwords.
+        // IMPORTANT: For unencrypted keys, the checksum field is all zeros
+        // and is NOT validated. This matches C minisign behavior but means
+        // corrupted unencrypted key files will load without error.
+        // The checksum is only computed and verified for encrypted keys.
 
         Ok(SecretKey::from_bytes(self.secret_key_encrypted))
     }
@@ -632,8 +662,8 @@ impl SeckeyStruct {
     fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
         // Standard minisign uses r=8, p=1
         // We can derive N from either formula, using memlimit is simpler
-        let r = SCRYPT_R_STANDARD;
-        let p = SCRYPT_P_STANDARD;
+        let r = SCRYPT_R;
+        let p = SCRYPT_P;
 
         // N = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * r)
         // Use checked arithmetic to prevent overflow/underflow
@@ -1107,7 +1137,7 @@ mod tests {
         // opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
         // memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r
         let n = 1u64 << 14; // N = 16384
-        let r = u64::from(SCRYPT_R_STANDARD);
+        let r = u64::from(SCRYPT_R);
         let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
@@ -1145,7 +1175,7 @@ mod tests {
         let kdf_salt = [42u8; KDF_SALT_BYTES];
         // Use reduced parameters for testing
         let n = 1u64 << 14;
-        let r = u64::from(SCRYPT_R_STANDARD);
+        let r = u64::from(SCRYPT_R);
         let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 

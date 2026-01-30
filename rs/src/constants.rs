@@ -25,6 +25,8 @@
 //! | `SCRYPT_LOG_N` | 20 | N=2^20 | SENSITIVE level work factor |
 //! | `SCRYPT_R` | 8 | r=8 | Block size parameter |
 //! | `SCRYPT_P` | 1 | p=1 | Parallelization |
+//! | `LIBSODIUM_OPSLIMIT_MULTIPLIER` | 4 | - | libsodium formula constant |
+//! | `LIBSODIUM_MEMLIMIT_MULTIPLIER` | 128 | - | libsodium formula constant |
 //! | `COMMENTMAXBYTES` | 1024 | `COMMENTMAXBYTES` | Max untrusted comment |
 //! | `TRUSTEDCOMMENTMAXBYTES` | 8192 | `TRUSTEDCOMMENTMAXBYTES` | Max trusted comment |
 //! | `SIG_STRUCT_SIZE` | 74 | 2+8+64 | Signature structure |
@@ -33,9 +35,9 @@
 
 // Re-export cryptographic constants from crypto module
 pub use crate::crypto::{
-    CHECKSUM_BYTES, KDF_SALT_BYTES, KEYNUM_BYTES, PUBLIC_KEY_BYTES, SCRYPT_LOG_N,
-    SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN, SCRYPT_P, SCRYPT_R, SECRET_KEY_BYTES,
-    SIGNATURE_BYTES,
+    CHECKSUM_BYTES, KDF_SALT_BYTES, KEYNUM_BYTES, LIBSODIUM_MEMLIMIT_MULTIPLIER,
+    LIBSODIUM_OPSLIMIT_MULTIPLIER, PUBLIC_KEY_BYTES, SCRYPT_LOG_N, SCRYPT_MEMLIMIT_MIN,
+    SCRYPT_OPSLIMIT_MIN, SCRYPT_P, SCRYPT_R, SECRET_KEY_BYTES, SIGNATURE_BYTES,
 };
 
 // Re-export signature format constants from signature module
