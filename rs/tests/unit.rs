@@ -3,4 +3,5 @@
 
 mod unit {
     pub mod crypto;
+    pub mod keys;
 }
