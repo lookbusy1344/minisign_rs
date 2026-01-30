@@ -25,7 +25,7 @@ This is a security-critical cryptographic signing tool. Overall, the implementat
   - BUG-3: Prehashed mode default verified and documented
   - TEST-1: Empty password edge case tests added
   - TEST-2: Comprehensive malformed input fuzzing added
-- 🟡 **Phase 2 In Progress:** 3/6 medium-priority items remaining
+- 🟡 **Phase 2 In Progress:** 2/6 medium-priority items remaining
 
 ---
 
@@ -252,7 +252,9 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 ---
 
-### TEST-5: No Boundary Length Comment Tests (🟡 Medium)
+### TEST-5: No Boundary Length Comment Tests (🟡 Medium) ✅ COMPLETED
+
+**Status:** Tests added in commit 76823f3
 
 **Issue:** Tests exist for "too long" comments but not:
 - Comment at exactly `COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1` (max valid)
@@ -470,7 +472,7 @@ const SECKEY_KDF_ALG_OFFSET: usize = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE
 | BUG-3 | Verify/document prehashed default | 30 min | 🟡 Medium | ✅ Done (eb3bdd1) |
 | TEST-3 | Add concurrent access tests | 2 hr | 🟡 Medium | ⏳ Pending |
 | TEST-4 | Add symlink tests | 1 hr | 🟡 Medium | ⏳ Pending |
-| TEST-5 | Add boundary length tests | 1 hr | 🟡 Medium | ⏳ Pending |
+| TEST-5 | Add boundary length tests | 1 hr | 🟡 Medium | ✅ Fixed (76823f3) |
 
 ### Phase 3: Quality Improvements (Next Sprint)
 
