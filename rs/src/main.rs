@@ -135,7 +135,9 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         signature_file: Some(signature_file.to_string_lossy().to_string()),
         trusted_comment: cli.trusted_comment.clone(),
         untrusted_comment: cli.untrusted_comment.clone(),
-        prehashed: !cli.legacy, // Legacy mode means non-prehashed
+        // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
+        // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
+        prehashed: !cli.legacy,
         force: cli.force,
     };
 
