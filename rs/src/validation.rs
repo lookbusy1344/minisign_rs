@@ -16,32 +16,31 @@
 
 use crate::errors::{Error, Result};
 
-/// Validate that a string contains only printable characters and valid UTF-8
+/// Validate that a string contains only printable characters
 ///
 /// This function matches the behavior of the C implementation's `is_printable()`
-/// function (minisign.c:76-125). It validates:
+/// function (minisign.c:76-125), but simplified for Rust's UTF-8 guarantees.
 ///
+/// Since Rust's `&str` type guarantees valid UTF-8 (no overlong encodings,
+/// no surrogate pairs, no invalid code points), we only need to check for
+/// control characters.
+///
+/// Validates:
 /// - Printable ASCII (0x20-0x7E)
 /// - Tab character (0x09)
-/// - Valid UTF-8 multi-byte sequences (2-4 bytes)
+/// - Non-control Unicode characters (> U+009F)
 /// - Rejects control characters (0x00-0x1F except tab, 0x7F)
-/// - Rejects C1 control characters (U+007F-U+009F)
-/// - Rejects overlong encodings
-/// - Rejects surrogate pairs (U+D800-U+DFFF)
-/// - Rejects values > U+10FFFF
+/// - Rejects C1 control characters (U+0080-U+009F)
 ///
 /// # Arguments
 ///
-/// * `s` - String slice to validate
+/// * `s` - String slice to validate (already guaranteed to be valid UTF-8)
 ///
 /// # Errors
 ///
 /// Returns `Error::InvalidComment` if the string contains:
 /// - Control characters (0x00-0x08, 0x0A-0x1F, 0x7F)
 /// - C1 control characters (U+0080-U+009F)
-/// - Invalid UTF-8 sequences
-/// - Overlong encodings
-/// - Truncated multi-byte sequences
 ///
 /// # Examples
 ///
@@ -54,92 +53,22 @@ use crate::errors::{Error, Result};
 /// assert!(is_printable("Control\x00char").is_err());
 /// ```
 pub fn is_printable(s: &str) -> Result<()> {
-    let bytes = s.as_bytes();
-    let mut i = 0;
-
-    while i < bytes.len() {
-        let c = bytes[i];
-
-        // Tab is allowed
-        if c == b'\t' {
-            i += 1;
+    // Since &str guarantees valid UTF-8, we can use .chars() which handles
+    // all UTF-8 decoding for us. We only need to check for control characters.
+    for c in s.chars() {
+        // Tab is explicitly allowed (despite being a control character)
+        if c == '\t' {
             continue;
         }
 
-        // Printable ASCII range
-        if (0x20..=0x7e).contains(&c) {
-            i += 1;
-            continue;
-        }
-
-        // Control characters (including 0x7F DEL)
-        if c < 0x20 || c == 0x7f {
+        // Reject ASCII control characters (0x00-0x1F and 0x7F)
+        // and C1 control characters (U+0080-U+009F)
+        if c.is_control() || c == '\x7f' {
             return Err(Error::InvalidComment(format!(
-                "contains control character at byte {i}: 0x{c:02x}"
+                "contains control character: U+{:04X}",
+                c as u32
             )));
         }
-
-        // Multi-byte UTF-8 sequences
-        let (need, mask) = if (0xc2..=0xdf).contains(&c) {
-            // 2-byte sequence
-            (1, 0x1f)
-        } else if (0xe0..=0xef).contains(&c) {
-            // 3-byte sequence
-            (2, 0x0f)
-        } else if (0xf0..=0xf4).contains(&c) {
-            // 4-byte sequence
-            (3, 0x07)
-        } else {
-            return Err(Error::InvalidComment(format!(
-                "invalid UTF-8 leading byte at position {i}: 0x{c:02x}"
-            )));
-        };
-
-        // Validate we have enough bytes for continuation
-        if i + need >= bytes.len() {
-            return Err(Error::InvalidComment(format!(
-                "truncated UTF-8 sequence at position {i}"
-            )));
-        }
-
-        // Validate continuation bytes
-        for j in 1..=need {
-            let cc = bytes[i + j];
-            if cc == 0 || (cc & 0xc0) != 0x80 {
-                return Err(Error::InvalidComment(format!(
-                    "invalid UTF-8 continuation byte at position {}: 0x{cc:02x}",
-                    i + j
-                )));
-            }
-        }
-
-        // Check for overlong encodings and invalid ranges
-        let first_continuation = bytes[i + 1];
-        if (c == 0xe0 && first_continuation < 0xa0)
-            || (c == 0xed && first_continuation > 0x9f)
-            || (c == 0xf0 && first_continuation < 0x90)
-            || (c == 0xf4 && first_continuation > 0x8f)
-        {
-            return Err(Error::InvalidComment(format!(
-                "invalid UTF-8 encoding at position {i}: overlong or invalid range"
-            )));
-        }
-
-        // Decode the code point to check for control characters
-        let mut cp = u32::from(c & mask);
-        for j in 1..=need {
-            cp = (cp << 6) | u32::from(bytes[i + j] & 0x3f);
-        }
-
-        // Reject control characters in C1 range (U+007F-U+009F)
-        // Note: 0x7F is already rejected above, this catches U+0080-U+009F
-        if cp <= 0x1f || (0x7f..=0x9f).contains(&cp) {
-            return Err(Error::InvalidComment(format!(
-                "contains C1 control character at position {i}: U+{cp:04X}"
-            )));
-        }
-
-        i += need + 1;
     }
 
     Ok(())
