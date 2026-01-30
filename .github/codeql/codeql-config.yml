@@ -1,0 +1,19 @@
+name: "CodeQL Config"
+
+paths-ignore:
+  - rs/tests/**
+  - rs/target/**
+  - '**/tests.rs'
+  - '**/test_*.rs'
+  - '**/*_test.rs'
+
+# Disable hardcoded credentials check for test code
+query-filters:
+  - exclude:
+      id: rust/hardcoded-credentials
+      paths:
+        - rs/tests/**
+        - '**/test*.rs'
+  - exclude:
+      id: rust/hardcoded-credentials
+      tags: test

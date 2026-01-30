@@ -479,6 +479,7 @@ mod tests {
 
     #[test]
     fn test_derive_key_output_length() {
+        // codeql[rust/hardcoded-credentials] - Test password for unit tests
         let password = b"test password";
         let salt = [0u8; 32];
 
@@ -509,6 +510,7 @@ mod tests {
 
     #[test]
     fn test_derive_key_deterministic() {
+        // codeql[rust/hardcoded-credentials] - Test password for unit tests
         let password = b"test password";
         let salt = [0u8; 32];
 
@@ -564,6 +566,7 @@ mod tests {
 
     #[test]
     fn test_derive_key_different_salts() {
+        // codeql[rust/hardcoded-credentials] - Test password for unit tests
         let password = b"test password";
         let salt1 = [0u8; 32];
         let mut salt2 = [0u8; 32];
@@ -595,6 +598,7 @@ mod tests {
     #[test]
     #[ignore = "slow test with full scrypt parameters"]
     fn test_derive_key_full_params() {
+        // codeql[rust/hardcoded-credentials] - Test password for unit tests
         let password = b"test password";
         let salt = [0u8; 32];
 
