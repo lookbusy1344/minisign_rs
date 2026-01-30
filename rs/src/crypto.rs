@@ -26,6 +26,11 @@ pub const SCRYPT_LOG_N: u8 = 20;
 pub const SCRYPT_R: u32 = 8;
 pub const SCRYPT_P: u32 = 1;
 
+// Libsodium formula constants for converting between (N, r, p) and (opslimit, memlimit)
+// These multipliers match libsodium's crypto_pwhash_scryptsalsa208sha256 implementation
+pub const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
+pub const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
+
 // Minimum scrypt parameters (matching libsodium minimums)
 // These are used as lower bounds for fallback mechanism
 pub const SCRYPT_OPSLIMIT_MIN: u64 = 32_768; // 2^15

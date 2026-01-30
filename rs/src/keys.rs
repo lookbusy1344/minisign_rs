@@ -67,12 +67,10 @@ const SECKEY_CHECKSUM_SIZE: usize = CHECKSUM_BYTES;
 // Libsodium KDF formula constants
 // opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
 // memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r
-const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
-const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
-
-// Standard scrypt parameters used by minisign
-const SCRYPT_R_STANDARD: u32 = 8;
-const SCRYPT_P_STANDARD: u32 = 1;
+// Import libsodium multipliers and scrypt parameters from centralized location
+use crate::constants::{
+    LIBSODIUM_MEMLIMIT_MULTIPLIER, LIBSODIUM_OPSLIMIT_MULTIPLIER, SCRYPT_P, SCRYPT_R,
+};
 
 /// Public key file structure (42 bytes)
 ///
@@ -632,8 +630,8 @@ impl SeckeyStruct {
     fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
         // Standard minisign uses r=8, p=1
         // We can derive N from either formula, using memlimit is simpler
-        let r = SCRYPT_R_STANDARD;
-        let p = SCRYPT_P_STANDARD;
+        let r = SCRYPT_R;
+        let p = SCRYPT_P;
 
         // N = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * r)
         // Use checked arithmetic to prevent overflow/underflow
@@ -1107,7 +1105,7 @@ mod tests {
         // opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
         // memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r
         let n = 1u64 << 14; // N = 16384
-        let r = u64::from(SCRYPT_R_STANDARD);
+        let r = u64::from(SCRYPT_R);
         let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 
@@ -1145,7 +1143,7 @@ mod tests {
         let kdf_salt = [42u8; KDF_SALT_BYTES];
         // Use reduced parameters for testing
         let n = 1u64 << 14;
-        let r = u64::from(SCRYPT_R_STANDARD);
+        let r = u64::from(SCRYPT_R);
         let kdf_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r;
         let kdf_memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r;
 

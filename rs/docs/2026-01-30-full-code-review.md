@@ -338,7 +338,9 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 ## 4. Code Quality Issues
 
-### QUALITY-1: Duplicated Scrypt Constants (🟡 Medium)
+### QUALITY-1: Duplicated Scrypt Constants (🟡 Medium) ✅ FIXED
+
+**Status:** Fixed in commit [pending]
 
 **Locations:**
 - `src/crypto.rs:23-27`
@@ -348,7 +350,13 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 **Issue:** Scrypt parameters and libsodium formula constants are defined in multiple places. While `constants.rs` re-exports some, the source definitions are scattered.
 
-**Fix:** Centralize all definitions in `crypto.rs` or `constants.rs` and import everywhere else.
+**Resolution:**
+- Added `LIBSODIUM_OPSLIMIT_MULTIPLIER` and `LIBSODIUM_MEMLIMIT_MULTIPLIER` to `crypto.rs` (the source of truth for crypto constants)
+- Exported them from `constants.rs` for easy access
+- Removed duplicate definitions from `keys.rs`, `ops/generate.rs`, and `ops/change.rs`
+- Updated all files to import from `constants` module
+- Replaced `SCRYPT_R_STANDARD` and `SCRYPT_P_STANDARD` in `keys.rs` with direct use of `SCRYPT_R` and `SCRYPT_P`
+- All constants now defined once and imported everywhere, eliminating maintenance burden
 
 ---
 
@@ -489,15 +497,15 @@ const SECKEY_KDF_ALG_OFFSET: usize = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE
 | TEST-4 | Add symlink tests | 1 hr | 🟡 Medium | ✅ Done (a8f3c41) |
 | TEST-5 | Add boundary length tests | 1 hr | 🟡 Medium | ✅ Fixed (76823f3) |
 
-### Phase 3: Quality Improvements (Next Sprint)
+### Phase 3: Quality Improvements (Next Sprint) - IN PROGRESS
 
-| ID | Issue | Effort | Priority |
-|----|-------|--------|----------|
-| QUALITY-1 | Centralize scrypt constants | 30 min | 🟡 Medium |
-| SEC-2 | Document unencrypted checksum | 15 min | 🟡 Medium |
-| TEST-6 | Unicode edge case tests | 1 hr | 🟡 Medium |
-| QUALITY-2 | Standardize error messages | 1 hr | 🔵 Low |
-| QUALITY-4 | Simplify UTF-8 validation | 30 min | 🔵 Low |
+| ID | Issue | Effort | Priority | Status |
+|----|-------|--------|----------|--------|
+| QUALITY-1 | Centralize scrypt constants | 30 min | 🟡 Medium | ✅ Fixed |
+| SEC-2 | Document unencrypted checksum | 15 min | 🟡 Medium | ⏳ Pending |
+| TEST-6 | Unicode edge case tests | 1 hr | 🟡 Medium | ⏳ Pending |
+| QUALITY-4 | Simplify UTF-8 validation | 30 min | 🔵 Low | ⏳ Pending |
+| QUALITY-2 | Standardize error messages | 1 hr | 🔵 Low | ⏳ Pending |
 
 ### Phase 4: Nice-to-Have (Backlog)
 
