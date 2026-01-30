@@ -474,3 +474,221 @@ fn test_change_password_from_empty() {
 
     sign(&sign_opts, Some(b"new_password")).expect("Should sign with new non-empty password");
 }
+
+/// Test untrusted comment at exactly max valid length (1003 bytes)
+#[test]
+fn test_untrusted_comment_max_valid_length() {
+    use minisign::constants::{COMMENT_PREFIX_SIZE, COMMENTMAXBYTES};
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Max valid length: COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1 = 1024 - 20 - 1 = 1003
+    let max_valid_comment = "a".repeat(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1);
+    assert_eq!(max_valid_comment.len(), 1003);
+
+    // Should succeed without warning
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: Some(max_valid_comment),
+        force: true,
+    };
+
+    sign(&sign_opts, None).expect("Should sign with max valid untrusted comment");
+
+    // Verify signature
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify signature with max valid comment");
+}
+
+/// Test untrusted comment at warning threshold (1004 bytes)
+#[test]
+fn test_untrusted_comment_warning_threshold() {
+    use minisign::constants::{COMMENT_PREFIX_SIZE, COMMENTMAXBYTES};
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Warning threshold: COMMENTMAXBYTES - COMMENT_PREFIX_SIZE = 1024 - 20 = 1004
+    let warning_comment = "a".repeat(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE);
+    assert_eq!(warning_comment.len(), 1004);
+
+    // Should succeed but emit warning to stderr (we can't easily capture stderr in test)
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: Some(warning_comment),
+        force: true,
+    };
+
+    sign(&sign_opts, None).expect("Should sign but warn about untrusted comment length");
+
+    // Verify signature still works
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify signature despite warning");
+}
+
+/// Test trusted comment at exactly max valid length (8173 bytes)
+#[test]
+fn test_trusted_comment_max_valid_length() {
+    use minisign::constants::{TRUSTED_COMMENT_PREFIX_SIZE, TRUSTEDCOMMENTMAXBYTES};
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Max valid length: TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1 = 8192 - 18 - 1 = 8173
+    let max_valid_trusted = "b".repeat(TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1);
+    assert_eq!(max_valid_trusted.len(), 8173);
+
+    // Should succeed
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some(max_valid_trusted.clone()),
+        untrusted_comment: None,
+        force: true,
+    };
+
+    let result = sign(&sign_opts, None).expect("Should sign with max valid trusted comment");
+    assert_eq!(result.trusted_comment, max_valid_trusted);
+
+    // Verify signature
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
+        signature_file: sig_file.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        output: false,
+        quiet: true,
+    };
+    verify(&verify_opts).expect("Should verify signature with max valid trusted comment");
+}
+
+/// Test trusted comment at error threshold (8174 bytes)
+#[test]
+fn test_trusted_comment_error_threshold() {
+    use minisign::constants::{TRUSTED_COMMENT_PREFIX_SIZE, TRUSTEDCOMMENTMAXBYTES};
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions {
+        secret_key_file: secret_key.clone(),
+        public_key_file: public_key.clone(),
+        comment: None,
+        force: true,
+        no_password: true,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Error threshold: TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE = 8192 - 18 = 8174
+    let too_long_trusted = "b".repeat(TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE);
+    assert_eq!(too_long_trusted.len(), 8174);
+
+    // Should error
+    let sign_opts = SignOptions {
+        secret_key_file: secret_key.to_str().unwrap().to_string(),
+        message_file: message_file.to_str().unwrap().to_string(),
+        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        prehashed: true,
+        trusted_comment: Some(too_long_trusted),
+        untrusted_comment: None,
+        force: true,
+    };
+
+    let result = sign(&sign_opts, None);
+    assert!(
+        result.is_err(),
+        "Should fail with trusted comment at error threshold"
+    );
+
+    // Verify error message mentions trusted comment
+    let err = result.unwrap_err();
+    assert!(
+        format!("{err}").to_lowercase().contains("trusted comment"),
+        "Error should mention trusted comment"
+    );
+}
