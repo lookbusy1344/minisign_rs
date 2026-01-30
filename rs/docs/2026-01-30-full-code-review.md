@@ -144,7 +144,9 @@ eprintln!(
 
 ---
 
-### SEC-2: Checksum for Unencrypted Keys is All Zeros (🟡 Medium)
+### SEC-2: Checksum for Unencrypted Keys is All Zeros (🟡 Medium) ✅ DOCUMENTED
+
+**Status:** Documented in commit [pending]
 
 **Location:** `src/keys.rs:306`
 
@@ -156,7 +158,12 @@ checksum: [0u8; CHECKSUM_BYTES], // All zeros for unencrypted keys
 
 **Impact:** Corrupted unencrypted keys would be used without warning, potentially producing invalid signatures.
 
-**Fix:** Consider computing and verifying checksum even for unencrypted keys (would be C-incompatible), or document this limitation clearly.
+**Resolution:**
+- Added comprehensive module-level documentation explaining checksum behavior for both encrypted and unencrypted keys
+- Enhanced `new_unencrypted()` function documentation with explicit security note about lack of integrity verification
+- Updated inline comments in `get_unencrypted_secret_key()` to emphasize the security implications
+- Documented rationale: matches C minisign for compatibility; unencrypted keys are for testing/automation where security is already compromised
+- Note: Changing this would break C compatibility and require new key format version
 
 ---
 
@@ -501,8 +508,8 @@ const SECKEY_KDF_ALG_OFFSET: usize = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE
 
 | ID | Issue | Effort | Priority | Status |
 |----|-------|--------|----------|--------|
-| QUALITY-1 | Centralize scrypt constants | 30 min | 🟡 Medium | ✅ Fixed |
-| SEC-2 | Document unencrypted checksum | 15 min | 🟡 Medium | ⏳ Pending |
+| QUALITY-1 | Centralize scrypt constants | 30 min | 🟡 Medium | ✅ Fixed (c065da3) |
+| SEC-2 | Document unencrypted checksum | 15 min | 🟡 Medium | ✅ Done |
 | TEST-6 | Unicode edge case tests | 1 hr | 🟡 Medium | ⏳ Pending |
 | QUALITY-4 | Simplify UTF-8 validation | 30 min | 🔵 Low | ⏳ Pending |
 | QUALITY-2 | Standardize error messages | 1 hr | 🔵 Low | ⏳ Pending |
