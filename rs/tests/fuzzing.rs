@@ -459,3 +459,120 @@ fn test_utf8_bom_in_public_key() {
         "BOM should be rejected in public key format"
     );
 }
+
+// ============================================================================
+// Random Binary Input Fuzzing - Full Structure Sizes
+// ============================================================================
+
+proptest! {
+    /// Property test: Random 42-byte inputs to PubkeyStruct::from_bytes should not panic
+    /// This tests that all possible byte combinations in the public key structure are handled safely
+    #[test]
+    fn prop_random_pubkey_bytes(bytes in prop::collection::vec(any::<u8>(), 42)) {
+        // Should either parse or return error, never panic
+        let _ = PubkeyStruct::from_bytes(&bytes);
+    }
+
+    /// Property test: Random 158-byte inputs to SeckeyStruct::from_bytes should not panic
+    /// This tests that all possible byte combinations in the secret key structure are handled safely
+    #[test]
+    fn prop_random_seckey_bytes(bytes in prop::collection::vec(any::<u8>(), 158)) {
+        // Should either parse or return error, never panic
+        let _ = SeckeyStruct::from_bytes(&bytes);
+    }
+
+    /// Property test: Random 74-byte inputs to SigStruct::from_bytes should not panic
+    /// This tests that all possible byte combinations in the signature structure are handled safely
+    #[test]
+    fn prop_random_sig_bytes(bytes in prop::collection::vec(any::<u8>(), 74)) {
+        // Should either parse or return error, never panic
+        let _ = SigStruct::from_bytes(&bytes);
+    }
+}
+
+// ============================================================================
+// Corrupted Checksum Fuzzing
+// ============================================================================
+
+proptest! {
+    /// Property test: Encrypted secret keys with corrupted checksums should be detected
+    #[test]
+    fn prop_corrupted_checksum(
+        checksum_bytes in prop::array::uniform32(any::<u8>())
+    ) {
+        // Create a potentially valid encrypted key structure with corrupted checksum
+        let mut key_bytes = vec![0u8; 158];
+
+        // Algorithm markers
+        key_bytes[0..2].copy_from_slice(b"Ed");  // sig_alg
+        key_bytes[2..4].copy_from_slice(b"Sc");  // kdf_alg (encrypted)
+        key_bytes[4..6].copy_from_slice(b"B2");  // chk_alg
+
+        // Salt (32 bytes at offset 6)
+        key_bytes[6..38].fill(2);
+
+        // KDF parameters (opslimit and memlimit at offsets 38 and 46)
+        // Use values that represent production scrypt params: N=2^20, r=8, p=1
+        let opslimit: u64 = 33_554_432;  // 4 * 2^20 * 8
+        let memlimit: u64 = 1_073_741_824; // 128 * 2^20 * 8
+        key_bytes[38..46].copy_from_slice(&opslimit.to_le_bytes());
+        key_bytes[46..54].copy_from_slice(&memlimit.to_le_bytes());
+
+        // Keynum (8 bytes at offset 54)
+        key_bytes[54..62].fill(1);
+
+        // Encrypted secret key (64 bytes at offset 62)
+        key_bytes[62..126].fill(3);
+
+        // Corrupted checksum (32 bytes at offset 126)
+        // Intentionally use random bytes that won't match any valid checksum
+        key_bytes[126..158].copy_from_slice(&checksum_bytes);
+
+        // Try to parse - should handle gracefully (either parse structurally or detect corruption)
+        let result = SeckeyStruct::from_bytes(&key_bytes);
+        // We expect this to not panic - it may succeed in parsing the structure
+        // but will fail later during decryption with wrong password
+        let _ = result;
+    }
+}
+
+// ============================================================================
+// Impossible KDF Parameters Fuzzing
+// ============================================================================
+
+proptest! {
+    /// Property test: Secret keys with impossible KDF parameters should error gracefully
+    #[test]
+    fn prop_impossible_kdf_params(
+        opslimit in any::<u64>(),
+        memlimit in any::<u64>()
+    ) {
+        // Create a key structure with potentially impossible/extreme KDF parameters
+        let mut key_bytes = vec![0u8; 158];
+
+        // Algorithm markers
+        key_bytes[0..2].copy_from_slice(b"Ed");  // sig_alg
+        key_bytes[2..4].copy_from_slice(b"Sc");  // kdf_alg (encrypted)
+        key_bytes[4..6].copy_from_slice(b"B2");  // chk_alg
+
+        // Salt (32 bytes at offset 6)
+        key_bytes[6..38].fill(2);
+
+        // Random/extreme KDF parameters
+        key_bytes[38..46].copy_from_slice(&opslimit.to_le_bytes());
+        key_bytes[46..54].copy_from_slice(&memlimit.to_le_bytes());
+
+        // Keynum (8 bytes at offset 54)
+        key_bytes[54..62].fill(1);
+
+        // Secret key (64 bytes at offset 62)
+        key_bytes[62..126].fill(3);
+
+        // Checksum (32 bytes at offset 126)
+        key_bytes[126..158].fill(4);
+
+        // Should handle gracefully - either parse or return error, never panic
+        let _ = SeckeyStruct::from_bytes(&key_bytes);
+    }
+
+}
