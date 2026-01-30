@@ -17,6 +17,16 @@ This is a security-critical cryptographic signing tool. Overall, the implementat
 - 🟡 **Medium:** 6
 - 🔵 **Low:** 10
 
+**Resolution Progress:**
+- ✅ **Phase 1 Complete:** All high-priority issues fixed (6/6 items)
+  - BUG-1: Constant-time password comparison implemented
+  - SEC-1: Password file warning shown in all builds
+  - BUG-2: Trusted comment prefix validation enforced
+  - BUG-3: Prehashed mode default verified and documented
+  - TEST-1: Empty password edge case tests added
+  - TEST-2: Comprehensive malformed input fuzzing added
+- 🟡 **Phase 2 In Progress:** 3/6 medium-priority items remaining
+
 ---
 
 ## Table of Contents
@@ -32,7 +42,9 @@ This is a security-critical cryptographic signing tool. Overall, the implementat
 
 ## 1. Potential Bugs
 
-### BUG-1: Non-Constant-Time Password Confirmation (🟠 High)
+### BUG-1: Non-Constant-Time Password Confirmation (🟠 High) ✅ FIXED
+
+**Status:** Fixed in commit 59af07b
 
 **Location:** `src/main.rs:450-451`
 
@@ -57,7 +69,9 @@ if !password1.as_bytes().ct_eq(password2.as_bytes()).into() {
 
 ---
 
-### BUG-2: Missing Prefix Validation for Trusted Comment (🟡 Medium)
+### BUG-2: Missing Prefix Validation for Trusted Comment (🟡 Medium) ✅ FIXED
+
+**Status:** Fixed in commit fbd76b0
 
 **Location:** `src/signature.rs:285-288`
 
@@ -82,7 +96,9 @@ let trusted_comment = lines[2]
 
 ---
 
-### BUG-3: Default Prehashed Mode May Differ from C minisign (🟡 Medium)
+### BUG-3: Default Prehashed Mode May Differ from C minisign (🟡 Medium) ✅ VERIFIED
+
+**Status:** Verified correct, documented in commit eb3bdd1
 
 **Location:** `src/main.rs:137`
 
@@ -102,7 +118,9 @@ let options = SignOptions {
 
 ## 2. Security Concerns
 
-### SEC-1: Password File Warning Only in Release Builds (🟡 Medium)
+### SEC-1: Password File Warning Only in Release Builds (🟡 Medium) ✅ FIXED
+
+**Status:** Fixed in commit d35a639
 
 **Location:** `src/main.rs:404-407`
 
@@ -186,7 +204,9 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 ## 3. Testing Gaps
 
-### TEST-1: No Empty Password Tests (🟠 High)
+### TEST-1: No Empty Password Tests (🟠 High) ✅ COMPLETED
+
+**Status:** Tests added in commit 7a63a08
 
 **Issue:** No tests verify behavior with zero-length passwords (`b""`). This is a common edge case that could expose bugs in KDF or encryption logic.
 
@@ -197,7 +217,9 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 ---
 
-### TEST-2: No Fuzzing of Malformed Binary Data (🟠 High)
+### TEST-2: No Fuzzing of Malformed Binary Data (🟠 High) ✅ COMPLETED
+
+**Status:** Fuzzing tests added in commit 5214581
 
 **Issue:** While property-based tests exist, there's no dedicated fuzzing of:
 - Truncated key files
@@ -431,24 +453,24 @@ const SECKEY_KDF_ALG_OFFSET: usize = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE
 
 ## 6. Remediation Plan
 
-### Phase 1: Critical Fixes (Do Immediately)
+### Phase 1: Critical Fixes (Do Immediately) ✅ COMPLETED
 
-| ID | Issue | Effort | Priority |
-|----|-------|--------|----------|
-| BUG-1 | Non-constant-time password comparison | 10 min | 🟠 High |
-| TEST-1 | Add empty password tests | 30 min | 🟠 High |
-| TEST-2 | Add malformed input fuzzing | 2 hr | 🟠 High |
+| ID | Issue | Effort | Priority | Status |
+|----|-------|--------|----------|--------|
+| BUG-1 | Non-constant-time password comparison | 10 min | 🟠 High | ✅ Fixed (59af07b) |
+| TEST-1 | Add empty password tests | 30 min | 🟠 High | ✅ Done (7a63a08) |
+| TEST-2 | Add malformed input fuzzing | 2 hr | 🟠 High | ✅ Done (5214581) |
 
-### Phase 2: Security Hardening (This Week)
+### Phase 2: Security Hardening (This Week) - IN PROGRESS
 
-| ID | Issue | Effort | Priority |
-|----|-------|--------|----------|
-| SEC-1 | Fix password file warning | 5 min | 🟡 Medium |
-| BUG-2 | Validate trusted comment prefix | 15 min | 🟡 Medium |
-| BUG-3 | Verify/document prehashed default | 30 min | 🟡 Medium |
-| TEST-3 | Add concurrent access tests | 2 hr | 🟡 Medium |
-| TEST-4 | Add symlink tests | 1 hr | 🟡 Medium |
-| TEST-5 | Add boundary length tests | 1 hr | 🟡 Medium |
+| ID | Issue | Effort | Priority | Status |
+|----|-------|--------|----------|--------|
+| SEC-1 | Fix password file warning | 5 min | 🟡 Medium | ✅ Fixed (d35a639) |
+| BUG-2 | Validate trusted comment prefix | 15 min | 🟡 Medium | ✅ Fixed (fbd76b0) |
+| BUG-3 | Verify/document prehashed default | 30 min | 🟡 Medium | ✅ Done (eb3bdd1) |
+| TEST-3 | Add concurrent access tests | 2 hr | 🟡 Medium | ⏳ Pending |
+| TEST-4 | Add symlink tests | 1 hr | 🟡 Medium | ⏳ Pending |
+| TEST-5 | Add boundary length tests | 1 hr | 🟡 Medium | ⏳ Pending |
 
 ### Phase 3: Quality Improvements (Next Sprint)
 
