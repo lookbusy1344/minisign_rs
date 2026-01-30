@@ -402,7 +402,6 @@ fn prompt_password(
 ) -> Result<Zeroizing<String>> {
     // If password file is provided, read from it
     if let Some(path) = password_file {
-        #[cfg(not(debug_assertions))]
         eprintln!(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
