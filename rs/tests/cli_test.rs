@@ -1296,3 +1296,181 @@ fn test_force_long_option() {
         .assert()
         .success();
 }
+
+// Tests for long option aliases
+#[test]
+fn test_prehashed_long_option() {
+    // Test that --prehashed works the same as -H
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate keys
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Create message
+    fs::write(&message_file, b"test message").expect("Failed to write message file");
+
+    // Sign with --prehashed (long option)
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("--prehashed")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success();
+
+    // Verify signature exists
+    assert!(sig_file.exists());
+
+    // Verify with --prehashed (long option)
+    minisign_cmd()
+        .arg("-V")
+        .arg("--prehashed")
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_pretty_quiet_long_option() {
+    // Test that --pretty-quiet works the same as -Q
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+
+    // Generate keys
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Create and sign message
+    fs::write(&message_file, b"test").expect("Failed to write message file");
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-t")
+        .arg("trusted comment text")
+        .assert()
+        .success();
+
+    // Verify with --pretty-quiet (long option)
+    let output = minisign_cmd()
+        .arg("-V")
+        .arg("--pretty-quiet")
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&output);
+    assert!(stdout.contains("trusted comment text"));
+    assert!(!stdout.contains("Signature and comment signature verified"));
+}
+
+#[test]
+fn test_signature_long_option() {
+    // Test that --signature works the same as -x
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let custom_sig = temp_dir.path().join("custom.sig");
+
+    // Generate keys
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Create message
+    fs::write(&message_file, b"test").expect("Failed to write message file");
+
+    // Sign with --signature (long option) for custom signature path
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-m")
+        .arg(&message_file)
+        .arg("--signature")
+        .arg(&custom_sig)
+        .assert()
+        .success();
+
+    // Verify custom signature file exists
+    assert!(custom_sig.exists());
+
+    // Verify with --signature (long option)
+    minisign_cmd()
+        .arg("-V")
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-m")
+        .arg(&message_file)
+        .arg("--signature")
+        .arg(&custom_sig)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_no_password_long_option() {
+    // Test that --no-password works the same as -W
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    // Generate keys with --no-password (long option)
+    minisign_cmd()
+        .arg("-G")
+        .arg("--no-password")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Keys should exist
+    assert!(secret_key.exists());
+    assert!(public_key.exists());
+}

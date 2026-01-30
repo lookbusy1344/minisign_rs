@@ -120,7 +120,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-p <FILE>` | `--publickey-path <FILE>` | Public key file path |
 | `-P <STRING>` | `--publickey <STRING>` | Public key as BASE64-encoded string |
 | `-m <FILE>` | `--input <FILE>` | Input file (message to sign/verify) |
-| `-x <FILE>` | | Signature file (default: `<file>.minisig`) |
+| `-x <FILE>` | `--signature <FILE>` | Signature file (default: `<file>.minisig`) |
 
 #### Comment Options
 
@@ -134,12 +134,12 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | Short | Long | Description |
 |-------|------|-------------|
 | `-l` | `--legacy` | Create a legacy signature (non-prehashed) |
-| `-H` | | Sign or verify a prehashed file |
+| `-H` | `--prehashed` | Sign or verify a prehashed file |
 | `-q` | `--quiet` | Quiet mode (minimal output) |
-| `-Q` | | Pretty quiet mode (show only trusted comment) |
+| `-Q` | `--pretty-quiet` | Pretty quiet mode (show only trusted comment) |
 | `-f` | `--force` | Force overwrite of existing files |
 | `-o` | `--output` | Output verification result to stdout |
-| `-W` | | Do not use password (generate and change only) |
+| `-W` | `--no-password` | Do not use password (generate and change only) |
 
 #### Additional Options
 

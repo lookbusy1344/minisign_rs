@@ -24,27 +24,28 @@ minisign_rs -K [-s seckey_file] [-W]\n\
 minisign_rs -I [-s seckey_file | -p pubkey_file]\n\
 minisign_rs -S [-l] [-x sig_file] [-s seckey_file] [-c untrusted_comment] [-t trusted_comment] -m file\n\
 minisign_rs -V [-H] [-x sig_file] [-p pubkey_file | -P pubkey] [-o] [-q] -m file\n\n\
--G                generate a new key pair\n\
--R                recreate a public key file from a secret key file\n\
--K                change/remove the password of the secret key\n\
--I                inspect a key file and display security parameters\n\
--S                sign files\n\
--V                verify that a signature is valid for a given file\n\
--H                require input to be prehashed\n\
--l                sign using the legacy format\n\
--m <file>         file to sign/verify\n\
--o                combined with -V, output the file content after verification\n\
--p <pubkey_file>  public key file (default: ./minisign.pub)\n\
--P <pubkey>       public key, as a base64 string\n\
--s <seckey_file>  secret key file (default: ~/.minisign/minisign.key)\n\
--W                do not encrypt/decrypt the secret key with a password\n\
--x <sigfile>      signature file (default: <file>.minisig)\n\
--c <comment>      add a one-line untrusted comment\n\
--t <comment>      add a one-line trusted comment\n\
--q                quiet mode, suppress output\n\
--Q                pretty quiet mode, only print the trusted comment\n\
+-G, --generate    generate a new key pair\n\
+-R, --recreate    recreate a public key file from a secret key file\n\
+-K, --change-password  change/remove the password of the secret key\n\
+-I, --inspect     inspect a key file and display security parameters\n\
+-S, --sign        sign files\n\
+-V, --verify      verify that a signature is valid for a given file\n\
+-H, --prehashed   require input to be prehashed\n\
+-l, --legacy      sign using the legacy format\n\
+-m, --input <file>  file to sign/verify\n\
+-o, --output      combined with -V, output the file content after verification\n\
+-p, --publickey-path <pubkey_file>  public key file (default: ./minisign.pub)\n\
+-P, --publickey <pubkey>  public key, as a base64 string\n\
+-s, --secretkey-path <seckey_file>  secret key file (default: ~/.minisign/minisign.key)\n\
+-W, --no-password do not encrypt/decrypt the secret key with a password\n\
+-x, --signature <sigfile>  signature file (default: <file>.minisig)\n\
+-c, --untrusted-comment <comment>  add a one-line untrusted comment\n\
+-t, --trusted-comment <comment>  add a one-line trusted comment\n\
+-q, --quiet       quiet mode, suppress output\n\
+-Q, --pretty-quiet  pretty quiet mode, only print the trusted comment\n\
 -f, --force       force. Combined with -G, overwrite a previous key pair\n\
--v                display version number\n\n\
+-h, --help        display this help message\n\
+-v, --version     display version number\n\n\
 {{usage-heading}} {{usage}}\n\n\
 {{all-args}}"
     )
@@ -88,7 +89,7 @@ pub struct Cli {
     pub force: bool,
 
     /// Sign or verify a prehashed file
-    #[arg(short = 'H')]
+    #[arg(short = 'H', long = "prehashed")]
     pub prehashed: bool,
 
     /// Legacy mode (sign only)
@@ -116,7 +117,7 @@ pub struct Cli {
     pub quiet: bool,
 
     /// Pretty quiet mode (trusted comment only)
-    #[arg(short = 'Q')]
+    #[arg(short = 'Q', long = "pretty-quiet")]
     pub pretty_quiet: bool,
 
     /// Secret key file
@@ -132,11 +133,11 @@ pub struct Cli {
     pub untrusted_comment: Option<String>,
 
     /// Signature file
-    #[arg(short = 'x', value_name = "FILE")]
+    #[arg(short = 'x', long = "signature", value_name = "FILE")]
     pub signature_file: Option<PathBuf>,
 
     /// Do not use password (generate and change only)
-    #[arg(short = 'W')]
+    #[arg(short = 'W', long = "no-password")]
     pub no_password: bool,
 
     /// Read password from file (for testing only - insecure for production use)
