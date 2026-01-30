@@ -95,7 +95,7 @@ pub enum Error {
     ScryptParamError(String),
 
     // User input errors
-    #[error("password mismatch")]
+    #[error("Passwords don't match")]
     PasswordMismatch,
 
     #[error("invalid path: {0:?}")]

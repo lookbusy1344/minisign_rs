@@ -62,11 +62,13 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     // Get comment
     let comment = cli.untrusted_comment.clone();
 
-    // Get password (unless -W was specified)
+    // Get password with confirmation (unless -W was specified)
     let password = if cli.no_password {
         None
     } else {
-        Some(prompt_password("Password: ", cli.password_file.as_deref())?)
+        Some(prompt_password_with_confirmation(
+            cli.password_file.as_deref(),
+        )?)
     };
 
     let options = GenerateOptions {
@@ -425,4 +427,30 @@ fn prompt_password(
     rpassword::read_password()
         .map(Zeroizing::new)
         .map_err(|e| Error::Io(format!("Failed to read password: {e}")))
+}
+
+/// Prompt for password with confirmation (for key generation)
+///
+/// Prompts twice and validates that both entries match.
+/// If reading from a password file, only prompts once (confirmation not needed for automation).
+///
+/// Returns a `Zeroizing<String>` that automatically clears the password from memory when dropped.
+fn prompt_password_with_confirmation(
+    password_file: Option<&std::path::Path>,
+) -> Result<Zeroizing<String>> {
+    // If reading from file, no confirmation needed
+    if password_file.is_some() {
+        return prompt_password("Password: ", password_file);
+    }
+
+    // Prompt twice for interactive input
+    let password1 = prompt_password("Password: ", None)?;
+    let password2 = prompt_password("Password (one more time): ", None)?;
+
+    // Compare passwords (constant-time comparison via byte equality)
+    if password1.as_bytes() != password2.as_bytes() {
+        return Err(Error::PasswordMismatch);
+    }
+
+    Ok(password1)
 }
