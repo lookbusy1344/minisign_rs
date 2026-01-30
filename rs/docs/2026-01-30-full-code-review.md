@@ -25,7 +25,7 @@ This is a security-critical cryptographic signing tool. Overall, the implementat
   - BUG-3: Prehashed mode default verified and documented
   - TEST-1: Empty password edge case tests added
   - TEST-2: Comprehensive malformed input fuzzing added
-- 🟡 **Phase 2 In Progress:** 2/6 medium-priority items remaining
+- 🟡 **Phase 2 In Progress:** 1/6 medium-priority items remaining
 
 ---
 
@@ -234,12 +234,19 @@ if pubkey.keynum() != sig_box.sig_struct().keynum() {
 
 ---
 
-### TEST-3: No Concurrent Access Tests (🟡 Medium)
+### TEST-3: No Concurrent Access Tests (🟡 Medium) ✅ COMPLETED
+
+**Status:** Tests added in commit e4b09c2
 
 **Issue:** Despite `tests/concurrent_access.rs` existing, I didn't see tests for:
 - Two processes signing with same key simultaneously
 - Reading key while it's being written
 - File locking behavior
+
+**Resolution:** Added three new comprehensive tests:
+- `test_multiprocess_signing_same_key` - Tests multiple processes signing with the same key simultaneously (verifies file locking across process boundaries)
+- `test_read_during_write` - Tests reading a key file while it's being written (verifies atomic write operations)
+- `test_atomic_file_creation_stress` - Tests aggressive concurrent file creation with minimal delays (verifies `create_new(true)` atomicity)
 
 ---
 
@@ -470,7 +477,7 @@ const SECKEY_KDF_ALG_OFFSET: usize = SECKEY_SIG_ALG_OFFSET + SECKEY_SIG_ALG_SIZE
 | SEC-1 | Fix password file warning | 5 min | 🟡 Medium | ✅ Fixed (d35a639) |
 | BUG-2 | Validate trusted comment prefix | 15 min | 🟡 Medium | ✅ Fixed (fbd76b0) |
 | BUG-3 | Verify/document prehashed default | 30 min | 🟡 Medium | ✅ Done (eb3bdd1) |
-| TEST-3 | Add concurrent access tests | 2 hr | 🟡 Medium | ⏳ Pending |
+| TEST-3 | Add concurrent access tests | 2 hr | 🟡 Medium | ✅ Done (e4b09c2) |
 | TEST-4 | Add symlink tests | 1 hr | 🟡 Medium | ⏳ Pending |
 | TEST-5 | Add boundary length tests | 1 hr | 🟡 Medium | ✅ Fixed (76823f3) |
 
