@@ -27,6 +27,13 @@ pub struct InspectOptions {
     pub key_file: String,
 }
 
+/// Options for inspecting an encrypted private key (with decryption)
+#[derive(Debug, Clone)]
+pub struct InspectPrivateOptions {
+    /// Path to the secret key file
+    pub key_file: String,
+}
+
 /// Result of inspecting a key file
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InspectResult {
@@ -99,6 +106,79 @@ pub fn inspect(options: &InspectOptions) -> Result<InspectResult> {
 pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
     let pubkey = PubkeyStruct::from_base64(base64_str)?;
     Ok(inspect_public_key(&pubkey))
+}
+
+/// Inspect a private key by decrypting it first (if encrypted)
+///
+/// This function works like `inspect()` but decrypts encrypted private keys
+/// to retrieve the real key ID. For unencrypted keys and public keys, it
+/// behaves identically to `inspect()`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file cannot be read
+/// - The file is not a valid key
+/// - For encrypted keys: password is incorrect or decryption fails
+pub fn inspect_private(options: &InspectPrivateOptions, password: &[u8]) -> Result<InspectResult> {
+    let contents = fs::read_to_string(&options.key_file)
+        .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
+
+    // Try to parse as secret key first
+    if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
+        if !seckey.is_encrypted() {
+            // Unencrypted secret key - behave like regular inspect
+            return inspect_secret_key(&seckey);
+        }
+
+        // Encrypted - decrypt to get the real keynum
+        let (_secret_key, decrypted_keynum) = seckey.decrypt(password)?;
+
+        // Get KDF info for security analysis
+        let opslimit = seckey.kdf_opslimit();
+        let memlimit = seckey.kdf_memlimit();
+        let (log_n, r, p) = opslimit_memlimit_to_params(opslimit, memlimit)?;
+
+        let is_fallback = opslimit < PRODUCTION_OPSLIMIT || memlimit < PRODUCTION_MEMLIMIT;
+        let weakness_multiplier = if is_fallback {
+            Some(PRODUCTION_MEMLIMIT / memlimit)
+        } else {
+            None
+        };
+
+        let security_level = if !is_fallback {
+            SecurityLevel::High
+        } else if memlimit >= 256_000_000 {
+            SecurityLevel::Medium
+        } else {
+            SecurityLevel::Low
+        };
+
+        return Ok(InspectResult {
+            key_id: decrypted_keynum.to_key_id(),
+            key_id_words: crate::wordlist::keynum_to_words(&decrypted_keynum),
+            key_type: KeyType::SecretEncrypted,
+            security_level: Some(security_level),
+            kdf_info: Some(KdfInfo {
+                opslimit,
+                memlimit,
+                log_n,
+                r,
+                p,
+                is_fallback,
+                weakness_multiplier,
+            }),
+        });
+    }
+
+    // Try to parse as public key
+    if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
+        return Ok(inspect_public_key(&pubkey));
+    }
+
+    Err(Error::InvalidKeyFormat(
+        "File is not a valid minisign key".to_string(),
+    ))
 }
 
 // Production-strength KDF parameters (N=2^20, r=8, p=1)

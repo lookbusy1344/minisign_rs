@@ -44,6 +44,7 @@ fn run() -> Result<()> {
         Action::Recreate => handle_recreate(&cli),
         Action::Change => handle_change(&cli),
         Action::Inspect => handle_inspect(&cli),
+        Action::InspectPrivate => handle_inspect_private(&cli),
     }
 }
 
@@ -411,6 +412,95 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
                 }
 
                 // Add recommendation for weak keys
+                if result.security_level == Some(SecurityLevel::Low) {
+                    println!();
+                    println!(
+                        "*** RECOMMENDATION: Regenerate this key on a system with >=2GB RAM for full security."
+                    );
+                }
+            }
+        }
+        KeyType::SecretUnencrypted => {
+            println!("└─ Encrypted: No");
+            println!();
+            println!("*** WARNING: This key is stored in plaintext.");
+            println!("   Anyone with file access can use it without a password.");
+        }
+        KeyType::Public => {
+            println!("└─ Type: Ed25519 Public Key");
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_inspect_private(cli: &Cli) -> Result<()> {
+    use minisign::ops::inspect::{InspectPrivateOptions, KeyType, SecurityLevel, inspect_private};
+
+    // Get secret key path
+    let secret_key_file = cli
+        .secret_key_file
+        .clone()
+        .unwrap_or_else(Cli::default_secret_key_path);
+
+    // Prompt for password
+    let password = prompt_password("Password: ", cli.password_file.as_deref())?;
+
+    let options = InspectPrivateOptions {
+        key_file: secret_key_file.to_string_lossy().to_string(),
+    };
+
+    let result = inspect_private(&options, password.as_bytes())?;
+
+    // Display the source
+    println!("Inspecting: {} (decrypted)\n", secret_key_file.display());
+
+    // Display security level
+    if let Some(security_level) = result.security_level {
+        match security_level {
+            SecurityLevel::High => println!("Security Level: HIGH [OK]\n"),
+            SecurityLevel::Medium => println!("Security Level: MEDIUM [WARNING]\n"),
+            SecurityLevel::Low => println!("Security Level: LOW [CRITICAL]\n"),
+            SecurityLevel::None => println!("Security Level: NONE (UNENCRYPTED) [WARNING]\n"),
+        }
+    }
+
+    // Display key information with decrypted key ID
+    println!("Key Information:");
+    // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
+    println!("├─ Key ID: {}", result.key_id);
+    // codeql[rust/cleartext-logging] - Human-readable key ID (PGP Word List)
+    println!("├─ Key ID (words): {}", result.key_id_words);
+
+    match result.key_type {
+        KeyType::SecretEncrypted => {
+            println!("├─ Encrypted: Yes");
+            // codeql[rust/cleartext-logging] - Logging algorithm name, not sensitive data
+            println!("├─ KDF Algorithm: Scrypt");
+
+            if let Some(kdf) = result.kdf_info {
+                println!("└─ KDF Parameters:");
+                // codeql[rust/cleartext-logging] - KDF parameters are public metadata, not sensitive
+                println!(
+                    "   ├─ opslimit: {} (N=2^{}, r={}, p={})",
+                    kdf.opslimit, kdf.log_n, kdf.r, kdf.p
+                );
+                println!(
+                    "   ├─ memlimit: {} ({} MB)",
+                    kdf.memlimit,
+                    kdf.memlimit / 1_048_576
+                );
+
+                if kdf.is_fallback {
+                    println!("   ├─ Creation: Fallback (reduced parameters)");
+                    if let Some(multiplier) = kdf.weakness_multiplier {
+                        println!("   │   └─ {multiplier}x weaker than production strength");
+                    }
+                    println!("   └─ Status: WEAKENED SECURITY");
+                } else {
+                    println!("   └─ Creation: Normal (production parameters)");
+                }
+
                 if result.security_level == Some(SecurityLevel::Low) {
                     println!();
                     println!(

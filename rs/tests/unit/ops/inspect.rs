@@ -430,3 +430,123 @@ fn test_inspect_base64_wrong_format() {
     let result = inspect_base64(wrong_format);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_inspect_private_decrypts_and_shows_real_keyid() {
+    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+
+    // Create an encrypted key with known keynum
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    // Use weak parameters for fast test
+    let kdf_opslimit = 4_194_304; // N=2^17
+    let kdf_memlimit = 134_217_728; // 128 MB
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    let file_contents = seckey.to_file_contents("test encrypted key");
+    let temp_file = create_temp_key_file(&file_contents);
+
+    let options = InspectPrivateOptions {
+        key_file: temp_file.path().to_string_lossy().to_string(),
+    };
+
+    // Decrypt and inspect
+    let result = inspect_private(&options, password).unwrap();
+
+    // Verify the real keynum is shown (not zeros)
+    let expected_key_id = keynum.to_key_id();
+    assert_eq!(result.key_id, expected_key_id);
+    assert_ne!(result.key_id, "0000000000000000");
+
+    // Verify key type and security level
+    assert_eq!(result.key_type, KeyType::SecretEncrypted);
+    assert_eq!(result.security_level, Some(SecurityLevel::Low));
+}
+
+#[test]
+fn test_inspect_private_fails_with_wrong_password() {
+    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"correct_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        4_194_304,
+        134_217_728,
+        false,
+    )
+    .unwrap();
+
+    let file_contents = seckey.to_file_contents("test key");
+    let temp_file = create_temp_key_file(&file_contents);
+
+    let options = InspectPrivateOptions {
+        key_file: temp_file.path().to_string_lossy().to_string(),
+    };
+
+    // Try with wrong password
+    let result = inspect_private(&options, b"wrong_password");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_inspect_private_works_with_unencrypted_key() {
+    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+
+    let file_contents = seckey.to_file_contents("unencrypted test key");
+    let temp_file = create_temp_key_file(&file_contents);
+
+    let options = InspectPrivateOptions {
+        key_file: temp_file.path().to_string_lossy().to_string(),
+    };
+
+    // Should work without password (password is ignored for unencrypted keys)
+    let result = inspect_private(&options, b"").unwrap();
+
+    assert_eq!(result.key_type, KeyType::SecretUnencrypted);
+    assert_eq!(result.key_id, keynum.to_key_id());
+}
+
+#[test]
+fn test_inspect_private_works_with_public_key() {
+    use minisign::keys::PubkeyStruct;
+    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+
+    let (_secret_key, public_key, keynum) = generate_keypair().unwrap();
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let file_contents = pubkey.to_file_contents("test public key");
+    let temp_file = create_temp_key_file(&file_contents);
+
+    let options = InspectPrivateOptions {
+        key_file: temp_file.path().to_string_lossy().to_string(),
+    };
+
+    // Should work with public key (password is ignored)
+    let result = inspect_private(&options, b"").unwrap();
+
+    assert_eq!(result.key_type, KeyType::Public);
+    assert_eq!(result.key_id, keynum.to_key_id());
+}

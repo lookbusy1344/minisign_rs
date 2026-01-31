@@ -46,6 +46,10 @@ pub struct Cli {
     #[arg(short = 'I', long = "inspect", group = "action")]
     pub inspect: bool,
 
+    /// Inspect an encrypted private key (requires password, shows decrypted key ID)
+    #[arg(long = "inspect-private", group = "action")]
+    pub inspect_private: bool,
+
     /// Force overwrite existing files
     #[arg(short = 'f', long = "force")]
     pub force: bool,
@@ -133,6 +137,7 @@ pub enum Action {
     Recreate,
     Change,
     Inspect,
+    InspectPrivate,
 }
 
 impl Cli {
@@ -151,6 +156,8 @@ impl Cli {
             Some(Action::Change)
         } else if self.inspect {
             Some(Action::Inspect)
+        } else if self.inspect_private {
+            Some(Action::InspectPrivate)
         } else {
             None
         }
