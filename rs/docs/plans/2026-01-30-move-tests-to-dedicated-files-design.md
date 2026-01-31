@@ -91,9 +91,9 @@ Each unit test file will import from the main crate using `use minisign_rs::*;` 
 
 ### Phase 3: Utilities & CLI (5 files, ~864 lines)
 
-- `validation.rs` - 29 tests, ~266 lines
-- `formats.rs` - 11 tests, ~164 lines
-- `cli.rs` - 10 tests, ~263 lines
+- ✅ `validation.rs` - 29 tests, ~266 lines
+- ✅ `formats.rs` - 11 tests, ~164 lines
+- ✅ `cli.rs` - 10 tests, ~263 lines
 - `errors.rs` - 3 tests, ~42 lines
 - `constants.rs` - 8 tests, ~129 lines
 
