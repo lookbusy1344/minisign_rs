@@ -261,6 +261,69 @@ Minisign creates `.minisig` files with 4 lines:
 
 **Security:** Only the trusted comment (line 3) is cryptographically protected. The untrusted comment (line 1) can be modified without breaking verification.
 
+## Signing Modes
+
+Minisign supports two signing modes that differ in how they process file content before signing:
+
+### Prehashed Mode (Default)
+
+**How it works:** The file is first hashed with Blake2b-512 (producing a 64-byte hash), then that hash is signed with Ed25519.
+
+**Signature marker:** `"ED"` (uppercase) in the signature file
+
+**Advantages:**
+- **Memory efficient** - Streams files of any size without loading into memory
+- **Fast for large files** - No file size limits
+- **Default behavior** - Compatible with standard minisign workflows
+
+**Trade-off:**
+- Slightly reduced security - the signature authenticates the hash, not the raw file content
+- An attacker with a Blake2b-512 collision could substitute different content (computationally infeasible with current technology)
+
+**Usage:**
+```bash
+# Default mode (prehashed)
+minisign_rs -S -m large-file.bin
+
+# Explicit prehashed mode
+minisign_rs -S -m large-file.bin -H
+```
+
+### Legacy Mode (Direct Signing)
+
+**How it works:** The raw file content is signed directly with Ed25519, without hashing first.
+
+**Signature marker:** `"Ed"` (mixed case) in the signature file
+
+**Advantages:**
+- **Maximum security** - Signature directly authenticates the file content
+- **No hash function dependency** - Only relies on Ed25519 security
+
+**Limitations:**
+- **1 GB file size limit** - Files must fit in memory for signing/verification
+- **Higher memory usage** - Entire file loaded into RAM
+- **Slower for large files** - No streaming support
+
+**Usage:**
+```bash
+# Legacy mode (non-prehashed)
+minisign_rs -S -m small-file.txt --legacy
+```
+
+### When to Use Each Mode
+
+**Use prehashed mode (default) when:**
+- Working with files larger than a few hundred MB
+- Memory is constrained
+- Standard security is sufficient (virtually all use cases)
+
+**Use legacy mode when:**
+- Maximum theoretical security is required
+- Files are small (< 100 MB)
+- Eliminating hash function from trust assumptions
+
+**Note:** Both modes use Ed25519 signatures and provide strong cryptographic security. The prehashed mode's security reduction is purely theoretical - Blake2b-512 is cryptographically secure and no practical attacks exist.
+
 ## Configuration
 
 **`MINISIGN_CONFIG_DIR`** - Override default key directory (default: `~/.minisign/` on Unix, `%USERPROFILE%\.minisign\` on Windows). Useful for custom security policies, multi-user systems, or containers. Compatible with C minisign.
