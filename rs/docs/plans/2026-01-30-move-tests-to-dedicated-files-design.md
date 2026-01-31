@@ -73,14 +73,18 @@ Each unit test file will import from the main crate using `use minisign_rs::*;` 
 
 ### Phase 2: Operations (6 files, ~2,356 lines)
 
-- `ops/generate.rs` - 19 tests, ~485 lines
-- `ops/sign.rs` - 22 tests, ~631 lines
+- ✅ `ops/generate.rs` - 19 tests, ~485 lines
+- ✅ `ops/sign.rs` - 22 tests, ~631 lines
 - `ops/verify.rs` - 7 tests, ~108 lines
 - `ops/change.rs` - 8 tests, ~353 lines
 - `ops/recreate.rs` - 12 tests, ~356 lines
 - `ops/inspect.rs` - 15 tests, ~423 lines
 
 **Rationale:** High-level operations that use the core modules. Moving second ensures we catch integration issues.
+
+**Progress:**
+- ✅ generate.rs completed (commit 2d0108b): Made `generate_with_log_n`, `ensure_parent_directory` public, and `file_utils` module public
+- ✅ sign.rs completed (commit 9f31229): Made `create_signature`, `create_global_signature_data`, `generate_default_trusted_comment`, `write_signature_file`, `check_file_size_limit` public
 
 ### Phase 3: Utilities & CLI (5 files, ~864 lines)
 
