@@ -7,6 +7,7 @@ mod unit {
     pub mod signature;
 
     pub mod ops {
+        pub mod change;
         pub mod generate;
         pub mod sign;
         pub mod verify;
