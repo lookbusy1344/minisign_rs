@@ -51,6 +51,7 @@ tests/
 - **Slow tests** (11 tests): `--ignored`, use production N=2^20
 - Must test compatibility with C minisign after crypto changes
 - C minisign must be installed for compatibility tests
+- **IMPORTANT**: All tests MUST be in the `tests/` directory (not `src/`) to enable proper CodeQL security analysis exclusions
 
 ## Crypto Dependencies (ONLY These)
 - `ed25519-dalek` - Ed25519 signatures

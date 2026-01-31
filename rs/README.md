@@ -615,6 +615,10 @@ cargo run -- -C -s test.key --force-weak-kdf --password-file newpass.txt
 
 The `-I/--inspect` command allows you to audit the security parameters of your minisign keys. This is particularly useful for detecting keys created with weak KDF parameters.
 
+**Key ID Display:** The inspect command displays key IDs in two formats:
+- **Base64 format** (e.g., `RWQwpZ...`): Standard representation for scripting and verification
+- **PGP Word List format** (e.g., `physique aftermath edict...`): Human-readable 8-word representation designed for voice communication and visual verification. Each word is phonetically distinct to minimize errors when reading aloud or comparing keys.
+
 ```bash
 # Inspect a secret key (default: ~/.minisign/minisign.key)
 cargo run -- -I
@@ -648,6 +652,7 @@ Security Level: HIGH [OK]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
 ├─ KDF Algorithm: Scrypt
 └─ KDF Parameters:
@@ -664,6 +669,7 @@ Security Level: LOW [CRITICAL]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
+├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
 ├─ KDF Algorithm: Scrypt
 └─ KDF Parameters:
@@ -683,6 +689,7 @@ Security Level: NONE (UNENCRYPTED) [WARNING]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
+├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 └─ Encrypted: No
 
 *** WARNING: This key is stored in plaintext.
@@ -695,6 +702,7 @@ Inspecting: public key from command line (-P)
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
+├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 └─ Type: Ed25519 Public Key
 
 Note: Public keys do not contain KDF parameters or security information.
@@ -707,6 +715,7 @@ Inspecting: path/to/key.pub
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
+├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 └─ Type: Ed25519 Public Key
 
 Note: Public keys do not contain KDF parameters or security information.
