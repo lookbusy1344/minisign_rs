@@ -626,6 +626,7 @@ fn test_inspect_production_key() {
         .arg("-I")
         .arg("-s")
         .arg("tests/fixtures/keys/test.key")
+        .arg("--no-decrypt")
         .assert()
         .success()
         .stdout(predicate::str::contains(
@@ -688,7 +689,7 @@ fn test_inspect_invalid_file() {
 fn test_inspect_uses_default_secret_key_path() {
     // When no key file is specified, should use default secret key path
     // If the default key exists, inspect succeeds; otherwise it fails with a file error
-    let result = minisign_cmd().arg("-I").assert();
+    let result = minisign_cmd().arg("-I").arg("--no-decrypt").assert();
 
     // Either succeeds (if default key exists) or fails with file read error
     let output = result.get_output();
@@ -755,6 +756,7 @@ fn test_force_weak_kdf_creates_weak_key() {
         .arg("-I")
         .arg("-s")
         .arg(&sk_path)
+        .arg("--no-decrypt")
         .assert()
         .success()
         .stdout(predicate::str::contains("Security Level: LOW"))

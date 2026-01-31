@@ -42,17 +42,17 @@ pub struct Cli {
     #[arg(short = 'K', long = "change-password", group = "action")]
     pub change: bool,
 
-    /// Inspect a key file and display security parameters
+    /// Inspect a key file and display security parameters (prompts for password if encrypted)
     #[arg(short = 'I', long = "inspect", group = "action")]
     pub inspect: bool,
-
-    /// Inspect an encrypted private key (requires password, shows decrypted key ID)
-    #[arg(long = "inspect-private", group = "action")]
-    pub inspect_private: bool,
 
     /// Force overwrite existing files
     #[arg(short = 'f', long = "force")]
     pub force: bool,
+
+    /// Skip decryption of encrypted keys (show [encrypted] instead of prompting)
+    #[arg(long = "no-decrypt")]
+    pub no_decrypt: bool,
 
     /// Sign or verify a prehashed file
     #[arg(short = 'H', long = "prehashed")]
@@ -137,7 +137,6 @@ pub enum Action {
     Recreate,
     Change,
     Inspect,
-    InspectPrivate,
 }
 
 impl Cli {
@@ -156,8 +155,6 @@ impl Cli {
             Some(Action::Change)
         } else if self.inspect {
             Some(Action::Inspect)
-        } else if self.inspect_private {
-            Some(Action::InspectPrivate)
         } else {
             None
         }
