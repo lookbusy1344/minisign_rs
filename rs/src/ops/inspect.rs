@@ -32,6 +32,8 @@ pub struct InspectOptions {
 pub struct InspectResult {
     /// Key ID in base64 format
     pub key_id: String,
+    /// Key ID in PGP Word List format (human-readable)
+    pub key_id_words: String,
     /// Whether this is a secret or public key
     pub key_type: KeyType,
     /// Security level (for secret keys)
@@ -109,11 +111,13 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
         "RW{}",
         crate::formats::encode_base64(seckey.keynum().as_bytes())
     );
+    let key_id_words = crate::wordlist::keynum_to_words(seckey.keynum());
 
     if !seckey.is_encrypted() {
         // Unencrypted key
         return Ok(InspectResult {
             key_id,
+            key_id_words,
             key_type: KeyType::SecretUnencrypted,
             security_level: Some(SecurityLevel::None),
             kdf_info: None,
@@ -151,6 +155,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
 
     Ok(InspectResult {
         key_id,
+        key_id_words,
         key_type: KeyType::SecretEncrypted,
         security_level: Some(security_level),
         kdf_info: Some(KdfInfo {
@@ -171,9 +176,11 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
         "RW{}",
         crate::formats::encode_base64(pubkey.keynum().as_bytes())
     );
+    let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
 
     InspectResult {
         key_id,
+        key_id_words,
         key_type: KeyType::Public,
         security_level: None,
         kdf_info: None,

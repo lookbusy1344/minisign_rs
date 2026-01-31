@@ -186,6 +186,9 @@ fn test_inspect_public_key() {
     assert_eq!(result.security_level, None);
     assert!(result.kdf_info.is_none());
     assert!(!result.key_id.is_empty());
+    assert!(!result.key_id_words.is_empty());
+    // Should have exactly 8 words (one per byte in keynum)
+    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
 }
 
 #[test]
@@ -405,6 +408,9 @@ fn test_inspect_base64_public_key() {
     assert!(result.kdf_info.is_none());
     assert!(!result.key_id.is_empty());
     assert!(result.key_id.starts_with("RW"));
+    assert!(!result.key_id_words.is_empty());
+    // Should have exactly 8 words (one per byte in keynum)
+    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
 }
 
 #[test]

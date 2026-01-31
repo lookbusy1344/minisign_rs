@@ -342,6 +342,8 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     println!("Key Information:");
     // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
     println!("├─ Key ID: {}", result.key_id);
+    // codeql[rust/cleartext-logging] - Human-readable key ID (PGP Word List)
+    println!("├─ Key ID (words): {}", result.key_id_words);
 
     match result.key_type {
         KeyType::SecretEncrypted => {

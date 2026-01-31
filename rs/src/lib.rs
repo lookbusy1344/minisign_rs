@@ -12,6 +12,7 @@
 //! - [`validation`] - Comment and input validation (C compatibility)
 //! - [`ops`] - High-level operations (sign, verify, generate, etc.)
 //! - [`formats`] - Binary and base64 encoding/decoding
+//! - [`wordlist`] - PGP Word List encoding for human-readable key IDs
 //! - [`errors`] - Error types and Result alias
 //! - [`cli`] - Command-line interface (for binary)
 
@@ -24,6 +25,7 @@ pub mod keys;
 pub mod ops;
 pub mod signature;
 pub mod validation;
+pub mod wordlist;
 
 // Re-export commonly used types
 pub use errors::Error;

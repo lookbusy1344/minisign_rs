@@ -10,6 +10,7 @@ mod unit {
     pub mod keys;
     pub mod signature;
     pub mod validation;
+    pub mod wordlist;
 
     pub mod ops {
         pub mod change;
