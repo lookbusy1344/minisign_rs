@@ -7,8 +7,9 @@ paths-ignore:
   - '**/test_*.rs'
   - '**/*_test.rs'
 
-# Disable hardcoded credentials and crypto values for test code
+# Disable security checks for test code (tests use dummy credentials, hardcoded keys, etc.)
 query-filters:
+  # Hardcoded credentials (test passwords, API keys, etc.)
   - exclude:
       id: rust/hardcoded-credentials
       paths:
@@ -17,8 +18,31 @@ query-filters:
   - exclude:
       id: rust/hardcoded-credentials
       tags: test
+
+  # Hardcoded cryptographic values (test keys, salts, signatures)
   - exclude:
       id: rust/hard-coded-cryptographic-value
+      paths:
+        - rs/tests/**
+        - '**/test*.rs'
+
+  # Cleartext storage of sensitive information (test fixtures)
+  - exclude:
+      id: rust/cleartext-storage-of-sensitive-information
+      paths:
+        - rs/tests/**
+        - '**/test*.rs'
+
+  # Cleartext logging (tests may log sensitive test data for debugging)
+  - exclude:
+      id: rust/cleartext-logging
+      paths:
+        - rs/tests/**
+        - '**/test*.rs'
+
+  # Weak cryptographic algorithms (tests use fast/weak crypto for speed)
+  - exclude:
+      id: rust/weak-cryptographic-algorithm
       paths:
         - rs/tests/**
         - '**/test*.rs'
