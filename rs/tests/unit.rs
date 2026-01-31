@@ -5,4 +5,8 @@ mod unit {
     pub mod crypto;
     pub mod keys;
     pub mod signature;
+
+    pub mod ops {
+        pub mod generate;
+    }
 }
