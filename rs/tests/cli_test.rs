@@ -1475,3 +1475,70 @@ fn test_no_password_long_option() {
     assert!(secret_key.exists());
     assert!(public_key.exists());
 }
+
+#[test]
+fn test_generate_displays_working_message() {
+    // Test that key generation displays "Working..." during the slow scrypt operation
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    let output = minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&output);
+
+    // Should display "Working..." message
+    assert!(
+        stderr.contains("Working..."),
+        "Expected 'Working...' message during key generation but got:\n{stderr}"
+    );
+
+    // Keys should exist
+    assert!(secret_key.exists());
+    assert!(public_key.exists());
+}
+
+#[test]
+fn test_generate_quiet_suppresses_working_message() {
+    // Test that --quiet flag suppresses the working message
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    let output = minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-q")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&output);
+
+    // Should NOT display "Working..." when quiet
+    assert!(
+        !stderr.contains("Working..."),
+        "Expected no 'Working...' message with --quiet flag but got:\n{stderr}"
+    );
+
+    // Keys should exist
+    assert!(secret_key.exists());
+    assert!(public_key.exists());
+}

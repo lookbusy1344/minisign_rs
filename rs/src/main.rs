@@ -83,7 +83,23 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         force_weak_kdf: cli.force_weak_kdf,
     };
 
+    // Display working message for slow key generation
+    if !cli.quiet {
+        eprint!("Working...");
+        io::stderr()
+            .flush()
+            .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
+    }
+
     let result = generate(&options, password.as_ref().map(|p| p.as_bytes()))?;
+
+    // Clear working message
+    if !cli.quiet {
+        eprint!("\r\x1b[K");
+        io::stderr()
+            .flush()
+            .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
+    }
 
     if !cli.quiet {
         println!(
