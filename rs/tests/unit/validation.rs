@@ -1,5 +1,4 @@
-use minisign_rs::validation::*;
-use minisign_rs::errors::Error;
+use minisign::validation::*;
 
 mod is_printable_tests {
     use super::*;

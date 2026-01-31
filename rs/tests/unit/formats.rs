@@ -1,4 +1,4 @@
-use minisign_rs::formats::*;
+use minisign::formats::*;
 
 #[test]
 fn test_base64_roundtrip() {

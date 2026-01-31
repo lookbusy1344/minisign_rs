@@ -1,4 +1,4 @@
-use minisign_rs::cli::*;
+use minisign::cli::*;
 use serial_test::serial;
 use std::path::PathBuf;
 
@@ -127,8 +127,8 @@ fn test_signature_path() {
 
 #[test]
 fn test_default_signature_path_edge_cases() {
+    use minisign::errors::Error;
     use std::path::Path;
-    use minisign_rs::errors::Error;
 
     // Path with regular file - should work
     let path = Path::new("/some/path/file.txt");

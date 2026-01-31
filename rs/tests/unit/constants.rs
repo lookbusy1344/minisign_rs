@@ -1,4 +1,4 @@
-use minisign_rs::constants::*;
+use minisign::constants::*;
 
 #[test]
 fn test_cryptographic_sizes() {

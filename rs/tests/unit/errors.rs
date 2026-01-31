@@ -1,4 +1,4 @@
-use minisign_rs::errors::*;
+use minisign::errors::*;
 use std::io;
 use std::path::PathBuf;
 

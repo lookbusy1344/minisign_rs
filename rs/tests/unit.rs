@@ -2,9 +2,14 @@
 // This file includes all unit test modules from rs/tests/unit/
 
 mod unit {
+    pub mod cli;
+    pub mod constants;
     pub mod crypto;
+    pub mod errors;
+    pub mod formats;
     pub mod keys;
     pub mod signature;
+    pub mod validation;
 
     pub mod ops {
         pub mod change;
