@@ -1,5 +1,5 @@
 Generate a weak key intentionally:
-cargo run — -G -s weak_private.key -p weak_public.pub --force-weak-kdf
+cargo run -- -G -s weak_private.key -p weak_public.pub --force-weak-kdf
 
 Signing:
 minisign_rs --sign -m SSMS20.exe --secretkey-path ./weak_private.key -t 'This is a trusted comment 28 Jan 19:31 from RS version with weak key'
