@@ -1,13 +1,16 @@
+WEAK KEYS
+=========
+
 Generate a weak key intentionally:
 cargo run -- -G -s weak_private.key -p weak_public.pub --force-weak-kdf
 
-Signing:
-minisign_rs --sign -m SSMS20.exe --secretkey-path ./weak_private.key -t 'This is a trusted comment 28 Jan 19:31 from RS version with weak key'
-minisign -Sm SSMS20B.exe -s ./weak_private.key -t 'This is a trusted comment 28 Jan 19:55 from classic C version with weak key'
+Signing with weak key:
+minisign_rs --sign -m SSMS20.exe --secretkey-path ./weak_private.key -t 'This is a trusted comment from RS version with WEAK KEY'
+minisign -Sm SSMS20B.exe -s ./weak_private.key -t 'This is a trusted comment from classic C version with weak key. No warnings'
 
-Verify:
-minisign_rs -Vm SSMS20.exe -p ./weak_public.pub
+Cross verify:
 minisign -Vm SSMS20.exe -p ./weak_public.pub
+minisign_rs -Vm SSMS20.exe -p ./weak_public.pub
 
 minisign_rs -Vm SSMS20B.exe -p ./weak_public.pub
 minisign -Vm SSMS20B.exe -p ./weak_public.pub
@@ -16,12 +19,34 @@ Inspect:
 minisign_rs -Ip weak_public.pub
 minisign_rs -Is weak_private.key
 
-Strong keys:
+Remove those signatures:
+rm SSMS20.exe.minisig
+rm SSMS20B.exe.minisig
+
+
+Strong keys
+===========
+
+Generate:
 minisign_rs -G -s strong_private_r.key -p strong_public_r.pub
 minisign -G -s strong_private_c.key -p strong_public_c.pub
 
-minisign_rs --sign -m SSMS20.exe --secretkey-path ./strong_private_c.key -t 'This is a trusted comment 30 Jan 10:38 from RS version with strong C key'
-minisign -Sm SSMS20B.exe -s ./strong_private_r.key -t 'This is a trusted comment 30 Jan 10:40 from classic C version with strong Rust key'
+Inspect:
+minisign_rs -Is strong_private_c.key --no-decrypt
+minisign_rs -Is strong_private_c.key
+minisign_rs -Is strong_private_r.key
+
+minisign_rs -Ip strong_public_c.pub
+cat strong_public_c.pub
+minisign_rs -Ip strong_public_r.pub
+cat strong_public_r.pub
+
+Cross signing:
+minisign_rs --sign -m SSMS20.exe --secretkey-path ./strong_private_c.key -t 'This is a trusted comment from RS version with strong C key'
+minisign -Sm SSMS20B.exe -s ./strong_private_r.key -t 'This is a trusted comment from classic C version with strong Rust key'
+
+Inspecting signatures:
+TODO
 
 Verify:
 minisign_rs -Vm SSMS20.exe -p ./strong_public_c.pub
@@ -29,3 +54,7 @@ minisign -Vm SSMS20.exe -p ./strong_public_c.pub
 
 minisign_rs -Vm SSMS20B.exe -p ./strong_public_r.pub
 minisign -Vm SSMS20B.exe -p ./strong_public_r.pub
+
+Failure, using the wrong public keys:
+minisign_rs -Vm SSMS20.exe -p ./strong_public_r.pub
+minisign_rs -Vm SSMS20B.exe -p ./strong_public_c.pub
