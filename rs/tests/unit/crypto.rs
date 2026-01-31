@@ -26,6 +26,18 @@ fn test_keynum_hex() {
 }
 
 #[test]
+fn test_keynum_to_key_id_little_endian() {
+    // Verify that to_key_id() converts bytes to little-endian u64, matching C minisign
+    // Bytes: E0 BC 3A E3 30 23 02 DD
+    // As little-endian u64: DD022330E33ABCE0 (matches C minisign le64_load() + %016PRIX64)
+    let keynum = KeyNum::from_bytes([0xE0, 0xBC, 0x3A, 0xE3, 0x30, 0x23, 0x02, 0xDD]);
+    assert_eq!(keynum.to_key_id(), "DD022330E33ABCE0");
+
+    // to_hex() should return bytes in order (different from to_key_id())
+    assert_eq!(keynum.to_hex(), "E0BC3AE3302302DD");
+}
+
+#[test]
 fn test_secret_key_debug() {
     let sk = SecretKey::from_bytes([42u8; SECRET_KEY_BYTES]);
     let debug_str = format!("{sk:?}");

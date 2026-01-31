@@ -66,7 +66,7 @@ pub fn recreate(options: &RecreateOptions, password: Option<&[u8]>) -> Result<Re
     let pubkey = PubkeyStruct::new(keynum, public_key);
 
     // Generate comment
-    let keynum_hex = keynum.to_hex();
+    let keynum_hex = keynum.to_key_id();
     let comment = options
         .comment
         .clone()

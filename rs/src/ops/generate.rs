@@ -157,7 +157,7 @@ pub fn generate_with_log_n(
     let pubkey = PubkeyStruct::new(keynum, public_key);
 
     // Generate comments
-    let keynum_hex = keynum.to_hex();
+    let keynum_hex = keynum.to_key_id();
     let comment = options
         .comment
         .clone()

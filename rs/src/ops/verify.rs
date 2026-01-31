@@ -158,8 +158,8 @@ pub fn verify_message_signature(
     // First, verify that the keynum matches
     if pubkey.keynum() != sig_box.sig_struct().keynum() {
         return Err(Error::KeyMismatch {
-            sig_keynum: sig_box.sig_struct().keynum().to_hex(),
-            pub_keynum: pubkey.keynum().to_hex(),
+            sig_keynum: sig_box.sig_struct().keynum().to_key_id(),
+            pub_keynum: pubkey.keynum().to_key_id(),
         });
     }
 

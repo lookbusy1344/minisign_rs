@@ -299,7 +299,7 @@ fn test_roundtrip_generated_keys() {
 
     // Verify keynums match
     assert_eq!(seckey.keynum(), pubkey.keynum());
-    assert_eq!(seckey.keynum().to_hex(), result.keynum_hex);
+    assert_eq!(seckey.keynum().to_key_id(), result.keynum_hex);
 }
 
 #[test]
