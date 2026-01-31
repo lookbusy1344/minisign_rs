@@ -149,6 +149,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-v` | `--version` | Show version information and exit |
 | | `--password-file <FILE>` | Read password from file (testing only - insecure) |
 | | `--allow-kdf-fallback` | Allow KDF parameter fallback on low-memory systems |
+| | `--no-decrypt` | Skip decryption of encrypted keys (show [encrypted] instead of prompting) |
 
 ### Common Usage Examples
 
@@ -231,13 +232,16 @@ minisign_rs -K -W
 #### Inspect key security
 
 ```bash
-# Inspect default secret key
+# Inspect default secret key (prompts for password if encrypted)
 minisign_rs --inspect
 
-# Inspect specific secret key
+# Inspect specific secret key (smart: prompts only if encrypted)
 minisign_rs -I -s mykey.key
 
-# Inspect public key file
+# Inspect without decrypting (non-interactive, shows [encrypted] for key ID)
+minisign_rs -I -s mykey.key --no-decrypt
+
+# Inspect public key file (never prompts)
 minisign_rs -I -p key.pub
 
 # Inspect public key from command line (base64)
@@ -363,6 +367,7 @@ For detailed analysis:
 Additional flags not in C minisign:
 
 - **`-I/--inspect`** - Audit key security parameters and KDF strength (see [Inspecting Key Security](#inspecting-key-security))
+- **`--no-decrypt`** - Skip password prompt for encrypted keys during inspection (non-interactive mode)
 - **`--password-file <FILE>`** - Read password from file (testing only, insecure)
 - **`--allow-kdf-fallback`** - Allow weak KDF on low-memory systems (opt-in, reduces security)
 - **`--force-weak-kdf`** - Create intentionally weak keys (debug builds only, testing)
@@ -373,29 +378,57 @@ See [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) for
 
 The `-I/--inspect` command audits the security parameters of your minisign keys, useful for detecting keys created with weak KDF parameters.
 
+**Smart decryption:** Automatically detects encrypted keys and prompts for password only when needed. For public keys and unencrypted secret keys, no password prompt occurs. Use `--no-decrypt` to skip password prompting for non-interactive scripts.
+
 **Key ID formats:** Displays both hexadecimal (e.g., `31FCAABFDC95A530`) for scripting and PGP Word List (e.g., `physique aftermath edict...`) for human verification.
 
 ```bash
-# Inspect default secret key (~/.minisign/minisign.key)
+# Inspect default secret key (prompts for password if encrypted)
 cargo run -- -I
 
-# Inspect specific secret key
+# Inspect specific secret key (smart: prompts only if encrypted)
 cargo run -- -I -s path/to/key.key
 
-# Inspect public key (file or base64 string)
+# Inspect without decrypting (non-interactive, shows [encrypted] for key ID)
+cargo run -- -I -s path/to/key.key --no-decrypt
+
+# Inspect public key (never prompts)
 cargo run -- -I -p key.pub
 cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ```
 
-**Example output - Production key:**
+**Example output - Production key (decrypted):**
 ```
+Inspecting: mykey.key (decrypted)
+
 Security Level: HIGH [OK]
 
 Key Information:
 ├─ Key ID: 31FCAABFDC95A530
 ├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
-└─ KDF Parameters: opslimit=33554432 (N=2^20), memlimit=1073741824 (1024 MB)
+├─ KDF Algorithm: Scrypt
+└─ KDF Parameters:
+   ├─ opslimit: 33554432 (N=2^20, r=8, p=1)
+   ├─ memlimit: 1073741824 (1024 MB)
+   └─ Creation: Normal (production parameters)
+```
+
+**Example output - Production key (--no-decrypt):**
+```
+Inspecting: mykey.key
+
+Security Level: HIGH [OK]
+
+Key Information:
+├─ Key ID: [encrypted - password required to view]
+├─ Key ID (words): [decrypt key to view]
+├─ Encrypted: Yes
+├─ KDF Algorithm: Scrypt
+└─ KDF Parameters:
+   ├─ opslimit: 33554432 (N=2^20, r=8, p=1)
+   ├─ memlimit: 1073741824 (1024 MB)
+   └─ Creation: Normal (production parameters)
 ```
 
 **Example output - Weak key:**
