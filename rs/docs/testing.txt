@@ -46,7 +46,8 @@ minisign_rs --sign -m SSMS20.exe --secretkey-path ./strong_private_c.key -t 'Thi
 minisign -Sm SSMS20B.exe -s ./strong_private_r.key -t 'This is a trusted comment from classic C version with strong Rust key'
 
 Inspecting signatures:
-TODO
+minisign_rs -Ix SSMS20.exe.minisig
+minisign_rs -Ix SSMS20B.exe.minisig
 
 Verify:
 minisign_rs -Vm SSMS20.exe -p ./strong_public_c.pub
