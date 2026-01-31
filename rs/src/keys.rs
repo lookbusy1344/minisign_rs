@@ -858,14 +858,18 @@ impl SeckeyStruct {
 
         let mut keynum_bytes = [0u8; KEYNUM_BYTES];
         keynum_bytes.copy_from_slice(&bytes[SECKEY_KEYNUM_OFFSET..keynum_end]);
-        let keynum = KeyNum::from_bytes(keynum_bytes);
 
-        // For encrypted keys, store encrypted keynum separately for serialization
-        let encrypted_keynum = if encrypted {
-            keynum_bytes
+        // For encrypted keys, the bytes on disk are encrypted - we cannot interpret them as a keynum
+        // For unencrypted keys, the bytes are plaintext keynum
+        let (keynum, encrypted_keynum) = if encrypted {
+            // Encrypted: store encrypted bytes for serialization, zero keynum until decrypt
+            ([0u8; KEYNUM_BYTES], keynum_bytes)
         } else {
-            [0u8; KEYNUM_BYTES]
+            // Unencrypted: bytes are plaintext keynum
+            (keynum_bytes, [0u8; KEYNUM_BYTES])
         };
+
+        let keynum = KeyNum::from_bytes(keynum);
 
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
         secret_key_encrypted.copy_from_slice(&bytes[SECKEY_SK_OFFSET..sk_end]);

@@ -390,6 +390,51 @@ fn test_atomic_file_creation_both_files_check() {
 }
 
 #[test]
+fn test_encrypted_keypair_has_matching_key_ids() {
+    // Fast variant using N=2^14 for speed
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("encrypted.key");
+    let pk_path = temp_dir.path().join("encrypted.pub");
+
+    let options = GenerateOptions {
+        secret_key_file: sk_path.clone(),
+        public_key_file: pk_path.clone(),
+        comment: Some("Encrypted key ID test".to_string()),
+        force: false,
+        no_password: false,
+        allow_kdf_fallback: false,
+        #[cfg(debug_assertions)]
+        force_weak_kdf: false,
+    };
+
+    let password = b"testpassword";
+    let result =
+        generate_with_log_n(&options, Some(password), 14).expect("generation should succeed");
+
+    // Load both key files
+    let sk_contents = fs::read_to_string(&sk_path).unwrap();
+    let seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
+
+    let pk_contents = fs::read_to_string(&pk_path).unwrap();
+    let pubkey = PubkeyStruct::from_file_contents(&pk_contents).unwrap();
+
+    // Decrypt the secret key to get the real keynum
+    let (_secret_key, decrypted_keynum) = seckey
+        .decrypt(password)
+        .expect("should decrypt with correct password");
+
+    // CRITICAL: Key IDs must match between public and private key files
+    // This proves they are from the same keypair
+    assert_eq!(
+        decrypted_keynum,
+        *pubkey.keynum(),
+        "Encrypted keypair must have matching key IDs after decryption"
+    );
+    assert_eq!(decrypted_keynum.to_key_id(), result.keynum_hex);
+    assert_eq!(pubkey.keynum().to_key_id(), result.keynum_hex);
+}
+
+#[test]
 fn test_write_secret_key_file_atomic_creation() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("new.key");

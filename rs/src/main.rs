@@ -366,10 +366,18 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     // Display key information
     // codeql[rust/cleartext-logging] - Logging non-sensitive key metadata only
     println!("Key Information:");
-    // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
-    println!("├─ Key ID: {}", result.key_id);
-    // codeql[rust/cleartext-logging] - Human-readable key ID (PGP Word List)
-    println!("├─ Key ID (words): {}", result.key_id_words);
+
+    // For encrypted secret keys, key ID is not available without decryption
+    if result.key_type == KeyType::SecretEncrypted && result.key_id == "0000000000000000" {
+        // codeql[rust/cleartext-logging] - Logging non-sensitive informational message
+        println!("├─ Key ID: [encrypted - password required to view]");
+        println!("├─ Key ID (words): [decrypt key to view]");
+    } else {
+        // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
+        println!("├─ Key ID: {}", result.key_id);
+        // codeql[rust/cleartext-logging] - Human-readable key ID (PGP Word List)
+        println!("├─ Key ID (words): {}", result.key_id_words);
+    }
 
     match result.key_type {
         KeyType::SecretEncrypted => {
