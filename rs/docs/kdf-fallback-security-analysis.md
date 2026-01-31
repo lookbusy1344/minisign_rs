@@ -154,7 +154,7 @@ $ minisign_rs -I -s ~/.minisign/minisign.key
 Security Level: HIGH ✓
 
 Key Information:
-├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+├─ Key ID: 31FCAABFDC95A530
 ├─ Encrypted: Yes
 ├─ KDF Algorithm: Scrypt
 └─ KDF Parameters:
@@ -169,7 +169,7 @@ For weak keys, the inspect command displays:
 Security Level: LOW 🔥
 
 Key Information:
-├─ Key ID: RWQwpZXcv6r8MS...
+├─ Key ID: 31FCAABFDC95A530
 ├─ Encrypted: Yes
 ├─ KDF Algorithm: Scrypt
 └─ KDF Parameters:
@@ -490,7 +490,7 @@ Keys created with C minisign's automatic fallback can be used with Rust minisign
    Security Level: LOW 🔥
 
    Key Information:
-   ├─ Key ID: RW4tQTKepuvhc=
+   ├─ Key ID: 17BE6EEA2913D4E2
    ├─ Encrypted: Yes
    ├─ KDF Algorithm: Scrypt
    └─ KDF Parameters:
@@ -535,7 +535,7 @@ Keys created with C minisign's automatic fallback can be used with Rust minisign
    # Security Level: HIGH ✓
    #
    # Key Information:
-   # ├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+   # ├─ Key ID: 31FCAABFDC95A530
    # ├─ Encrypted: Yes
    # ├─ KDF Algorithm: Scrypt
    # └─ KDF Parameters:
@@ -547,7 +547,7 @@ Keys created with C minisign's automatic fallback can be used with Rust minisign
    # Security Level: LOW 🔥
    #
    # Key Information:
-   # ├─ Key ID: RWQwpZXcv6r8MS...
+   # ├─ Key ID: 31FCAABFDC95A530
    # ├─ Encrypted: Yes
    # ├─ KDF Algorithm: Scrypt
    # └─ KDF Parameters:

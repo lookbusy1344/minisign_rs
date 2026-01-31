@@ -151,6 +151,18 @@ impl KeyNum {
             output
         })
     }
+
+    /// Convert to hexadecimal key ID string (matches C minisign format)
+    ///
+    /// Formats the keynum as a 16-character uppercase hexadecimal string
+    /// by interpreting the 8 bytes as a little-endian u64, matching the
+    /// C minisign implementation's `le64_load()` + `%016PRIX64` format.
+    #[must_use]
+    pub fn to_key_id(&self) -> String {
+        use crate::formats::read_u64_le;
+        let value = read_u64_le(&self.0);
+        format!("{value:016X}")
+    }
 }
 
 impl std::fmt::Debug for KeyNum {

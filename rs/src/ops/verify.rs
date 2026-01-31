@@ -83,10 +83,7 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
     sig_box.verify_global_signature(pubkey.public_key())?;
 
     // Generate key ID display formats
-    let key_id = format!(
-        "RW{}",
-        crate::formats::encode_base64(pubkey.keynum().as_bytes())
-    );
+    let key_id = pubkey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
 
     Ok(VerifyResult {

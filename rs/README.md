@@ -373,7 +373,7 @@ See [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) for
 
 The `-I/--inspect` command audits the security parameters of your minisign keys, useful for detecting keys created with weak KDF parameters.
 
-**Key ID formats:** Displays both base64 (e.g., `RWQwpZ...`) for scripting and PGP Word List (e.g., `physique aftermath edict...`) for human verification.
+**Key ID formats:** Displays both hexadecimal (e.g., `31FCAABFDC95A530`) for scripting and PGP Word List (e.g., `physique aftermath edict...`) for human verification.
 
 ```bash
 # Inspect default secret key (~/.minisign/minisign.key)
@@ -392,7 +392,7 @@ cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 Security Level: HIGH [OK]
 
 Key Information:
-├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+├─ Key ID: 31FCAABFDC95A530
 ├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
 └─ KDF Parameters: opslimit=33554432 (N=2^20), memlimit=1073741824 (1024 MB)
@@ -403,7 +403,7 @@ Key Information:
 Security Level: LOW [CRITICAL]
 
 Key Information:
-├─ Key ID: RWQwpZXcv6r8MS...
+├─ Key ID: 31FCAABFDC95A530
 ├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
 └─ KDF Parameters: opslimit=4194304 (N=2^17), memlimit=134217728 (128 MB)

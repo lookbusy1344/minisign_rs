@@ -107,10 +107,7 @@ const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
 
 /// Inspect a secret key structure
 fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
-    let key_id = format!(
-        "RW{}",
-        crate::formats::encode_base64(seckey.keynum().as_bytes())
-    );
+    let key_id = seckey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(seckey.keynum());
 
     if !seckey.is_encrypted() {
@@ -172,10 +169,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
 
 /// Inspect a public key structure
 fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
-    let key_id = format!(
-        "RW{}",
-        crate::formats::encode_base64(pubkey.keynum().as_bytes())
-    );
+    let key_id = pubkey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
 
     InspectResult {

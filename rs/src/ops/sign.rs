@@ -99,7 +99,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     write_signature_file(Path::new(&sig_file_path), &sig_contents, options.force)?;
 
     // Generate key ID display formats
-    let key_id = format!("RW{}", crate::formats::encode_base64(keynum.as_bytes()));
+    let key_id = keynum.to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(&keynum);
 
     Ok(SignResult {
