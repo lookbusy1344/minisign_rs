@@ -550,3 +550,91 @@ fn test_inspect_private_works_with_public_key() {
     assert_eq!(result.key_type, KeyType::Public);
     assert_eq!(result.key_id, keynum.to_key_id());
 }
+
+// Tests for signature inspection
+
+#[test]
+fn test_inspect_signature_normal() {
+    use minisign::crypto::{generate_keypair, sign};
+    use minisign::ops::inspect::inspect_signature;
+    use minisign::signature::{SigStruct, SignatureBox};
+
+    // Create a normal (non-prehashed) signature
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let message = b"test message";
+    let signature = sign(&secret_key, message).unwrap();
+    let sig_struct = SigStruct::new(keynum, signature, false); // false = normal
+
+    let sig_box = SignatureBox::with_global_signature(
+        "test signature".to_string(),
+        sig_struct,
+        "timestamp: 123456".to_string(),
+        &secret_key,
+    )
+    .unwrap();
+
+    let sig_contents = sig_box.to_file_contents();
+    let temp_file = create_temp_key_file(&sig_contents);
+
+    let result = inspect_signature(&temp_file.path().to_string_lossy()).unwrap();
+
+    // Should extract key ID matching the keynum
+    assert_eq!(result.key_id, keynum.to_key_id());
+    assert_eq!(result.key_id.len(), 16); // 16 hex chars
+
+    // Should have word list matching the keynum
+    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
+
+    // Should detect normal algorithm
+    assert_eq!(
+        result.algorithm,
+        minisign::ops::inspect::SignatureAlgorithm::Normal
+    );
+}
+
+#[test]
+fn test_inspect_signature_prehashed() {
+    use minisign::ops::inspect::inspect_signature;
+
+    // Use existing signature fixture (this one is prehashed)
+    let result = inspect_signature("tests/fixtures/signatures/hello.txt.minisig").unwrap();
+
+    // Should extract key ID
+    assert!(!result.key_id.is_empty());
+    assert_eq!(result.key_id.len(), 16); // 16 hex chars
+    assert!(result.key_id.chars().all(|c| c.is_ascii_hexdigit()));
+    assert!(
+        result
+            .key_id
+            .chars()
+            .all(|c| c.is_uppercase() || c.is_ascii_digit())
+    );
+
+    // Should have word list
+    assert!(!result.key_id_words.is_empty());
+    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
+
+    // Should detect prehashed algorithm
+    assert_eq!(
+        result.algorithm,
+        minisign::ops::inspect::SignatureAlgorithm::Prehashed
+    );
+}
+
+#[test]
+fn test_inspect_signature_invalid_file() {
+    use minisign::ops::inspect::inspect_signature;
+
+    let temp_file = create_temp_key_file("not a valid signature\n");
+
+    let result = inspect_signature(&temp_file.path().to_string_lossy());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_inspect_signature_nonexistent_file() {
+    use minisign::ops::inspect::inspect_signature;
+
+    let result = inspect_signature("/nonexistent/signature.minisig");
+    assert!(result.is_err());
+}

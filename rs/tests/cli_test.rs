@@ -724,6 +724,24 @@ fn test_inspect_public_key_base64() {
 }
 
 #[test]
+fn test_inspect_signature_file() {
+    // Test inspecting a signature file with -I -x
+    minisign_cmd()
+        .arg("-I")
+        .arg("-x")
+        .arg("tests/fixtures/signatures/hello.txt.minisig")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Inspecting: tests/fixtures/signatures/hello.txt.minisig",
+        ))
+        .stdout(predicate::str::contains("Signature Information:"))
+        .stdout(predicate::str::contains("Key ID:"))
+        .stdout(predicate::str::contains("Key ID (words):"))
+        .stdout(predicate::str::contains("Algorithm:"));
+}
+
+#[test]
 #[cfg(debug_assertions)]
 fn test_force_weak_kdf_creates_weak_key() {
     // Test that --force-weak-kdf creates a key with reduced parameters

@@ -233,19 +233,22 @@ minisign_rs -K -W
 
 ```bash
 # Inspect default secret key (prompts for password if encrypted)
-minisign_rs --inspect
+minisign_rs -I
 
 # Inspect specific secret key (smart: prompts only if encrypted)
-minisign_rs -I -s mykey.key
+minisign_rs -Is mykey.key
 
 # Inspect without decrypting (non-interactive, shows [encrypted] for key ID)
-minisign_rs -I -s mykey.key --no-decrypt
+minisign_rs -Is mykey.key --no-decrypt
 
 # Inspect public key file (never prompts)
-minisign_rs -I -p key.pub
+minisign_rs -Ip key.pub
 
 # Inspect public key from command line (base64)
-minisign_rs -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+minisign_rs -IP RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+
+# Inspect signature file (shows key ID used to sign)
+minisign_rs -Ix file.txt.minisig
 ```
 
 ## Signature File Format
@@ -376,7 +379,9 @@ See [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) for
 
 ### Inspecting Key Security
 
-The `-I/--inspect` command audits the security parameters of your minisign keys, useful for detecting keys created with weak KDF parameters.
+The `-I/--inspect` command audits the security parameters of keys and signatures, useful for detecting keys created with weak KDF parameters or identifying which key signed a file.
+
+**Works with:** Private keys, public keys, public key strings, and signature files.
 
 **Smart decryption:** Automatically detects encrypted keys and prompts for password only when needed. For public keys and unencrypted secret keys, no password prompt occurs. Use `--no-decrypt` to skip password prompting for non-interactive scripts.
 
@@ -387,14 +392,17 @@ The `-I/--inspect` command audits the security parameters of your minisign keys,
 cargo run -- -I
 
 # Inspect specific secret key (smart: prompts only if encrypted)
-cargo run -- -I -s path/to/key.key
+cargo run -- -Is path/to/key.key
 
 # Inspect without decrypting (non-interactive, shows [encrypted] for key ID)
-cargo run -- -I -s path/to/key.key --no-decrypt
+cargo run -- -Is path/to/key.key --no-decrypt
 
 # Inspect public key (never prompts)
-cargo run -- -I -p key.pub
-cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+cargo run -- -Ip key.pub
+cargo run -- -IP RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
+
+# Inspect signature file (shows key ID used to sign)
+cargo run -- -Ix file.txt.minisig
 ```
 
 **Example output - Production key (decrypted):**

@@ -261,6 +261,58 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
     }
 }
 
+/// Signature algorithm type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignatureAlgorithm {
+    /// Normal signature ("Ed")
+    Normal,
+    /// Prehashed signature ("ED")
+    Prehashed,
+}
+
+/// Result of inspecting a signature file
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignatureInspectResult {
+    /// Key ID in hex format
+    pub key_id: String,
+    /// Key ID in PGP Word List format
+    pub key_id_words: String,
+    /// Signature algorithm type
+    pub algorithm: SignatureAlgorithm,
+}
+
+/// Inspect a signature file and return key ID information
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file cannot be read
+/// - The file format is invalid
+pub fn inspect_signature(signature_file: &str) -> Result<SignatureInspectResult> {
+    use crate::signature::SignatureBox;
+
+    let contents = std::fs::read_to_string(signature_file)
+        .map_err(|e| Error::Io(format!("Failed to read signature file: {e}")))?;
+
+    let sig_box = SignatureBox::from_file_contents(&contents)?;
+
+    let keynum = sig_box.sig_struct().keynum();
+    let key_id = keynum.to_key_id();
+    let key_id_words = crate::wordlist::keynum_to_words(keynum);
+
+    let algorithm = if sig_box.sig_struct().is_prehashed() {
+        SignatureAlgorithm::Prehashed
+    } else {
+        SignatureAlgorithm::Normal
+    };
+
+    Ok(SignatureInspectResult {
+        key_id,
+        key_id_words,
+        algorithm,
+    })
+}
+
 /// Convert opslimit/memlimit to scrypt parameters
 ///
 /// This is a copy of the logic from `SeckeyStruct::opslimit_memlimit_to_params`

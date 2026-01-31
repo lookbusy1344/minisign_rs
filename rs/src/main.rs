@@ -318,6 +318,21 @@ fn handle_change(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
+/// Display the signature inspection result
+fn display_signature_inspect_result(result: &minisign::ops::inspect::SignatureInspectResult) {
+    use minisign::ops::inspect::SignatureAlgorithm;
+
+    println!("Signature Information:");
+    println!("├─ Key ID: {}", result.key_id);
+    println!("├─ Key ID (words): {}", result.key_id_words);
+
+    let algorithm_desc = match result.algorithm {
+        SignatureAlgorithm::Normal => "Normal (Ed25519)",
+        SignatureAlgorithm::Prehashed => "Prehashed (Blake2b-512)",
+    };
+    println!("└─ Algorithm: {algorithm_desc}");
+}
+
 /// Display the inspection result
 fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
     use minisign::ops::inspect::{KeyType, SecurityLevel};
@@ -401,7 +416,19 @@ fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
 }
 
 fn handle_inspect(cli: &Cli) -> Result<()> {
-    use minisign::ops::inspect::{InspectPrivateOptions, KeyType, inspect_base64, inspect_private};
+    use minisign::ops::inspect::{
+        InspectPrivateOptions, KeyType, inspect_base64, inspect_private, inspect_signature,
+    };
+
+    // Check if we're inspecting a signature file
+    if let Some(ref sig_file) = cli.signature_file {
+        let path = sig_file.to_string_lossy().to_string();
+        let result = inspect_signature(&path)?;
+
+        println!("Inspecting: {path}\n");
+        display_signature_inspect_result(&result);
+        return Ok(());
+    }
 
     // Determine the source and get the inspection result
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
