@@ -89,15 +89,22 @@ Each unit test file will import from the main crate using `use minisign_rs::*;` 
 - Zero clippy warnings
 - Completed commits: 2d0108b, 9f31229, 1d50647, c06d0a9, 4652a85, 9d6b4bc
 
-### Phase 3: Utilities & CLI (5 files, ~864 lines)
+### Phase 3: Utilities & CLI (5 files, ~864 lines) ✅ COMPLETED
 
 - ✅ `validation.rs` - 29 tests, ~266 lines
 - ✅ `formats.rs` - 11 tests, ~164 lines
 - ✅ `cli.rs` - 10 tests, ~263 lines
-- `errors.rs` - 3 tests, ~42 lines
-- `constants.rs` - 8 tests, ~129 lines
+- ✅ `errors.rs` - 3 tests, ~42 lines
+- ✅ `constants.rs` - 8 tests, ~129 lines
 
 **Rationale:** Supporting utilities and CLI parsing. Moving last as they're least likely to have issues.
+
+**Completion Notes:**
+- All 61 unit tests (29+11+10+3+8) successfully moved to `tests/unit/`
+- All items already public - no visibility changes needed
+- All tests passing (151 total unit tests)
+- Zero clippy warnings
+- Completed commits: 78b0201, b874edd, 4846080, 05d5981, [pending], [pending]
 
 ## Per-File Migration Process
 
