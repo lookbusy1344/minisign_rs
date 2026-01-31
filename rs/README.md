@@ -168,21 +168,7 @@ minisign_rs -G -W
 minisign_rs -G -f
 ```
 
-**Password Strength Recommendations:**
-
-When generating password-protected keys, use a strong password:
-
-- **Minimum**: 16 characters with mixed case, numbers, and symbols
-- **Recommended**: 20+ character passphrase or randomly generated password
-- **Best**: Use a password manager to generate and store a unique 32+ character password
-
-While minisign-rs uses strong key derivation parameters (scrypt N=2^20, requiring ~1GB memory and 1-5 seconds per attempt), weak passwords still significantly reduce security. An attacker with your encrypted key file can perform offline brute-force attacks.
-
-**Examples of weak passwords to avoid:**
-- Dictionary words ("password", "minisign")
-- Personal information (names, dates, addresses)
-- Simple patterns ("123456", "qwerty", "abc123")
-- Short passwords (<12 characters)
+**Password Strength:** Use 20+ character passwords or passphrases. Despite strong KDF parameters (scrypt N=2^20), weak passwords enable offline brute-force attacks. Avoid dictionary words, personal information, and short passwords (<16 characters).
 
 #### Sign a file
 
@@ -258,123 +244,19 @@ minisign_rs -I -p key.pub
 minisign_rs -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ```
 
-### Long vs Short Options
-
-All commonly used flags now support long option names for improved readability and script maintainability:
-
-```bash
-# These commands are equivalent:
-minisign_rs -S -m file.txt -s key.key -t "v1.0"
-minisign_rs --sign --input file.txt --secretkey-path key.key --trusted-comment "v1.0"
-
-# Mix and match as preferred:
-minisign_rs --sign -m file.txt --secretkey-path key.key -t "v1.0"
-```
-
 ## Signature File Format
 
-When you sign a file, minisign creates a `.minisig` file containing the signature. This file always has exactly 4 lines:
+Minisign creates `.minisig` files with 4 lines:
+1. **Untrusted comment** - Human-readable, not verified (`-c` flag)
+2. **Signature data** - Base64-encoded Ed25519 signature of the file
+3. **Trusted comment** - Cryptographically verified (`-t` flag)
+4. **Global signature** - Signs lines 2+3 together
 
-1. **Untrusted comment**: A human-readable comment (not cryptographically protected)
-2. **Signature data**: Base64-encoded signature of the file (104 bytes encoded)
-3. **Trusted comment**: A cryptographically verified comment (protected by the global signature)
-4. **Global signature**: Base64-encoded signature of the signature data + trusted comment (64 bytes encoded)
-
-### Example
-
-```
-untrusted comment: created with -c, --untrusted-comment this is not protected by any signatures
-RUTiTgPA5DzP/wOBQTz ==== SIGNATURE OF EXTERNAL FILE ==== LB7dRwO6ESwgfRtf3ENYreCURsRUT==
-trusted comment: This is a trusted comment created with -t, --trusted-comment and protected by the global signature below
-XYMOhmlCCf8IXYx5GF0 ==== GLOBAL SIGNATURE OF WHOLE FILE ==== 078887I2RUTiTQTzgPA5DzP0s==
-```
-
-### Line-by-Line Breakdown
-
-#### Line 1: Untrusted Comment
-```
-untrusted comment: created with -c, --untrusted-comment this is not protected by any signatures
-```
-
-- Can contain any text (user-customizable with `-c` or `--untrusted-comment`)
-- **Not cryptographically verified** - can be modified without detection
-- Use case: Human-readable context about the signature
-- Should **not be trusted** for authenticity decisions
-
-#### Line 2: Signature of external file
-```
-RUTiTgPA5DzP/wOBQTz ==== SIGNATURE OF EXTERNAL FILE ==== LB7dRwO6ESwgfRtf3ENYreCURsRUT==
-```
-
-- Base64-encoded signature (104 bytes total when decoded)
-- Contains:
-  - 2-byte signature algorithm ID
-  - 8-byte key ID (matches the public key)
-  - 64-byte Ed25519 signature of the file
-  - 30 bytes of additional metadata
-- This is what cryptographically binds the signature to the file
-
-#### Line 3: Trusted Comment
-```
-trusted comment: This is a trusted comment created with -t, --trusted-comment and protected by the global signature below
-```
-
-- Can contain any text (user-customizable with `-t` or `--trusted-comment` flag)
-- **Cryptographically verified** - protected by the global signature (line 4)
-- Default includes timestamp: `timestamp:TIMESTAMP`
-- Recommended for version numbers, release notes, or verified metadata
-- Tampering with this line will cause verification to fail thanks to the global signature
-
-#### Line 4: Global Signature of whole minisig file
-```
-XYMOhmlCCf8IXYx5GF0 ==== GLOBAL SIGNATURE OF WHOLE FILE ==== 078887I2RUTiTQTzgPA5DzP0s==
-```
-
-- Base64-encoded Ed25519 signature (64 bytes when decoded)
-- Signs: (Line 2 signature data) + (Line 3 trusted comment)
-- This is what makes the trusted comment cryptographically verifiable
-- Provides two-tier signature verification:
-  1. Line 2 verifies the file hasn't been modified
-  2. Line 4 verifies the whole minisig file hasn't been modified
-
-### Security Model
-
-The two-tier signature system provides:
-
-1. **File authenticity**: Line 2 signature proves the file was signed by the key holder
-2. **Comment authenticity**: Line 4 signature proves the trusted comment came from the key holder
-3. **Comment flexibility**: Line 1 untrusted comment can be changed for local annotation without breaking verification
-
-**Important**: Only the trusted comment (line 3) is cryptographically protected. Never make security decisions based on the untrusted comment (line 1).
+**Security:** Only the trusted comment (line 3) is cryptographically protected. The untrusted comment (line 1) can be modified without breaking verification.
 
 ## Configuration
 
-### Environment Variables
-
-#### `MINISIGN_CONFIG_DIR`
-
-Override the default configuration directory for secret keys.
-
-**Default behavior:**
-- Unix/Linux/macOS: `~/.minisign/minisign.key`
-- Windows: `%USERPROFILE%\.minisign\minisign.key`
-
-**With `MINISIGN_CONFIG_DIR` set:**
-```bash
-# Set custom config directory
-export MINISIGN_CONFIG_DIR=/opt/secure/minisign
-
-# Secret key will now be at: /opt/secure/minisign/minisign.key
-cargo run -- -G
-```
-
-**Use cases:**
-- Custom security policies requiring keys in specific directories
-- Multi-user systems with centralized key management
-- Containerized environments with mounted volumes
-- Compatibility with C minisign deployments using this variable
-
-**Compatibility:** This environment variable is also supported by the C implementation of minisign, ensuring consistent behavior across both versions.
+**`MINISIGN_CONFIG_DIR`** - Override default key directory (default: `~/.minisign/` on Unix, `%USERPROFILE%\.minisign\` on Windows). Useful for custom security policies, multi-user systems, or containers. Compatible with C minisign.
 
 ## Testing
 
@@ -388,42 +270,7 @@ cargo run -- -G
   - Without C minisign: ~359 tests run (skips 7 compatibility tests)
   - With C minisign: All 366 tests run
 
-Most development can be done without C minisign installed. Install it only when you need to verify cross-compatibility or run the full test suite.
-
-### Quick Testing with Fixtures
-
-The `tests/fixtures` directory contains pre-generated keys and test files for quick testing:
-
-```bash
-# Sign a test file
-cargo run --release --bin minisign_rs -- -S -m tests/fixtures/messages/hello.txt -s tests/fixtures/keys/test.key --password-file tests/fixtures/messages/password.txt
-
-# Verify the signature
-cargo run --release --bin minisign_rs -- -V -m tests/fixtures/messages/hello.txt -p tests/fixtures/keys/test.pub
-```
-
-Available test keys:
-- `tests/fixtures/keys/test.key` (password: "test")
-- `tests/fixtures/keys/unencrypted.key` (no password)
-- `tests/fixtures/keys/c_encrypted_password123.key` (password: "password123")
-
-See `tests/fixtures/keys/README.md` for complete details.
-
-### Test Categories
-
-1. **Unit Tests**: In-module tests for individual functions
-2. **Integration Tests**: End-to-end operation tests in `tests/`
-3. **Compatibility Tests**: Verify interoperability with C minisign
-4. **Property Tests**: Using `proptest` for randomized input validation
-
-### Fast vs Slow Tests
-
-The project uses a dual testing strategy for operations involving scrypt:
-
-- **Fast tests** (355 tests, default): Use N=2^14 (~50ms per operation)
-- **Slow tests** (11 tests, `#[ignore]`): Use N=2^20 (~1-5s per operation)
-
-Fast tests provide rapid feedback during development, while slow tests verify production security parameters work correctly. With recent performance improvements, slow tests now complete in ~11 seconds.
+**Fast vs slow tests:** 355 fast tests (N=2^14, ~10s) for development, 11 slow tests (N=2^20, ~11s) for production parameter verification.
 
 ```bash
 # Run only fast tests (default, ~10 seconds)
@@ -511,286 +358,81 @@ For detailed analysis:
 - [COMPATIBILITY.md](COMPATIBILITY.md) - Complete compatibility documentation
 - [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed comparison of both implementations
 
-### CLI Differences from C minisign
+### Rust-Specific Enhancements
 
-This Rust implementation adds **security enhancements** and **optional flags** not present in the original C version:
+Additional flags not in C minisign:
 
-#### `-I/--inspect`
-Inspect a key file and display its security parameters (KDF configuration, strength rating).
+- **`-I/--inspect`** - Audit key security parameters and KDF strength (see [Inspecting Key Security](#inspecting-key-security))
+- **`--password-file <FILE>`** - Read password from file (testing only, insecure)
+- **`--allow-kdf-fallback`** - Allow weak KDF on low-memory systems (opt-in, reduces security)
+- **`--force-weak-kdf`** - Create intentionally weak keys (debug builds only, testing)
 
-**[SECURITY ENHANCEMENT]**
-
-```bash
-# Inspect a secret key
-cargo run -- -I -s key.key
-
-# Inspect using default key location
-cargo run -- -I
-
-# Inspect a public key file
-cargo run -- -I -p key.pub
-
-# Inspect a public key from command line (-P flag)
-cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
-```
-
-- Displays security level (High/Medium/Low/None)
-- Shows exact KDF parameters (N, r, p, opslimit, memlimit)
-- Calculates weakness multiplier for fallback keys
-- Provides recommendations for weak keys
-- Works with both secret and public keys (file paths or base64 strings)
-- Shows inspection source (file path, command-line literal, or default)
-- Fully compatible with C-generated keys
-- C minisign does not provide this capability
-
-See [Inspecting Key Security](#inspecting-key-security) for detailed usage.
-
-#### `--password-file <FILE>`
-Read password from file instead of interactive prompt.
-
-**[WARNING: TESTING ONLY - INSECURE FOR PRODUCTION USE]**
-
-```bash
-# Example (testing only)
-cargo run -- -S -m file.txt -s key.key --password-file password.txt
-```
-
-- Intended for automated testing and CI environments
-- Passwords stored in plain text files are a security risk
-- Use interactive password entry for production use
-- C minisign does not support this flag
-
-#### `--allow-kdf-fallback`
-Rust version is secure by default. This flag enables a scrypt KDF parameter fallback on resource-constrained systems.
-
-**[WARNING: LESS SECURE - OPT-IN ONLY]**
-
-```bash
-# Example (embedded/constrained systems)
-cargo run -- -G --allow-kdf-fallback
-```
-
-- **Permission flag only** - does not force fallback, only allows it
-- Fallback **only triggers if** normal 128MB allocation fails
-- When triggered: reduces memory to 512KB with weaker KDF parameters (N=2^14 instead of N=2^20)
-- **Without this flag**: operations fail immediately if 128MB cannot be allocated
-- **With this flag**: operations attempt fallback before failing
-- Prevents complete failure on memory-limited devices (embedded systems, containers)
-- C minisign does not support this flag (it always allows fallback automatically)
-
-**Recommendation**: Avoid both flags in production. Use only when necessary and understand the security trade-offs.
-
-#### `--force-weak-kdf` (Debug Builds Only)
-
-**[CRITICAL: DEBUG ONLY - INTENTIONALLY INSECURE]**
-
-Forces creation of weak KDF parameters (N=2^17, 8x easier to brute-force) for testing purposes.
-
-```bash
-# Example (debug builds only)
-cargo run -- -G --force-weak-kdf --password-file test.txt
-
-# Works with password changes too
-cargo run -- -C -s test.key --force-weak-kdf --password-file newpass.txt
-```
-
-- **Only available in debug builds** (`cargo build` without `--release`)
-- **Not available in release builds** for safety
-- Creates keys with N=2^17 instead of N=2^20 (8x weaker)
-- Displays loud warnings about intentional insecurity
-- Useful for:
-  - Testing weak key detection logic
-  - Creating fixture files for security testing
-  - Manual QA of warning systems
-- **NEVER use in production** - these keys are intentionally compromised
-
-**For detailed security analysis**, see [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) which explains:
-- Why fallback keys are permanently weaker (8-64x easier to brute-force)
-- How C minisign's automatic fallback differs from Rust's opt-in approach
-- How to detect and audit weak keys
-- How to force weak key creation for testing
-- Migration strategies for production deployments
+See [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) for detailed security implications.
 
 ### Inspecting Key Security
 
-The `-I/--inspect` command allows you to audit the security parameters of your minisign keys. This is particularly useful for detecting keys created with weak KDF parameters.
+The `-I/--inspect` command audits the security parameters of your minisign keys, useful for detecting keys created with weak KDF parameters.
 
-**Key ID Display:** The inspect command displays key IDs in two formats:
-- **Base64 format** (e.g., `RWQwpZ...`): Standard representation for scripting and verification
-- **PGP Word List format** (e.g., `physique aftermath edict...`): Human-readable 8-word representation designed for voice communication and visual verification. Each word is phonetically distinct to minimize errors when reading aloud or comparing keys.
+**Key ID formats:** Displays both base64 (e.g., `RWQwpZ...`) for scripting and PGP Word List (e.g., `physique aftermath edict...`) for human verification.
 
 ```bash
-# Inspect a secret key (default: ~/.minisign/minisign.key)
+# Inspect default secret key (~/.minisign/minisign.key)
 cargo run -- -I
 
-# Inspect a specific secret key
+# Inspect specific secret key
 cargo run -- -I -s path/to/key.key
 
-# Inspect a public key file
-cargo run -- -I -p path/to/key.pub
-
-# Inspect a public key from command line (base64 string)
+# Inspect public key (file or base64 string)
+cargo run -- -I -p key.pub
 cargo run -- -I -P RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ```
 
-**Note:** The inspect command now displays the source being inspected (file path or command-line literal) to avoid confusion when using default keys or base64 strings.
-
-#### Public vs Secret Keys
-
-**Important:** Public keys do not contain security information. KDF parameters (scrypt opslimit/memlimit) are only stored in secret key files because they're used for password-based encryption. When inspecting a public key (via `-p` file or `-P` base64 string), only the key ID and type are displayed - this is by design, not a limitation.
-
-- **Secret keys** (.key files): Show full security details including KDF parameters, encryption status, and security level
-- **Public keys** (.pub files or base64): Show only key ID and type - no KDF or security information available
-
-#### Example Output
-
-**Production-strength key:**
+**Example output - Production key:**
 ```
-Inspecting: /Users/name/.minisign/minisign.key (default)
-
 Security Level: HIGH [OK]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 ├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
-├─ KDF Algorithm: Scrypt
-└─ KDF Parameters:
-   ├─ opslimit: 33554432 (N=2^20, r=8, p=1)
-   ├─ memlimit: 1073741824 (1024 MB)
-   └─ Creation: Normal (production parameters)
+└─ KDF Parameters: opslimit=33554432 (N=2^20), memlimit=1073741824 (1024 MB)
 ```
 
-**Weak key (created with fallback):**
+**Example output - Weak key:**
 ```
-Inspecting: path/to/weak.key
-
 Security Level: LOW [CRITICAL]
 
 Key Information:
 ├─ Key ID: RWQwpZXcv6r8MS...
 ├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
-├─ KDF Algorithm: Scrypt
-└─ KDF Parameters:
-   ├─ opslimit: 4194304 (N=2^17, r=8, p=1)
-   ├─ memlimit: 134217728 (128 MB)
-   ├─ Creation: Fallback (reduced parameters)
-   └─ Brute-force resistance: 8x weaker than production strength
+└─ KDF Parameters: opslimit=4194304 (N=2^17), memlimit=134217728 (128 MB)
+   Brute-force resistance: 8x weaker than production strength
 
 *** RECOMMENDATION: Regenerate this key on a system with >=2GB RAM for full security.
 ```
 
-**Unencrypted key:**
-```
-Inspecting: path/to/unencrypted.key
+**Security levels:**
+- **HIGH**: Production parameters (N=2^20, 1024 MB)
+- **MEDIUM**: Reduced parameters (N=2^19-18, 256-512 MB) - 2-4x weaker
+- **LOW**: Weak parameters (N≤2^17, ≤128 MB) - 8x+ weaker
+- **NONE**: Unencrypted (no password protection)
 
-Security Level: NONE (UNENCRYPTED) [WARNING]
-
-Key Information:
-├─ Key ID: RWQwpZXcv6r8MS...
-├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
-└─ Encrypted: No
-
-*** WARNING: This key is stored in plaintext.
-   Anyone with file access can use it without a password.
-```
-
-**Public key from command line:**
-```
-Inspecting: public key from command line (-P)
-
-Key Information:
-├─ Key ID: RWQwpZXcv6r8MS...
-├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
-└─ Type: Ed25519 Public Key
-
-Note: Public keys do not contain KDF parameters or security information.
-      Only secret keys (.key files) store encryption and KDF data.
-```
-
-**Public key from file:**
-```
-Inspecting: path/to/key.pub
-
-Key Information:
-├─ Key ID: RWQwpZXcv6r8MS...
-├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
-└─ Type: Ed25519 Public Key
-
-Note: Public keys do not contain KDF parameters or security information.
-      Only secret keys (.key files) store encryption and KDF data.
-```
-
-#### Security Levels
-
-The inspect command classifies keys into four security levels:
-
-- **HIGH [OK]**: Production parameters (N=2^20, 1024 MB) - full security
-- **MEDIUM [WARNING]**: 1-2 fallbacks (N=2^19-18, 256-512 MB) - 2-4x weaker
-- **LOW [CRITICAL]**: 3+ fallbacks (N<=2^17, <=128 MB) - 8x+ weaker
-- **NONE [WARNING]**: Unencrypted (no password protection)
-
-#### Use Cases
-
-- **Audit existing keys**: Check if your keys were created with weak parameters
-- **Verify key strength**: Confirm production-strength parameters before deployment
-- **Security compliance**: Ensure all keys meet minimum security requirements
-- **Migration planning**: Identify keys that should be regenerated
-- **C minisign compatibility**: Works with keys generated by the C implementation
-
-**Note**: The inspect command reads KDF parameters directly from bytes 38-53 of the key file, making it fully compatible with both C and Rust-generated keys.
+**Note:** Public keys show only key ID and type. KDF parameters are only in secret key files.
 
 ## Performance & Memory
 
-The Rust implementation **matches or exceeds** C minisign performance across all operations while providing superior memory safety guarantees.
+**Performance:** Within 6% of C minisign across all operations. See [Performance Benchmark Report](docs/benchmark-report.md).
 
-### Performance Summary
+**Binary size:** 1.1MB (vs C's 70KB) - larger binary for memory safety and zero C dependencies.
 
-| Operation | C minisign | minisign-rs | Winner |
-|-----------|-----------|-------------|--------|
-| Key Generation | 3.3ms | 3.2ms | Rust (1.02x) |
-| Sign 100KB | 3.4ms | 3.5ms | C (1.02x) |
-| Sign 10MB | 16.0ms | 15.4ms | Rust (1.04x) |
-| Verify 100KB | 2.2ms | 2.2ms | Tied |
-| Verify 10MB | 15.4ms | 14.5ms | Rust (1.06x) |
+**Memory requirements:**
+- Scrypt KDF: ~128MB, ~1-2s (N=2^20 for security)
+- Ed25519: <1KB, <1ms
+- Prehashed mode (default): Streaming, minimal memory
+- Legacy mode (`--legacy`): Loads entire file into memory (1GB max)
 
-**Performance differences are within 6%** - effectively identical for real-world usage. See [Performance Benchmark Report](docs/benchmark-report.md) for complete analysis.
-
-### Binary Size
-
-- **C version**: 70KB (optimized with static libsodium)
-- **Rust version**: 1.1MB (includes Rust standard library)
-- Trade-off: Larger binary for memory safety and zero C dependencies
-
-### Memory Requirements
-
-**Scrypt KDF** (key encryption/decryption):
-- Memory usage: ~128MB during operations (intentional for security)
-- Duration: ~1-2s per operation
-- Both implementations use identical parameters: N=2^20, r=8, p=1
-
-**Ed25519 Operations** (signing/verification):
-- Minimal memory (<1KB), operations complete in <1ms
-- No difference between implementations
-
-**File Signing/Verification Modes**:
-- **Prehashed mode** (default for files >1GB): Streaming operation, minimal memory regardless of file size
-- **Legacy/non-prehashed mode** (`--legacy` flag): Loads entire file into memory
-  - File size limit: 1GB maximum
-  - Memory usage: Equals file size (e.g., 900MB file requires 900MB RAM)
-  - **Recommendation**: Use prehashed mode (default) for large files or memory-constrained systems
-  - **Note**: On systems with limited RAM, signing/verifying large files in legacy mode may cause out-of-memory errors
-
-### Memory Safety Advantages
-
-- ✅ **Zero unsafe code** - Eliminates entire classes of vulnerabilities
-- ✅ **Automatic secret cleanup** - `Zeroize` and `Drop` traits ensure secrets are wiped
-- ✅ **Memory safety verified** - Miri checks detect undefined behavior
-- ✅ **No buffer overflows** - Bounds checking prevents memory corruption
-- ✅ **No use-after-free** - Ownership system guarantees validity
-
-**Conclusion**: The Rust version provides C-level performance with superior memory safety.
+**Safety advantages:** Zero unsafe code, automatic secret cleanup, verified memory safety, no buffer overflows or use-after-free.
 
 ## Development Guidelines
 
