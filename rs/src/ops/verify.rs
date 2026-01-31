@@ -45,6 +45,10 @@ pub struct VerifyResult {
     pub trusted_comment: String,
     /// The untrusted comment from the signature
     pub untrusted_comment: String,
+    /// Key ID in base64 format
+    pub key_id: String,
+    /// Key ID in PGP Word List format (human-readable)
+    pub key_id_words: String,
 }
 
 /// Verify a file's signature
@@ -78,10 +82,19 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
 
+    // Generate key ID display formats
+    let key_id = format!(
+        "RW{}",
+        crate::formats::encode_base64(pubkey.keynum().as_bytes())
+    );
+    let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
+
     Ok(VerifyResult {
         valid: true,
         trusted_comment: sig_box.trusted_comment().to_string(),
         untrusted_comment: sig_box.untrusted_comment().to_string(),
+        key_id,
+        key_id_words,
     })
 }
 

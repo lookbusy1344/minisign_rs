@@ -145,6 +145,17 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
     if !cli.quiet {
+        // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
+        println!(
+            "Signing with key: {} ({}...)",
+            result.key_id,
+            result
+                .key_id_words
+                .split_whitespace()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
         // codeql[rust/cleartext-logging] - Logging file path, not sensitive data
         println!("Signature written to {}", result.signature_file);
     }
@@ -198,6 +209,17 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         println!("{}", result.trusted_comment);
     } else if !cli.quiet {
         // Normal output
+        // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
+        println!(
+            "Verified with key: {} ({}...)",
+            result.key_id,
+            result
+                .key_id_words
+                .split_whitespace()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
         println!("Signature and comment signature verified");
         println!("Trusted comment: {}", result.trusted_comment);
     }

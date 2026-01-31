@@ -42,6 +42,10 @@ pub struct SignResult {
     pub signature_file: String,
     /// The trusted comment used
     pub trusted_comment: String,
+    /// Key ID in base64 format
+    pub key_id: String,
+    /// Key ID in PGP Word List format (human-readable)
+    pub key_id_words: String,
 }
 
 /// Sign a file with a secret key
@@ -94,9 +98,15 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     let sig_contents = sig_box.to_file_contents();
     write_signature_file(Path::new(&sig_file_path), &sig_contents, options.force)?;
 
+    // Generate key ID display formats
+    let key_id = format!("RW{}", crate::formats::encode_base64(keynum.as_bytes()));
+    let key_id_words = crate::wordlist::keynum_to_words(&keynum);
+
     Ok(SignResult {
         signature_file: sig_file_path,
         trusted_comment: sig_box.trusted_comment().to_string(),
+        key_id,
+        key_id_words,
     })
 }
 
