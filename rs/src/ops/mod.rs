@@ -2,7 +2,7 @@
 //!
 //! This module contains the main operations: verify, sign, generate, recreate, change, and inspect.
 
-mod file_utils;
+pub mod file_utils;
 
 pub mod change;
 pub mod generate;
