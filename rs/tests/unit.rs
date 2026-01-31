@@ -9,6 +9,7 @@ mod unit {
     pub mod ops {
         pub mod change;
         pub mod generate;
+        pub mod recreate;
         pub mod sign;
         pub mod verify;
     }
