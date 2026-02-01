@@ -3,6 +3,7 @@
 //! This module provides functionality to inspect minisign key files
 //! and display their security parameters and KDF configuration.
 
+use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
 use std::fs;
@@ -180,10 +181,6 @@ pub fn inspect_private(options: &InspectPrivateOptions, password: &[u8]) -> Resu
         "File is not a valid minisign key".to_string(),
     ))
 }
-
-// Production-strength KDF parameters (N=2^20, r=8, p=1)
-const PRODUCTION_OPSLIMIT: u64 = 33_554_432;
-const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
 
 /// Inspect a secret key structure
 fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {

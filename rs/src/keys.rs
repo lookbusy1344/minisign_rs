@@ -272,10 +272,6 @@ pub struct SeckeyStruct {
 }
 
 impl SeckeyStruct {
-    // Production-strength KDF parameters (N=2^20, r=8, p=1)
-    const PRODUCTION_OPSLIMIT: u64 = 33_554_432;
-    const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
-
     /// Create a new secret key structure (unencrypted)
     ///
     /// Creates an unencrypted secret key structure with no password protection.
@@ -567,11 +563,8 @@ impl SeckeyStruct {
         }
 
         // Key is weak if either parameter is below production strength
-        // Production parameters: N = 2^20, r = 8, p = 1
-        // opslimit = 4 * N * r = 4 * 1,048,576 * 8 = 33,554,432
-        // memlimit = 128 * N * r = 128 * 1,048,576 * 8 = 1,073,741,824
-        self.kdf_opslimit < Self::PRODUCTION_OPSLIMIT
-            || self.kdf_memlimit < Self::PRODUCTION_MEMLIMIT
+        self.kdf_opslimit < crate::constants::PRODUCTION_OPSLIMIT
+            || self.kdf_memlimit < crate::constants::PRODUCTION_MEMLIMIT
     }
 
     /// Compute the checksum (Blake2b-256 of keynum + `secret_key`)
