@@ -10,7 +10,8 @@ use crate::{
     keys::PubkeyStruct,
     signature::SignatureBox,
 };
-use std::path::Path;
+use rayon::prelude::*;
+use std::path::{Path, PathBuf};
 
 /// Options for signature verification
 #[derive(Debug, Clone)]
@@ -49,6 +50,15 @@ pub struct VerifyResult {
     pub key_id: String,
     /// Key ID in PGP Word List format (human-readable)
     pub key_id_words: String,
+}
+
+/// Result of a single file verification operation (for batch processing)
+#[derive(Debug)]
+pub struct FileVerifyResult {
+    /// Path to the file that was verified
+    pub file: PathBuf,
+    /// Result of the verification operation
+    pub result: Result<VerifyResult>,
 }
 
 /// Verify a file's signature
@@ -181,4 +191,139 @@ pub fn verify_message_signature(
         &data_to_verify,
         sig_box.sig_struct().signature(),
     )
+}
+
+/// Verify a single file with an already-loaded public key
+fn verify_file_with_key(
+    message_file: &Path,
+    pubkey: &PubkeyStruct,
+    _options: &VerifyOptions<'_>,
+) -> Result<VerifyResult> {
+    let sig_file_path = PathBuf::from(format!("{}.minisig", message_file.display()));
+
+    let sig_box = load_signature(&sig_file_path)?;
+
+    // Verify the signature on the message
+    verify_message_signature(pubkey, &sig_box, message_file)?;
+
+    // Verify the global signature (trusted comment binding)
+    sig_box.verify_global_signature(pubkey.public_key())?;
+
+    // Generate key ID display formats
+    let key_id = pubkey.keynum().to_key_id();
+    let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
+
+    Ok(VerifyResult {
+        valid: true,
+        trusted_comment: sig_box.trusted_comment().to_string(),
+        untrusted_comment: sig_box.untrusted_comment().to_string(),
+        key_id,
+        key_id_words,
+    })
+}
+
+/// Verify multiple files (parallel or sequential)
+///
+/// # Arguments
+///
+/// * `files` - Vector of file paths to verify
+/// * `options` - Verification options (`message_file` and `signature_file` fields are ignored)
+/// * `sequential` - If true, process files sequentially; if false, use parallel execution
+///
+/// # Returns
+///
+/// `Ok(())` if all files verified successfully, `Err(PartialFailure)` if any failed
+///
+/// # Errors
+///
+/// Returns `PartialFailure` error if any files could not be verified.
+/// Individual file errors are reported to stderr during execution.
+pub fn verify_multiple_files(
+    files: Vec<PathBuf>,
+    options: &VerifyOptions<'_>,
+    sequential: bool,
+) -> Result<()> {
+    // Fast path for single file
+    if files.len() == 1 {
+        let result =
+            verify_file_with_key(&files[0], &load_public_key(&options.public_key)?, options)?;
+        println!(
+            "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
+            files[0].display(),
+            result.trusted_comment,
+            result.key_id,
+            result.key_id_words
+        );
+        return Ok(());
+    }
+
+    // Load public key once — avoids N-1 redundant I/O operations
+    let pubkey = load_public_key(&options.public_key)?;
+
+    // Multi-file path: verify all files with the already-loaded key
+    let results: Vec<FileVerifyResult> = if sequential {
+        files
+            .into_iter()
+            .map(|file| {
+                let result = verify_file_with_key(&file, &pubkey, options);
+                report_file_result(&file, &result);
+                FileVerifyResult { file, result }
+            })
+            .collect()
+    } else {
+        files
+            .par_iter()
+            .map(|file| {
+                let result = verify_file_with_key(file, &pubkey, options);
+                report_file_result(file, &result);
+                FileVerifyResult {
+                    file: file.clone(),
+                    result,
+                }
+            })
+            .collect()
+    };
+
+    print_summary(&results)
+}
+
+/// Report the result of verifying a single file (called for each file)
+fn report_file_result(file: &Path, result: &Result<VerifyResult>) {
+    match result {
+        Ok(verify_result) => {
+            println!(
+                "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
+                file.display(),
+                verify_result.trusted_comment,
+                verify_result.key_id,
+                verify_result.key_id_words
+            );
+        }
+        Err(e) => eprintln!("Failed: {} ({})", file.display(), e),
+    }
+}
+
+/// Print summary of batch verification operation
+fn print_summary(results: &[FileVerifyResult]) -> Result<()> {
+    let failures: Vec<_> = results
+        .iter()
+        .filter_map(|r| r.result.as_ref().err().map(|e| (&r.file, e)))
+        .collect();
+
+    let success_count = results.len() - failures.len();
+
+    if !failures.is_empty() {
+        eprintln!(
+            "\nSummary: {} verified, {} failed",
+            success_count,
+            failures.len()
+        );
+        eprintln!("Failed files:");
+        for (file, err) in &failures {
+            eprintln!("  - {}: {}", file.display(), err);
+        }
+        return Err(Error::PartialFailure);
+    }
+
+    Ok(())
 }
