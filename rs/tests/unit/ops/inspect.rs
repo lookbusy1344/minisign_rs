@@ -598,7 +598,8 @@ fn test_inspect_signature_prehashed() {
     use minisign::ops::inspect::inspect_signature;
 
     // Use existing signature fixture (this one is prehashed)
-    let result = inspect_signature("tests/fixtures/signatures/hello.txt.minisig").unwrap();
+    let result =
+        inspect_signature(Path::new("tests/fixtures/signatures/hello.txt.minisig")).unwrap();
 
     // Should extract key ID
     assert!(!result.key_id.is_empty());
@@ -628,7 +629,7 @@ fn test_inspect_signature_invalid_file() {
 
     let temp_file = create_temp_key_file("not a valid signature\n");
 
-    let result = inspect_signature(&temp_file.path().to_string_lossy());
+    let result = inspect_signature(temp_file.path());
     assert!(result.is_err());
 }
 
@@ -636,6 +637,6 @@ fn test_inspect_signature_invalid_file() {
 fn test_inspect_signature_nonexistent_file() {
     use minisign::ops::inspect::inspect_signature;
 
-    let result = inspect_signature("/nonexistent/signature.minisig");
+    let result = inspect_signature(Path::new("/nonexistent/signature.minisig"));
     assert!(result.is_err());
 }

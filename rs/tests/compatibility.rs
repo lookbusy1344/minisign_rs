@@ -252,9 +252,9 @@ fn test_c_verify_rust_legacy_signature() {
 
     // Sign with Rust in legacy mode (non-prehashed)
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: false, // Legacy mode = non-prehashed
         trusted_comment: None,
         untrusted_comment: None,

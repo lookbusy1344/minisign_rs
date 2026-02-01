@@ -79,7 +79,6 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
     // Verify the signature on the message
     verify_message_signature(&pubkey, &sig_box, &options.message_file)?;
 
-
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
 
@@ -110,8 +109,7 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
 pub fn load_public_key(source: &PublicKeySource) -> Result<PubkeyStruct> {
     match source {
         PublicKeySource::File(path) => {
-            let contents =
-                std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
+            let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
             PubkeyStruct::from_file_contents(&contents)
         }
         PublicKeySource::Base64(base64_str) => {

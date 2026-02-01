@@ -38,9 +38,9 @@ fn test_empty_file_signing() {
 
     // Sign empty file (prehashed mode)
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -50,9 +50,9 @@ fn test_empty_file_signing() {
 
     // Verify signature on empty file
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -86,9 +86,9 @@ fn test_empty_file_legacy_mode() {
 
     // Sign empty file (legacy mode - non-prehashed)
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: false, // Legacy mode
         trusted_comment: None,
         untrusted_comment: None,
@@ -98,9 +98,9 @@ fn test_empty_file_legacy_mode() {
 
     // Verify signature on empty file
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -134,9 +134,9 @@ fn test_unicode_in_trusted_comment() {
 
     // Sign with Unicode trusted comment (emoji, Chinese, Arabic)
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some("Signed 🔐 签名 توقيع".to_string()),
         untrusted_comment: Some("Test signature 测试 اختبار 🚀".to_string()),
@@ -148,9 +148,9 @@ fn test_unicode_in_trusted_comment() {
 
     // Verify signature with Unicode comments
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: false,
     };
@@ -185,9 +185,9 @@ fn test_unicode_in_untrusted_comment() {
 
     // Sign with Unicode untrusted comment only
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: Some("Файл подписан ✓".to_string()),
@@ -197,9 +197,9 @@ fn test_unicode_in_untrusted_comment() {
 
     // Verify and check untrusted comment
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: false,
     };
@@ -236,9 +236,9 @@ fn test_large_file_prehashed() {
 
     // Sign large file - should use prehashed mode
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some("Large file signature".to_string()),
         untrusted_comment: None,
@@ -248,9 +248,9 @@ fn test_large_file_prehashed() {
 
     // Verify signature
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -289,9 +289,9 @@ fn test_symlink_handling() {
 
     // Sign the symlink - should follow it and sign the real file
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_link.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_link.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -301,9 +301,9 @@ fn test_symlink_handling() {
 
     // Verify using the symlink
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_link.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_link.clone(),
         output: false,
         quiet: true,
     };
@@ -311,9 +311,9 @@ fn test_symlink_handling() {
 
     // Verify using the real file - should also work
     let verify_opts2 = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -352,9 +352,9 @@ fn test_generate_key_with_empty_password() {
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -366,9 +366,9 @@ fn test_generate_key_with_empty_password() {
 
     // Verify the signature
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -413,9 +413,9 @@ fn test_change_password_to_empty() {
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -463,9 +463,9 @@ fn test_change_password_from_empty() {
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -507,9 +507,9 @@ fn test_untrusted_comment_max_valid_length() {
 
     // Should succeed without warning
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: Some(max_valid_comment),
@@ -520,9 +520,9 @@ fn test_untrusted_comment_max_valid_length() {
 
     // Verify signature
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -561,9 +561,9 @@ fn test_untrusted_comment_warning_threshold() {
 
     // Should succeed but emit warning to stderr (we can't easily capture stderr in test)
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: Some(warning_comment),
@@ -574,9 +574,9 @@ fn test_untrusted_comment_warning_threshold() {
 
     // Verify signature still works
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -615,9 +615,9 @@ fn test_trusted_comment_max_valid_length() {
 
     // Should succeed
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some(max_valid_trusted.clone()),
         untrusted_comment: None,
@@ -629,9 +629,9 @@ fn test_trusted_comment_max_valid_length() {
 
     // Verify signature
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -670,9 +670,9 @@ fn test_trusted_comment_error_threshold() {
 
     // Should error
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some(too_long_trusted),
         untrusted_comment: None,
@@ -734,9 +734,9 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
 
     // Attempt to sign without force - should fail because sig_file exists (via symlink)
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -797,9 +797,9 @@ fn test_symlink_outside_working_directory() {
     // Sign using the symlink - should follow it and sign the real file
     let sig_file = work_dir.join("message_link.txt.minisig");
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: inside_link.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: inside_link.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -811,9 +811,9 @@ fn test_symlink_outside_working_directory() {
 
     // Verify using the real file path works
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: outside_message.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: outside_message.clone(),
         output: false,
         quiet: true,
     };
@@ -881,9 +881,9 @@ fn test_parent_directory_symlink_no_escape() {
 
     let sig_file = link_dir.join("message.txt.minisig");
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -934,9 +934,9 @@ fn test_circular_symlink_handling() {
     // Attempt to sign the circular symlink
     let sig_file = temp_dir.path().join("link1.txt.minisig");
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: link1.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: link1.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -983,9 +983,9 @@ fn test_unicode_zero_width_joiners() {
     assert!(zwj_comment.len() > zwj_comment.chars().count()); // Multi-byte
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some(zwj_comment.to_string()),
         untrusted_comment: None,
@@ -1027,9 +1027,9 @@ fn test_unicode_rtl_override() {
     let rtl_comment = "Test\u{202E}Override";
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some(rtl_comment.to_string()),
         untrusted_comment: None,
@@ -1041,9 +1041,9 @@ fn test_unicode_rtl_override() {
 
     // Verify signature works despite RTL
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(public_key.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: true,
     };
@@ -1082,9 +1082,9 @@ fn test_unicode_homoglyphs() {
     let homoglyph_comment = "Test with Cyrillic а and Greek ο";
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some(homoglyph_comment.to_string()),
         untrusted_comment: None,
@@ -1142,9 +1142,9 @@ fn test_unicode_multibyte_at_byte_limit() {
     assert!(comment_with_multibyte.chars().count() < comment_with_multibyte.len());
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some(comment_with_multibyte.clone()),
         untrusted_comment: None,
@@ -1195,9 +1195,9 @@ fn test_unicode_multibyte_exceeds_limit() {
     assert!(too_long_comment.len() > max_bytes);
 
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: Some(too_long_comment),
         untrusted_comment: None,

@@ -265,15 +265,8 @@ fn test_sign_prehashed_vs_normal() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
 
     // Create prehashed signature
-    let sig_prehashed = create_signature(
-        &secret_key,
-        keynum,
-        &message_path,
-        true,
-        Some("test"),
-        None,
-    )
-    .unwrap();
+    let sig_prehashed =
+        create_signature(&secret_key, keynum, &message_path, true, Some("test"), None).unwrap();
 
     // Create normal signature
     let sig_normal = create_signature(

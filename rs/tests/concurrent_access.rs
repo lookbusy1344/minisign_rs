@@ -140,9 +140,9 @@ fn test_concurrent_signature_creation() {
 
             // All threads attempt to sign at the same time
             let opts = SignOptions {
-                secret_key_file: secret_key.to_str().unwrap().to_string(),
-                message_file: message_file.to_str().unwrap().to_string(),
-                signature_file: Some(sig_file.to_str().unwrap().to_string()),
+                secret_key_file: (**secret_key).to_path_buf(),
+                message_file: (**message_file).to_path_buf(),
+                signature_file: Some((**sig_file).to_path_buf()),
                 prehashed: true,
                 trusted_comment: None,
                 untrusted_comment: None,
@@ -444,9 +444,9 @@ fn test_multiprocess_signing_same_key() {
         let handle = thread::spawn(move || {
             // Call sign operation directly (simulates separate process behavior)
             let opts = SignOptions {
-                secret_key_file: secret_key_str,
-                message_file: msg_file_str,
-                signature_file: Some(sig_file_str),
+                secret_key_file: secret_key_str.into(),
+                message_file: msg_file_str.into(),
+                signature_file: Some(sig_file_str.into()),
                 prehashed: true,
                 trusted_comment: None,
                 untrusted_comment: None,
