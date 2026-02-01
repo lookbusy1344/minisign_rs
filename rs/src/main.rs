@@ -154,7 +154,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = SignOptions {
             secret_key_file: &secret_key_file,
-            message_file: &message_file,
+            message_file,
             signature_file: Some(&signature_file),
             trusted_comment: cli.trusted_comment.clone(),
             untrusted_comment: cli.untrusted_comment.clone(),
@@ -494,9 +494,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         } else {
             // Default to secret key path
             let path = Cli::default_secret_key_path();
-            let options = InspectOptions {
-                key_file: &path,
-            };
+            let options = InspectOptions { key_file: &path };
             (
                 inspect(&options)?,
                 format!("Inspecting: {} (default)", path.display()),

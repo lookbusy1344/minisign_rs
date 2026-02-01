@@ -18,7 +18,7 @@ use minisign::{
     signature::{SigStruct, SignatureBox},
 };
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tempfile::TempDir;
 
 #[test]
@@ -617,7 +617,7 @@ fn test_sign_single_file_success() {
         force: false,
     };
 
-    let result = sign_single_file(&opts.message_file, &opts, None);
+    let result = sign_single_file(opts.message_file, &opts, None);
     assert!(result.is_ok());
 
     let sign_result = result.unwrap();

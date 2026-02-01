@@ -1,8 +1,7 @@
-use std::path::Path;
 use clap::Parser;
 use minisign::cli::*;
 use serial_test::serial;
-use std::path::PathBuf;
+use std::path::Path;
 
 #[test]
 fn test_action_detection() {

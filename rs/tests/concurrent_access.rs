@@ -140,9 +140,9 @@ fn test_concurrent_signature_creation() {
 
             // All threads attempt to sign at the same time
             let opts = SignOptions {
-                secret_key_file: &**secret_key,
-                message_file: &**message_file,
-                signature_file: Some(&**sig_file),
+                secret_key_file: &secret_key,
+                message_file: &message_file,
+                signature_file: Some(&sig_file),
                 prehashed: true,
                 trusted_comment: None,
                 untrusted_comment: None,

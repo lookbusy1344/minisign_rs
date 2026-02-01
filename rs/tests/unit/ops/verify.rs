@@ -15,7 +15,7 @@ use minisign::{
     signature::SignatureBox,
 };
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tempfile::TempDir;
 
 #[test]

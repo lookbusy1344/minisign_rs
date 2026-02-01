@@ -1,6 +1,6 @@
-use std::path::Path;
 use minisign::errors::*;
 use std::io;
+use std::path::Path;
 use std::path::PathBuf;
 
 #[test]
@@ -24,7 +24,7 @@ fn test_error_constructors() {
     let path = Path::new("/test");
     let io_err = io::Error::new(io::ErrorKind::NotFound, "test");
 
-    let err = Error::file_read(&path, io_err);
+    let err = Error::file_read(path, io_err);
     assert!(matches!(err, Error::FileRead { .. }));
 
     let err = Error::other("test message");

@@ -122,7 +122,10 @@ pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
 /// - The file cannot be read
 /// - The file is not a valid key
 /// - For encrypted keys: password is incorrect or decryption fails
-pub fn inspect_private(options: &InspectPrivateOptions<'_>, password: &[u8]) -> Result<InspectResult> {
+pub fn inspect_private(
+    options: &InspectPrivateOptions<'_>,
+    password: &[u8],
+) -> Result<InspectResult> {
     let contents = fs::read_to_string(options.key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
