@@ -280,3 +280,306 @@ fn test_verify_prehashed_mode_no_size_limit() {
 
     verify(&verify_opts).expect("verification should succeed with prehashed large file");
 }
+
+#[test]
+fn test_verify_multiple_files_sequential() {
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create and sign multiple files
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+    let file3 = temp_dir.path().join("file3.txt");
+
+    fs::write(&file1, b"Message 1").unwrap();
+    fs::write(&file2, b"Message 2").unwrap();
+    fs::write(&file3, b"Message 3").unwrap();
+
+    let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.as_path(),
+        message_file: Path::new(""),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: Some("Batch verification test".to_string()),
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+
+    // Now verify multiple files
+    let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: Path::new(""), // Ignored for batch operations
+        message_file: Path::new(""),   // Ignored for batch operations
+        output: false,
+        quiet: false,
+    };
+
+    let result = verify_multiple_files(verify_paths, &verify_opts, true);
+    assert!(result.is_ok(), "verification should succeed for all files");
+
+    // All signature files should still exist
+    assert!(file1.with_extension("txt.minisig").exists());
+    assert!(file2.with_extension("txt.minisig").exists());
+    assert!(file3.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn test_verify_multiple_files_parallel() {
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create 10 test files to better test parallelism
+    let mut paths = Vec::new();
+    for i in 0..10 {
+        let file = temp_dir.path().join(format!("file{i}.txt"));
+        fs::write(&file, format!("Message {i}").as_bytes()).unwrap();
+        paths.push(file);
+    }
+
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.as_path(),
+        message_file: Path::new(""),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: Some("Parallel verification test".to_string()),
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
+
+    // Now verify multiple files in parallel
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: Path::new(""), // Ignored for batch operations
+        message_file: Path::new(""),   // Ignored for batch operations
+        output: false,
+        quiet: false,
+    };
+
+    let result = verify_multiple_files(paths.clone(), &verify_opts, false);
+    assert!(result.is_ok(), "verification should succeed for all files");
+
+    // Verify all signature files exist
+    for file in &paths {
+        let sig_path = format!("{}.minisig", file.display());
+        assert!(
+            Path::new(&sig_path).exists(),
+            "Signature missing for {file:?}"
+        );
+    }
+}
+
+#[test]
+fn test_verify_multiple_files_partial_failure() {
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create and sign files
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+    let file3 = temp_dir.path().join("file3.txt");
+
+    fs::write(&file1, b"Message 1").unwrap();
+    fs::write(&file2, b"Message 2").unwrap();
+    fs::write(&file3, b"Message 3").unwrap();
+
+    let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.as_path(),
+        message_file: Path::new(""),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+
+    // Corrupt file2's content (signature won't match)
+    fs::write(&file2, b"Corrupted message").unwrap();
+
+    // Try to verify all files - should get partial failure
+    let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: Path::new(""),
+        message_file: Path::new(""),
+        output: false,
+        quiet: false,
+    };
+
+    let result = verify_multiple_files(verify_paths, &verify_opts, true);
+
+    // Should return PartialFailure error
+    assert!(result.is_err());
+    assert!(matches!(result, Err(Error::PartialFailure)));
+
+    // Signatures still exist for all files
+    assert!(file1.with_extension("txt.minisig").exists());
+    assert!(file2.with_extension("txt.minisig").exists());
+    assert!(file3.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn test_verify_multiple_files_all_attempted() {
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create mix of valid and files that will fail
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("missing1.txt"); // No signature exists
+    let file3 = temp_dir.path().join("file3.txt");
+    let file4 = temp_dir.path().join("file4.txt");
+    let file5 = temp_dir.path().join("file5.txt");
+
+    fs::write(&file1, b"M1").unwrap();
+    fs::write(&file3, b"M3").unwrap();
+    fs::write(&file4, b"M4").unwrap();
+    fs::write(&file5, b"M5").unwrap();
+
+    // Sign file1, file3, file4, file5 (skip file2 - it doesn't exist)
+    let sign_paths = vec![file1.clone(), file3.clone(), file4.clone(), file5.clone()];
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.as_path(),
+        message_file: Path::new(""),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+
+    // Now create file2 but don't sign it
+    fs::write(&file2, b"M2").unwrap();
+
+    // Corrupt file4's content
+    fs::write(&file4, b"Corrupted").unwrap();
+
+    // Try to verify all files
+    let verify_paths = vec![
+        file1.clone(),
+        file2.clone(),
+        file3.clone(),
+        file4.clone(),
+        file5.clone(),
+    ];
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: Path::new(""),
+        message_file: Path::new(""),
+        output: false,
+        quiet: false,
+    };
+
+    let result = verify_multiple_files(verify_paths, &verify_opts, true);
+
+    // Should return PartialFailure (file2 has no signature, file4 corrupted)
+    assert!(result.is_err());
+    assert!(matches!(result, Err(Error::PartialFailure)));
+
+    // file1, file3, file5 should have successful verification (implicitly tested by PartialFailure)
+    // file2 should have no signature
+    assert!(!file2.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn test_verify_multiple_files_quiet_mode() {
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create and sign files
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+
+    fs::write(&file1, b"M1").unwrap();
+    fs::write(&file2, b"M2").unwrap();
+
+    let sign_paths = vec![file1.clone(), file2.clone()];
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.as_path(),
+        message_file: Path::new(""),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+
+    // Verify with quiet mode (should suppress output)
+    let verify_paths = vec![file1.clone(), file2.clone()];
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: Path::new(""),
+        message_file: Path::new(""),
+        output: false,
+        quiet: true, // Quiet mode enabled
+    };
+
+    let result = verify_multiple_files(verify_paths, &verify_opts, true);
+    assert!(result.is_ok(), "verification should succeed");
+}

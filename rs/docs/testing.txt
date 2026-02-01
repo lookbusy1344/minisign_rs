@@ -63,4 +63,7 @@ minisign_rs -Vm SSMS20B.exe -p ./strong_public_c.pub
 Multi-threading:
 rm SSMS20.exe.minisig
 rm SSMS20B.exe.minisig
-minisign_rs --sign -m SSMS20.exe SSMS20B.exe SSMS20C.exe --secretkey-path ./strong_private_r.key -t 'This is a trusted comment from RS version with multi-threading'
+minisign_rs --sign --force -m SSMS20.exe SSMS20B.exe SSMS20C.exe --secretkey-path ./strong_private_r.key -t 'This is a trusted comment from RS version with multi-threading'
+
+Verify:
+minisign_rs --verify -m SSMS20.exe SSMS20B.exe SSMS20C.exe --publickey-path ./strong_public_r.pub

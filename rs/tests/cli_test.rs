@@ -1688,3 +1688,106 @@ fn cli_sign_single_file_backwards_compatible() {
 
     assert!(file.with_extension("txt.minisig").exists());
 }
+
+#[test]
+fn test_verify_multiple_files() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    // Generate keypair
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-f")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success();
+
+    // Create and sign multiple files
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+    let file3 = temp_dir.path().join("file3.txt");
+
+    fs::write(&file1, b"Message 1").expect("write failed");
+    fs::write(&file2, b"Message 2").expect("write failed");
+    fs::write(&file3, b"Message 3").expect("write failed");
+
+    // Sign all three files
+    minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-m")
+        .arg(&file1)
+        .arg(&file2)
+        .arg(&file3)
+        .arg("-s")
+        .arg(&secret_key)
+        .assert()
+        .success();
+
+    // Verify all three files
+    let output = minisign_cmd()
+        .arg("-V")
+        .arg("-m")
+        .arg(&file1)
+        .arg(&file2)
+        .arg(&file3)
+        .arg("-p")
+        .arg(&public_key)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&output);
+
+    // Should see key ID once at the top
+    assert!(
+        stdout.contains("Verifying with key:"),
+        "Expected 'Verifying with key:' in output:\n{stdout}"
+    );
+
+    // Should see verification output for all three files (just pass/fail, not full details)
+    assert!(
+        stdout.contains("file1.txt"),
+        "Expected file1.txt in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("file2.txt"),
+        "Expected file2.txt in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("file3.txt"),
+        "Expected file3.txt in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Verified:"),
+        "Expected 'Verified:' in output:\n{stdout}"
+    );
+
+    // Should show "Verifying with key:" exactly once (not repeated per file)
+    let verifying_count = stdout.matches("Verifying with key:").count();
+    assert_eq!(
+        verifying_count, 1,
+        "Expected 'Verifying with key:' shown once, found {verifying_count} times:\n{stdout}"
+    );
+
+    // Should show trusted comment for each file (can vary per signature)
+    let trusted_comment_count = stdout.matches("Trusted comment:").count();
+    assert_eq!(
+        trusted_comment_count, 3,
+        "Expected 3 trusted comments (one per file), found {trusted_comment_count}:\n{stdout}"
+    );
+
+    // Should NOT have "Key ID:" label per file (shown once at top)
+    let key_id_label_count = stdout.matches("Key ID:").count();
+    assert_eq!(
+        key_id_label_count, 0,
+        "Expected no per-file 'Key ID:' labels, found {key_id_label_count}:\n{stdout}"
+    );
+}
