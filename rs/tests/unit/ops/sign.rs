@@ -664,3 +664,35 @@ fn test_sign_multiple_files_sequential() {
     assert!(file2.with_extension("txt.minisig").exists());
     assert!(file3.with_extension("txt.minisig").exists());
 }
+
+#[test]
+fn test_sign_multiple_files_parallel() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create 10 test files to better test parallelism
+    let mut paths = Vec::new();
+    for i in 0..10 {
+        let file = temp_dir.path().join(format!("file{i}.txt"));
+        fs::write(&file, format!("Message {i}").as_bytes()).unwrap();
+        paths.push(file);
+    }
+
+    let opts = SignOptions {
+        secret_key_file: "tests/fixtures/keys/unencrypted.key".to_string(),
+        message_file: String::new(),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: Some("Parallel batch".to_string()),
+        untrusted_comment: None,
+        force: false,
+    };
+
+    let result = sign_multiple_files(paths.clone(), &opts, None, false);
+    assert!(result.is_ok());
+
+    // Verify all signature files exist
+    for file in &paths {
+        let sig_path = format!("{}.minisig", file.display());
+        assert!(Path::new(&sig_path).exists(), "Signature missing for {file:?}");
+    }
+}
