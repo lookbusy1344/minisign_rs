@@ -102,6 +102,10 @@ pub struct Cli {
     #[arg(short = 'x', long = "signature", value_name = "FILE")]
     pub signature_file: Option<PathBuf>,
 
+    /// Process files sequentially instead of in parallel
+    #[arg(long)]
+    pub sequential: bool,
+
     /// Do not use password (generate and change only)
     #[arg(short = 'W', long = "no-password")]
     pub no_password: bool,

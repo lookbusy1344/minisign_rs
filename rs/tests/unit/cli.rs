@@ -294,3 +294,26 @@ fn cli_accepts_single_message_file() {
     assert_eq!(cli.message_files.len(), 1);
     assert_eq!(cli.message_files[0].to_str().unwrap(), "file.txt");
 }
+
+#[test]
+fn cli_sequential_flag_defaults_false() {
+    let cli = Cli::try_parse_from(&[
+        "minisign_rs",
+        "-S",
+        "-m", "file.txt",
+    ]).unwrap();
+
+    assert!(!cli.sequential);
+}
+
+#[test]
+fn cli_sequential_flag_can_be_set() {
+    let cli = Cli::try_parse_from(&[
+        "minisign_rs",
+        "-S",
+        "-m", "file.txt",
+        "--sequential",
+    ]).unwrap();
+
+    assert!(cli.sequential);
+}
