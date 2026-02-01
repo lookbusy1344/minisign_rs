@@ -30,7 +30,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **366 total tests** covering all operations and CLI behavior
+- **401 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Compatibility tests verifying interoperability with C minisign
@@ -39,14 +39,16 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (355 tests) using optimized scrypt parameters (~10 seconds)
+- **Fast test suite** (390 tests) using optimized scrypt parameters (~10 seconds)
 - **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **9,647 lines** of well-documented Rust code (13,921 total with comments)
+- **3,068 lines** of production code in `src/` (3,287 total with comments)
+- **8,177 lines** of test code in `tests/` (9,143 total with comments)
+- **Test-to-code ratio**: 2.7:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
@@ -77,13 +79,13 @@ Release binaries are available for:
 # Build the project
 cargo build --release
 
-# Run tests (fast - 355 tests, ~10 seconds)
+# Run tests (fast - 390 tests, ~10 seconds)
 cargo test
 
 # Run slow security tests (11 tests, ~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (366 tests, ~21 seconds)
+# Run all tests (401 tests, ~21 seconds)
 cargo test && cargo test -- --ignored
 
 # Check code quality
@@ -111,7 +113,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-V` | `--verify` | Verify a signature |
 | `-R` | `--recreate` | Recreate a public key from a secret key |
 | `-K` | `--change-password` | Change or remove password from a secret key |
-| `-I` | `--inspect` | Inspect a key file and display security parameters |
+| `-I` | `--inspect` | Inspect a key file and display security parameters (prompts for password if encrypted) |
 
 #### Key and File Options
 
@@ -119,7 +121,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 |-------|------|-------------|
 | `-s <FILE>` | `--secretkey-path <FILE>` | Secret key file path |
 | `-p <FILE>` | `--publickey-path <FILE>` | Public key file path |
-| `-P <STRING>` | `--publickey <STRING>` | Public key as BASE64-encoded string |
+| `-P <STRING>` | `--publickey <STRING>` | Public key as base64 string |
 | `-m <FILE>` | `--input <FILE>` | Input file (message to sign/verify). Additional files to sign can follow as positional args: `-m file1 file2 file3` |
 | `-x <FILE>` | `--signature <FILE>` | Signature file (default: `<file>.minisig`) |
 
@@ -134,14 +136,14 @@ These reflect zig-minisign where it differs from classic C implementation. https
 
 | Short | Long | Description |
 |-------|------|-------------|
-| `-l` | `--legacy` | Create a legacy signature (non-prehashed) |
+| `-l` | `--legacy` | Legacy mode (sign only) |
 | `-H` | `--prehashed` | Sign or verify a prehashed file |
 | `-q` | `--quiet` | Quiet mode (minimal output) |
 | `-Q` | `--pretty-quiet` | Pretty quiet mode (show only trusted comment) |
 | `-f` | `--force` | Force overwrite of existing files |
 | `-o` | `--output` | Output verification result to stdout |
 | `-W` | `--no-password` | Do not use password (generate and change only) |
-| | `--sequential` | Sign multiple files sequentially instead of in parallel |
+| | `--sequential` | Process files sequentially instead of in parallel |
 
 #### Additional Options
 
@@ -150,7 +152,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-h` | `--help` | Display help message and exit |
 | `-v` | `--version` | Show version information and exit |
 | | `--password-file <FILE>` | Read password from file (testing only - insecure) |
-| | `--allow-kdf-fallback` | Allow KDF parameter fallback on low-memory systems |
+| | `--allow-kdf-fallback` | Allow KDF parameter fallback if 128MB allocation fails (permission only, does not force fallback) |
 | | `--no-decrypt` | Skip decryption of encrypted keys (show [encrypted] instead of prompting) |
 
 ### Common Usage Examples
@@ -360,10 +362,10 @@ minisign_rs -S -m small-file.txt --legacy
 
 **Optional (for full test suite):**
 - **C minisign** (for compatibility and cross-binary tests): `brew install minisign`
-  - Without C minisign: ~359 tests run (skips 7 compatibility tests)
-  - With C minisign: All 366 tests run
+  - Without C minisign: ~394 tests run (skips 7 compatibility tests)
+  - With C minisign: All 401 tests run
 
-**Fast vs slow tests:** 355 fast tests (N=2^14, ~10s) for development, 11 slow tests (N=2^20, ~11s) for production parameter verification.
+**Fast vs slow tests:** 390 fast tests (N=2^14, ~10s) for development, 11 slow tests (N=2^20, ~11s) for production parameter verification.
 
 ```bash
 # Run only fast tests (default, ~10 seconds)
