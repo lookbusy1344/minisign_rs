@@ -1,5 +1,6 @@
 use clap::Parser;
 use is_terminal::IsTerminal;
+use minisign::ops::sign::sign_multiple_files;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
@@ -8,7 +9,6 @@ use minisign::{
         SignOptions, VerifyOptions, change, generate, inspect, recreate, sign, verify,
     },
 };
-use minisign::ops::sign::sign_multiple_files;
 use std::io::{self, Write};
 use std::process;
 use subtle::ConstantTimeEq;
@@ -124,7 +124,9 @@ fn handle_generate(cli: &Cli) -> Result<()> {
 fn handle_sign(cli: &Cli) -> Result<()> {
     // Validate required arguments
     if cli.message_files.is_empty() {
-        return Err(Error::Usage("Message file (-m) is required for signing".into()));
+        return Err(Error::Usage(
+            "Message file (-m) is required for signing".into(),
+        ));
     }
 
     // Get secret key path
@@ -204,12 +206,16 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 fn handle_verify(cli: &Cli) -> Result<()> {
     // Validate required arguments
     if cli.message_files.is_empty() {
-        return Err(Error::Usage("Message file (-m) is required for verification".into()));
+        return Err(Error::Usage(
+            "Message file (-m) is required for verification".into(),
+        ));
     }
 
     // Verification only supports single file
     if cli.message_files.len() > 1 {
-        return Err(Error::Usage("Verification only supports a single message file".into()));
+        return Err(Error::Usage(
+            "Verification only supports a single message file".into(),
+        ));
     }
 
     let message_file = &cli.message_files[0];

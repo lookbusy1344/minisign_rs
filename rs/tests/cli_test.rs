@@ -1578,10 +1578,14 @@ fn cli_sign_multiple_files() {
     minisign_cmd()
         .args([
             "-S",
-            "-s", "tests/fixtures/keys/unencrypted.key",
-            "-m", file1.to_str().unwrap(),
-            "-m", file2.to_str().unwrap(),
-            "-m", file3.to_str().unwrap(),
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-m",
+            file1.to_str().unwrap(),
+            "-m",
+            file2.to_str().unwrap(),
+            "-m",
+            file3.to_str().unwrap(),
             "-W",
             "-q",
         ])
@@ -1606,9 +1610,12 @@ fn cli_sign_multiple_files_sequential() {
     minisign_cmd()
         .args([
             "-S",
-            "-s", "tests/fixtures/keys/unencrypted.key",
-            "-m", file1.to_str().unwrap(),
-            "-m", file2.to_str().unwrap(),
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-m",
+            file1.to_str().unwrap(),
+            "-m",
+            file2.to_str().unwrap(),
             "--sequential",
             "-W",
             "-q",
@@ -1632,9 +1639,12 @@ fn cli_sign_multiple_files_partial_failure_exit_code() {
     minisign_cmd()
         .args([
             "-S",
-            "-s", "tests/fixtures/keys/unencrypted.key",
-            "-m", file1.to_str().unwrap(),
-            "-m", file2.to_str().unwrap(),
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-m",
+            file1.to_str().unwrap(),
+            "-m",
+            file2.to_str().unwrap(),
             "-W",
             "-q",
         ])
@@ -1655,8 +1665,10 @@ fn cli_sign_single_file_backwards_compatible() {
     let output = minisign_cmd()
         .args([
             "-S",
-            "-s", "tests/fixtures/keys/unencrypted.key",
-            "-m", file.to_str().unwrap(),
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-m",
+            file.to_str().unwrap(),
             "-W",
         ])
         .assert()
@@ -1668,8 +1680,14 @@ fn cli_sign_single_file_backwards_compatible() {
     let stdout = String::from_utf8_lossy(&output);
 
     // Should show key ID and signature path (original single-file output format)
-    assert!(stdout.contains("Signing with key:"), "Expected 'Signing with key:' in output:\n{stdout}");
-    assert!(stdout.contains("Signature written to"), "Expected 'Signature written to' in output:\n{stdout}");
+    assert!(
+        stdout.contains("Signing with key:"),
+        "Expected 'Signing with key:' in output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Signature written to"),
+        "Expected 'Signature written to' in output:\n{stdout}"
+    );
 
     assert!(file.with_extension("txt.minisig").exists());
 }

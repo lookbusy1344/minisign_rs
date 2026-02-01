@@ -693,7 +693,10 @@ fn test_sign_multiple_files_parallel() {
     // Verify all signature files exist
     for file in &paths {
         let sig_path = format!("{}.minisig", file.display());
-        assert!(Path::new(&sig_path).exists(), "Signature missing for {file:?}");
+        assert!(
+            Path::new(&sig_path).exists(),
+            "Signature missing for {file:?}"
+        );
     }
 }
 
