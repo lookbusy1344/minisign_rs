@@ -122,8 +122,10 @@ fn handle_generate(cli: &Cli) -> Result<()> {
 }
 
 fn handle_sign(cli: &Cli) -> Result<()> {
+    let message_files = cli.all_message_files();
+
     // Validate required arguments
-    if cli.message_files.is_empty() {
+    if message_files.is_empty() {
         return Err(Error::Usage(
             "Message file (-m) is required for signing".into(),
         ));
@@ -142,9 +144,9 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
-    if cli.message_files.len() == 1 {
+    if message_files.len() == 1 {
         // Single file path - preserve original behavior and output format
-        let message_file = &cli.message_files[0];
+        let message_file = &message_files[0];
 
         let signature_file = match &cli.signature_file {
             Some(path) => path.clone(),
@@ -193,7 +195,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         };
 
         sign_multiple_files(
-            cli.message_files.clone(),
+            message_files,
             &options,
             password.as_ref().map(|p| p.as_bytes()),
             cli.sequential,
@@ -204,21 +206,23 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 }
 
 fn handle_verify(cli: &Cli) -> Result<()> {
+    let message_files = cli.all_message_files();
+
     // Validate required arguments
-    if cli.message_files.is_empty() {
+    if message_files.is_empty() {
         return Err(Error::Usage(
             "Message file (-m) is required for verification".into(),
         ));
     }
 
     // Verification only supports single file
-    if cli.message_files.len() > 1 {
+    if message_files.len() > 1 {
         return Err(Error::Usage(
             "Verification only supports a single message file".into(),
         ));
     }
 
-    let message_file = &cli.message_files[0];
+    let message_file = &message_files[0];
 
     // Get public key source (either -p or -P, one is required)
     let public_key = if let Some(ref pk_file) = cli.public_key_file {

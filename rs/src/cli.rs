@@ -62,9 +62,13 @@ pub struct Cli {
     #[arg(short = 'l', long = "legacy")]
     pub legacy: bool,
 
-    /// Message files (required for sign and verify, multiple allowed for signing)
+    /// Message file (required for sign and verify)
     #[arg(short = 'm', long = "input", value_name = "FILE")]
-    pub message_files: Vec<PathBuf>,
+    pub message_file: Option<PathBuf>,
+
+    /// Additional files to sign (positional, C-compatible: -m file1 file2 file3)
+    #[arg(value_name = "FILE")]
+    pub extra_files: Vec<PathBuf>,
 
     /// Output verification result to stdout
     #[arg(short = 'o', long = "output")]
@@ -161,6 +165,23 @@ impl Cli {
             Some(Action::Inspect)
         } else {
             None
+        }
+    }
+
+    /// Merge `-m` file and positional extra files into a single list.
+    ///
+    /// Matches C minisign semantics: `-m` specifies the first file, any
+    /// remaining positional arguments are additional files to sign.
+    #[must_use]
+    pub fn all_message_files(&self) -> Vec<PathBuf> {
+        match &self.message_file {
+            Some(first) => {
+                let mut files = Vec::with_capacity(1 + self.extra_files.len());
+                files.push(first.clone());
+                files.extend_from_slice(&self.extra_files);
+                files
+            }
+            None => self.extra_files.clone(),
         }
     }
 
