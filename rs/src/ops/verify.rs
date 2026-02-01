@@ -262,6 +262,13 @@ pub fn verify_multiple_files(
     // Load public key once — avoids N-1 redundant I/O operations
     let pubkey = load_public_key(&options.public_key)?;
 
+    // Show key ID once at the top (like signing does)
+    if !options.quiet {
+        let key_id = pubkey.keynum().to_key_id();
+        let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
+        println!("Verifying with key: {key_id} ({key_id_words})");
+    }
+
     // Multi-file path: verify all files with the already-loaded key
     let results: Vec<FileVerifyResult> = if sequential {
         files
@@ -292,15 +299,9 @@ pub fn verify_multiple_files(
 /// Report the result of verifying a single file (called for each file)
 fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &VerifyOptions<'_>) {
     match result {
-        Ok(verify_result) => {
+        Ok(_) => {
             if !options.quiet {
-                println!(
-                    "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
-                    file.display(),
-                    verify_result.trusted_comment,
-                    verify_result.key_id,
-                    verify_result.key_id_words
-                );
+                println!("Verified: {}", file.display());
             }
         }
         Err(e) => {

@@ -1746,7 +1746,13 @@ fn test_verify_multiple_files() {
 
     let stdout = String::from_utf8_lossy(&output);
 
-    // Should see verification output for all three files
+    // Should see key ID once at the top
+    assert!(
+        stdout.contains("Verifying with key:"),
+        "Expected 'Verifying with key:' in output:\n{stdout}"
+    );
+
+    // Should see verification output for all three files (just pass/fail, not full details)
     assert!(
         stdout.contains("file1.txt"),
         "Expected file1.txt in output:\n{stdout}"
@@ -1762,5 +1768,19 @@ fn test_verify_multiple_files() {
     assert!(
         stdout.contains("Verified:"),
         "Expected 'Verified:' in output:\n{stdout}"
+    );
+
+    // Should show "Verifying with key:" exactly once (not repeated per file)
+    let verifying_count = stdout.matches("Verifying with key:").count();
+    assert_eq!(
+        verifying_count, 1,
+        "Expected 'Verifying with key:' shown once, found {verifying_count} times:\n{stdout}"
+    );
+
+    // Should NOT have the old verbose format with "Key ID:" and "Trusted comment:" per file
+    let key_id_label_count = stdout.matches("Key ID:").count();
+    assert_eq!(
+        key_id_label_count, 0,
+        "Expected no 'Key ID:' labels (simplified format), found {key_id_label_count}:\n{stdout}"
     );
 }
