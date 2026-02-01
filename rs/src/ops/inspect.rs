@@ -313,54 +313,9 @@ pub fn inspect_signature(signature_file: &str) -> Result<SignatureInspectResult>
     })
 }
 
-/// Convert opslimit/memlimit to scrypt parameters
+/// Convert opslimit/memlimit to scrypt parameters (`log_n`, r, p)
 ///
-/// This is a copy of the logic from `SeckeyStruct::opslimit_memlimit_to_params`
-/// but made available for inspection purposes.
+/// Delegates to the shared implementation in [`crate::crypto::opslimit_memlimit_to_params`].
 fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
-    const SCRYPT_R_STANDARD: u32 = 8;
-    const SCRYPT_P_STANDARD: u32 = 1;
-    const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
-    const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
-
-    let r = SCRYPT_R_STANDARD;
-    let p = SCRYPT_P_STANDARD;
-
-    let divisor = LIBSODIUM_MEMLIMIT_MULTIPLIER
-        .checked_mul(u64::from(r))
-        .ok_or_else(|| Error::ScryptParamError("overflow calculating divisor".into()))?;
-
-    let n = memlimit
-        .checked_div(divisor)
-        .ok_or_else(|| Error::ScryptParamError("division by zero".into()))?;
-
-    if n == 0 {
-        return Err(Error::ScryptParamError("N cannot be zero".into()));
-    }
-
-    let log_n = n
-        .checked_ilog2()
-        .and_then(|v| u8::try_from(v).ok())
-        .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
-
-    let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
-        .checked_mul(n)
-        .and_then(|v| v.checked_mul(u64::from(r)))
-        .ok_or_else(|| Error::ScryptParamError("overflow calculating expected opslimit".into()))?;
-
-    if expected_opslimit != opslimit {
-        let derived_r = opslimit
-            .checked_div(
-                LIBSODIUM_OPSLIMIT_MULTIPLIER
-                    .checked_mul(n)
-                    .ok_or_else(|| {
-                        Error::ScryptParamError("overflow calculating derived r".into())
-                    })?,
-            )
-            .and_then(|v| u32::try_from(v).ok())
-            .unwrap_or(r);
-        return Ok((log_n, derived_r, p));
-    }
-
-    Ok((log_n, r, p))
+    crate::crypto::opslimit_memlimit_to_params(opslimit, memlimit)
 }

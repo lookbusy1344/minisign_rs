@@ -306,6 +306,71 @@ pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
     Ok(hasher.finalize().into())
 }
 
+/// Convert libsodium-style opslimit/memlimit to scrypt parameters (`log_n`, r, p)
+///
+/// The C minisign implementation uses libsodium's scrypt interface, which
+/// expresses work factors as `opslimit` and `memlimit`. These map to scrypt's
+/// native parameters via:
+/// - opslimit = `LIBSODIUM_OPSLIMIT_MULTIPLIER` * N * r
+/// - memlimit = `LIBSODIUM_MEMLIMIT_MULTIPLIER` * N * r
+///
+/// # Algorithm
+///
+/// 1. Derives N from memlimit assuming standard r=8, p=1
+/// 2. Computes `log_n` via checked integer log2
+/// 3. Cross-validates against opslimit; falls back to deriving r from opslimit
+///    if they disagree (handles non-standard parameters)
+///
+/// # Errors
+///
+/// Returns `Error::ScryptParamError` if N is zero, `log_n` overflows u8, or
+/// arithmetic overflow occurs.
+pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
+    let r = SCRYPT_R;
+    let p = SCRYPT_P;
+
+    // N = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * r)
+    let divisor = LIBSODIUM_MEMLIMIT_MULTIPLIER
+        .checked_mul(u64::from(r))
+        .ok_or_else(|| Error::ScryptParamError("overflow calculating divisor".into()))?;
+
+    let n = memlimit
+        .checked_div(divisor)
+        .ok_or_else(|| Error::ScryptParamError("division by zero".into()))?;
+
+    if n == 0 {
+        return Err(Error::ScryptParamError("N cannot be zero".into()));
+    }
+
+    let log_n = n
+        .checked_ilog2()
+        .and_then(|v| u8::try_from(v).ok())
+        .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
+
+    // Verify consistency with opslimit
+    let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
+        .checked_mul(n)
+        .and_then(|v| v.checked_mul(u64::from(r)))
+        .ok_or_else(|| Error::ScryptParamError("overflow calculating expected opslimit".into()))?;
+
+    if expected_opslimit != opslimit {
+        // Non-standard parameters: derive r from opslimit
+        let derived_r = opslimit
+            .checked_div(
+                LIBSODIUM_OPSLIMIT_MULTIPLIER
+                    .checked_mul(n)
+                    .ok_or_else(|| {
+                        Error::ScryptParamError("overflow calculating derived r".into())
+                    })?,
+            )
+            .and_then(|v| u32::try_from(v).ok())
+            .unwrap_or(r);
+        return Ok((log_n, derived_r, p));
+    }
+
+    Ok((log_n, r, p))
+}
+
 /// Derive a key from a password using Scrypt with custom parameters
 ///
 /// # Arguments
