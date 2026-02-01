@@ -1562,3 +1562,114 @@ fn test_generate_quiet_suppresses_working_message() {
     assert!(secret_key.exists());
     assert!(public_key.exists());
 }
+
+#[test]
+fn cli_sign_multiple_files() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("msg1.txt");
+    let file2 = temp_dir.path().join("msg2.txt");
+    let file3 = temp_dir.path().join("msg3.txt");
+
+    fs::write(&file1, b"Message 1").unwrap();
+    fs::write(&file2, b"Message 2").unwrap();
+    fs::write(&file3, b"Message 3").unwrap();
+
+    minisign_cmd()
+        .args([
+            "-S",
+            "-s", "tests/fixtures/keys/unencrypted.key",
+            "-m", file1.to_str().unwrap(),
+            "-m", file2.to_str().unwrap(),
+            "-m", file3.to_str().unwrap(),
+            "-W",
+            "-q",
+        ])
+        .assert()
+        .success();
+
+    assert!(file1.with_extension("txt.minisig").exists());
+    assert!(file2.with_extension("txt.minisig").exists());
+    assert!(file3.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn cli_sign_multiple_files_sequential() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("a.txt");
+    let file2 = temp_dir.path().join("b.txt");
+
+    fs::write(&file1, b"A").unwrap();
+    fs::write(&file2, b"B").unwrap();
+
+    minisign_cmd()
+        .args([
+            "-S",
+            "-s", "tests/fixtures/keys/unencrypted.key",
+            "-m", file1.to_str().unwrap(),
+            "-m", file2.to_str().unwrap(),
+            "--sequential",
+            "-W",
+            "-q",
+        ])
+        .assert()
+        .success();
+
+    assert!(file1.with_extension("txt.minisig").exists());
+    assert!(file2.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn cli_sign_multiple_files_partial_failure_exit_code() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("exists.txt");
+    let file2 = temp_dir.path().join("missing.txt"); // Does not exist on disk
+
+    fs::write(&file1, b"Exists").unwrap();
+
+    minisign_cmd()
+        .args([
+            "-S",
+            "-s", "tests/fixtures/keys/unencrypted.key",
+            "-m", file1.to_str().unwrap(),
+            "-m", file2.to_str().unwrap(),
+            "-W",
+            "-q",
+        ])
+        .assert()
+        .failure()
+        .code(1);
+
+    // Valid file should still be signed despite the other failing
+    assert!(file1.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn cli_sign_single_file_backwards_compatible() {
+    let temp_dir = TempDir::new().unwrap();
+    let file = temp_dir.path().join("single.txt");
+    fs::write(&file, b"Single").unwrap();
+
+    let output = minisign_cmd()
+        .args([
+            "-S",
+            "-s", "tests/fixtures/keys/unencrypted.key",
+            "-m", file.to_str().unwrap(),
+            "-W",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8_lossy(&output);
+
+    // Should show key ID and signature path (original single-file output format)
+    assert!(stdout.contains("Signing with key:"), "Expected 'Signing with key:' in output:\n{stdout}");
+    assert!(stdout.contains("Signature written to"), "Expected 'Signature written to' in output:\n{stdout}");
+
+    assert!(file.with_extension("txt.minisig").exists());
+}
