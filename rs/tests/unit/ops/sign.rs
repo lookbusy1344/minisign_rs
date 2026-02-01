@@ -696,3 +696,84 @@ fn test_sign_multiple_files_parallel() {
         assert!(Path::new(&sig_path).exists(), "Signature missing for {file:?}");
     }
 }
+
+#[test]
+fn test_sign_multiple_files_partial_failure() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("nonexistent.txt"); // This will fail
+    let file3 = temp_dir.path().join("file3.txt");
+
+    fs::write(&file1, b"Message 1").unwrap();
+    fs::write(&file3, b"Message 3").unwrap();
+
+    let paths = vec![file1.clone(), file2.clone(), file3.clone()];
+
+    let opts = SignOptions {
+        secret_key_file: "tests/fixtures/keys/unencrypted.key".to_string(),
+        message_file: String::new(),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    let result = sign_multiple_files(paths, &opts, None, true);
+
+    // Should return PartialFailure error
+    assert!(result.is_err());
+    assert!(matches!(result, Err(Error::PartialFailure)));
+
+    // file1 and file3 should have signatures despite file2 failing
+    assert!(file1.with_extension("txt.minisig").exists());
+    assert!(!file2.with_extension("txt.minisig").exists());
+    assert!(file3.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn test_sign_multiple_files_all_attempted() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create mix of valid and invalid files
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("missing1.txt");
+    let file3 = temp_dir.path().join("file3.txt");
+    let file4 = temp_dir.path().join("missing2.txt");
+    let file5 = temp_dir.path().join("file5.txt");
+
+    fs::write(&file1, b"M1").unwrap();
+    fs::write(&file3, b"M3").unwrap();
+    fs::write(&file5, b"M5").unwrap();
+
+    let paths = vec![
+        file1.clone(),
+        file2.clone(),
+        file3.clone(),
+        file4.clone(),
+        file5.clone(),
+    ];
+
+    let opts = SignOptions {
+        secret_key_file: "tests/fixtures/keys/unencrypted.key".to_string(),
+        message_file: String::new(),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    let result = sign_multiple_files(paths, &opts, None, true);
+    assert!(matches!(result, Err(Error::PartialFailure)));
+
+    // All valid files should be signed despite errors
+    assert!(file1.with_extension("txt.minisig").exists());
+    assert!(file3.with_extension("txt.minisig").exists());
+    assert!(file5.with_extension("txt.minisig").exists());
+
+    // Invalid files should not have signatures
+    assert!(!file2.with_extension("txt.minisig").exists());
+    assert!(!file4.with_extension("txt.minisig").exists());
+}
