@@ -274,7 +274,7 @@ fn test_minisign_config_dir_fallback_to_home() {
 
 #[test]
 fn cli_accepts_multiple_message_files() {
-    let cli = Cli::try_parse_from(&[
+    let cli = Cli::try_parse_from([
         "minisign_rs",
         "-S",
         "-m", "file1.txt",
@@ -290,7 +290,7 @@ fn cli_accepts_multiple_message_files() {
 
 #[test]
 fn cli_accepts_single_message_file() {
-    let cli = Cli::try_parse_from(&[
+    let cli = Cli::try_parse_from([
         "minisign_rs",
         "-S",
         "-m", "file.txt",
@@ -302,7 +302,7 @@ fn cli_accepts_single_message_file() {
 
 #[test]
 fn cli_sequential_flag_defaults_false() {
-    let cli = Cli::try_parse_from(&[
+    let cli = Cli::try_parse_from([
         "minisign_rs",
         "-S",
         "-m", "file.txt",
@@ -313,7 +313,7 @@ fn cli_sequential_flag_defaults_false() {
 
 #[test]
 fn cli_sequential_flag_can_be_set() {
-    let cli = Cli::try_parse_from(&[
+    let cli = Cli::try_parse_from([
         "minisign_rs",
         "-S",
         "-m", "file.txt",

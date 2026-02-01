@@ -9,7 +9,8 @@ use minisign::{
     keys::{PubkeyStruct, SeckeyStruct},
     ops::sign::{
         SignOptions, check_file_size_limit, create_global_signature_data, create_signature,
-        generate_default_trusted_comment, sign, sign_single_file, write_signature_file,
+        generate_default_trusted_comment, sign, sign_multiple_files, sign_single_file,
+        write_signature_file,
     },
     signature::{SigStruct, SignatureBox},
 };
@@ -629,4 +630,37 @@ fn test_sign_single_file_success() {
     // Signature file should exist
     let sig_path = format!("{}.minisig", message_path.display());
     assert!(Path::new(&sig_path).exists());
+}
+
+#[test]
+fn test_sign_multiple_files_sequential() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+    let file3 = temp_dir.path().join("file3.txt");
+
+    fs::write(&file1, b"Message 1").unwrap();
+    fs::write(&file2, b"Message 2").unwrap();
+    fs::write(&file3, b"Message 3").unwrap();
+
+    let paths = vec![file1.clone(), file2.clone(), file3.clone()];
+
+    let opts = SignOptions {
+        secret_key_file: "tests/fixtures/keys/unencrypted.key".to_string(),
+        message_file: String::new(),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: Some("Batch signature".to_string()),
+        untrusted_comment: None,
+        force: false,
+    };
+
+    let result = sign_multiple_files(paths, &opts, None, true);
+    assert!(result.is_ok());
+
+    // Verify all signature files exist
+    assert!(file1.with_extension("txt.minisig").exists());
+    assert!(file2.with_extension("txt.minisig").exists());
+    assert!(file3.with_extension("txt.minisig").exists());
 }
