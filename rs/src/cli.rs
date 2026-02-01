@@ -62,9 +62,9 @@ pub struct Cli {
     #[arg(short = 'l', long = "legacy")]
     pub legacy: bool,
 
-    /// Message file (required for sign and verify)
+    /// Message files (required for sign and verify, multiple allowed for signing)
     #[arg(short = 'm', long = "input", value_name = "FILE")]
-    pub message_file: Option<PathBuf>,
+    pub message_files: Vec<PathBuf>,
 
     /// Output verification result to stdout
     #[arg(short = 'o', long = "output")]

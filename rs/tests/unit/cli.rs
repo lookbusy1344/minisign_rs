@@ -1,3 +1,4 @@
+use clap::Parser;
 use minisign::cli::*;
 use serial_test::serial;
 use std::path::PathBuf;
@@ -264,4 +265,32 @@ fn test_minisign_config_dir_fallback_to_home() {
     } else {
         assert_eq!(secret_path, PathBuf::from(".minisign.key"));
     }
+}
+
+#[test]
+fn cli_accepts_multiple_message_files() {
+    let cli = Cli::try_parse_from(&[
+        "minisign_rs",
+        "-S",
+        "-m", "file1.txt",
+        "-m", "file2.txt",
+        "-m", "file3.txt",
+    ]).unwrap();
+
+    assert_eq!(cli.message_files.len(), 3);
+    assert_eq!(cli.message_files[0].to_str().unwrap(), "file1.txt");
+    assert_eq!(cli.message_files[1].to_str().unwrap(), "file2.txt");
+    assert_eq!(cli.message_files[2].to_str().unwrap(), "file3.txt");
+}
+
+#[test]
+fn cli_accepts_single_message_file() {
+    let cli = Cli::try_parse_from(&[
+        "minisign_rs",
+        "-S",
+        "-m", "file.txt",
+    ]).unwrap();
+
+    assert_eq!(cli.message_files.len(), 1);
+    assert_eq!(cli.message_files[0].to_str().unwrap(), "file.txt");
 }
