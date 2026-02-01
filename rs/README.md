@@ -26,11 +26,12 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - ✅ Key security inspection (KDF parameter auditing)
 - ✅ Weak key detection with persistent warnings
 - ✅ Multi-file signing with parallel execution (Rayon)
+- ✅ Multi-file verification with parallel execution (Rayon)
 - ✅ Full compatibility with C minisign file formats
 
 ### Test Coverage
 
-- **401 total tests** covering all operations and CLI behavior
+- **407 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Compatibility tests verifying interoperability with C minisign
@@ -39,15 +40,15 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (390 tests) using optimized scrypt parameters (~10 seconds)
+- **Fast test suite** (396 tests) using optimized scrypt parameters (~10 seconds)
 - **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **3,068 lines** of production code in `src/` (3,287 total with comments)
-- **8,177 lines** of test code in `tests/` (9,143 total with comments)
+- **3,194 lines** of production code in `src/` (5,266 total with comments)
+- **8,478 lines** of test code in `tests/` (11,309 total with comments)
 - **Test-to-code ratio**: 2.7:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
@@ -230,6 +231,36 @@ minisign_rs -V -m file.txt --publickey RWQwpZXcv6r8MS48...
 # Verify in quiet mode
 minisign_rs -V -m file.txt --quiet
 ```
+
+#### Verify multiple files
+
+Multiple files are verified in a single command using the same syntax as signing: `-m` specifies the first file, and any remaining positional arguments are additional files. Each file's corresponding `.minisig` signature is automatically located. By default files are verified in parallel across all available CPU cores.
+
+```bash
+# Verify three files in parallel (default)
+minisign_rs -V -m file1.txt file2.bin release.tar.gz -p key.pub
+
+# Verify sequentially (single-threaded)
+minisign_rs -V --sequential -m file1.txt file2.bin release.tar.gz -p key.pub
+
+# Verify in quiet mode (no output if successful)
+minisign_rs -V -q -m file1.txt file2.txt file3.txt -p key.pub
+```
+
+**Output format:** Shows the public key ID once at the top, then displays verification status and trusted comment for each file:
+```
+Verifying with key: E0A55C53BAE7BDB0 (robust rebellion trauma pyramid...)
+Verified: file1.txt
+  Trusted comment: timestamp:1769972985
+Verified: file2.txt
+  Trusted comment: Signed by Alice
+Verified: file3.txt
+  Trusted comment: v1.0.0 release
+```
+
+**Error handling:** If any file fails verification (e.g. corrupted, wrong key), verification continues for the remaining files. A summary is printed at the end and the exit code is 1.
+
+**Limitation:** `-x` (custom signature path) is not supported when verifying multiple files — each file automatically uses `<filename>.minisig`.
 
 #### Recreate public key from secret key
 
