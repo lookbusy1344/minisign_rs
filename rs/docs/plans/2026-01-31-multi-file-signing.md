@@ -20,7 +20,7 @@
 Add after line 27 (`git-version`):
 
 ```toml
-rayon = "~1.10.0"
+rayon = "~1.11.0"
 ```
 
 **Step 2: Build to verify dependency**
