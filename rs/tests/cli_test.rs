@@ -1777,10 +1777,17 @@ fn test_verify_multiple_files() {
         "Expected 'Verifying with key:' shown once, found {verifying_count} times:\n{stdout}"
     );
 
-    // Should NOT have the old verbose format with "Key ID:" and "Trusted comment:" per file
+    // Should show trusted comment for each file (can vary per signature)
+    let trusted_comment_count = stdout.matches("Trusted comment:").count();
+    assert_eq!(
+        trusted_comment_count, 3,
+        "Expected 3 trusted comments (one per file), found {trusted_comment_count}:\n{stdout}"
+    );
+
+    // Should NOT have "Key ID:" label per file (shown once at top)
     let key_id_label_count = stdout.matches("Key ID:").count();
     assert_eq!(
         key_id_label_count, 0,
-        "Expected no 'Key ID:' labels (simplified format), found {key_id_label_count}:\n{stdout}"
+        "Expected no per-file 'Key ID:' labels, found {key_id_label_count}:\n{stdout}"
     );
 }

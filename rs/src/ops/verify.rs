@@ -299,9 +299,13 @@ pub fn verify_multiple_files(
 /// Report the result of verifying a single file (called for each file)
 fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &VerifyOptions<'_>) {
     match result {
-        Ok(_) => {
+        Ok(verify_result) => {
             if !options.quiet {
-                println!("Verified: {}", file.display());
+                println!(
+                    "Verified: {}\n  Trusted comment: {}",
+                    file.display(),
+                    verify_result.trusted_comment
+                );
             }
         }
         Err(e) => {
