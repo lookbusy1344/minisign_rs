@@ -2,10 +2,9 @@
 //!
 //! This module implements the core signing logic for minisign.
 
-use super::file_utils::load_secret_key;
+use super::file_utils::{check_file_size_limit, load_secret_key};
 use crate::{
     Result,
-    constants::MAX_MESSAGE_SIZE_BYTES,
     crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
     errors::Error,
     signature::{
@@ -390,33 +389,6 @@ pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<
 
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
-}
-
-/// Check that a file doesn't exceed the maximum size for non-prehashed mode
-///
-/// Files larger than `MAX_MESSAGE_SIZE_BYTES` (1 GB) should use prehashed mode,
-/// which streams the file through Blake2b-512 without loading it into memory.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File metadata cannot be read
-/// - File size exceeds the maximum allowed
-///
-/// # Note
-///
-/// This function is public for unit testing purposes but is not part of the stable API.
-pub fn check_file_size_limit(path: &str) -> Result<()> {
-    let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
-
-    let file_size = metadata.len();
-    if file_size > MAX_MESSAGE_SIZE_BYTES {
-        return Err(Error::Other(format!(
-            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-p) for files larger than 1 GB."
-        )));
-    }
 
     Ok(())
 }

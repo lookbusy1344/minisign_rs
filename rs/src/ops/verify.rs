@@ -2,9 +2,9 @@
 //!
 //! This module implements the core verification logic for minisign signatures.
 
+use super::file_utils::check_file_size_limit;
 use crate::{
     Result,
-    constants::MAX_MESSAGE_SIZE_BYTES,
     crypto::{blake2b_512_stream, verify as crypto_verify},
     errors::Error,
     keys::PubkeyStruct,
@@ -182,31 +182,4 @@ pub fn verify_message_signature(
         &data_to_verify,
         sig_box.sig_struct().signature(),
     )
-}
-
-/// Check that a file doesn't exceed the maximum size for non-prehashed mode
-///
-/// Files larger than `MAX_MESSAGE_SIZE_BYTES` (1 GB) should use prehashed mode,
-/// which streams the file through Blake2b-512 without loading it into memory.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File metadata cannot be read
-/// - File size exceeds the maximum allowed
-///
-/// # Note
-///
-/// This function is public for unit testing purposes but is not part of the stable API.
-pub fn check_file_size_limit(path: &str) -> Result<()> {
-    let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
-
-    let file_size = metadata.len();
-    if file_size > MAX_MESSAGE_SIZE_BYTES {
-        return Err(Error::Other(format!(
-            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). This signature uses non-prehashed mode."
-        )));
-    }
-
-    Ok(())
 }

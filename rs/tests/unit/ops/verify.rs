@@ -5,10 +5,11 @@ use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
     ops::{
+        file_utils::check_file_size_limit,
         sign::{SignOptions, sign},
         verify::{
-            PublicKeySource, VerifyOptions, check_file_size_limit, load_public_key, load_signature,
-            verify, verify_message_signature,
+            PublicKeySource, VerifyOptions, load_public_key, load_signature, verify,
+            verify_message_signature,
         },
     },
     signature::SignatureBox,

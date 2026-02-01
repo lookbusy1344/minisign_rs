@@ -1,6 +1,6 @@
 //! Common file operation utilities for key and signature file handling
 
-use crate::{Error, Result, keys::SeckeyStruct};
+use crate::{Error, Result, constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
@@ -122,6 +122,29 @@ pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool
 
     // Ensure data is durably written to disk before returning success
     file.sync_all().map_err(|e| Error::file_write(path, e))?;
+
+    Ok(())
+}
+
+/// Check that a file doesn't exceed the maximum size for non-prehashed mode
+///
+/// Files larger than `MAX_MESSAGE_SIZE_BYTES` (1 GB) should use prehashed mode,
+/// which streams the file through Blake2b-512 without loading it into memory.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - File metadata cannot be read
+/// - File size exceeds the maximum allowed
+pub fn check_file_size_limit(path: &str) -> Result<()> {
+    let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
+
+    let file_size = metadata.len();
+    if file_size > MAX_MESSAGE_SIZE_BYTES {
+        return Err(Error::Other(format!(
+            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-p) for files larger than 1 GB."
+        )));
+    }
 
     Ok(())
 }

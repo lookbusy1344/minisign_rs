@@ -7,10 +7,13 @@ use minisign::{
     },
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    ops::sign::{
-        SignOptions, check_file_size_limit, create_global_signature_data, create_signature,
-        generate_default_trusted_comment, sign, sign_multiple_files, sign_single_file,
-        write_signature_file,
+    ops::{
+        file_utils::check_file_size_limit,
+        sign::{
+            SignOptions, create_global_signature_data, create_signature,
+            generate_default_trusted_comment, sign, sign_multiple_files, sign_single_file,
+            write_signature_file,
+        },
     },
     signature::{SigStruct, SignatureBox},
 };
