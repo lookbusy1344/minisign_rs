@@ -16,7 +16,8 @@ fn test_action_detection() {
         force: false,
         prehashed: false,
         legacy: false,
-        message_files: vec![],
+        message_file: None,
+        extra_files: vec![],
         sequential: false,
         output: false,
         public_key_file: None,
@@ -51,7 +52,8 @@ fn test_no_action() {
         force: false,
         prehashed: false,
         legacy: false,
-        message_files: vec![],
+        message_file: None,
+        extra_files: vec![],
         sequential: false,
         output: false,
         public_key_file: None,
@@ -86,7 +88,8 @@ fn test_inspect_action_detection() {
         force: false,
         prehashed: false,
         legacy: false,
-        message_files: vec![],
+        message_file: None,
+        extra_files: vec![],
         sequential: false,
         output: false,
         public_key_file: None,
@@ -169,7 +172,8 @@ fn test_allow_kdf_fallback_flag_defaults_to_false() {
         force: false,
         prehashed: false,
         legacy: false,
-        message_files: vec![],
+        message_file: None,
+        extra_files: vec![],
         sequential: false,
         output: false,
         public_key_file: None,
@@ -205,7 +209,8 @@ fn test_allow_kdf_fallback_flag_can_be_enabled() {
         force: false,
         prehashed: false,
         legacy: false,
-        message_files: vec![],
+        message_file: None,
+        extra_files: vec![],
         sequential: false,
         output: false,
         public_key_file: None,
@@ -273,31 +278,63 @@ fn test_minisign_config_dir_fallback_to_home() {
 }
 
 #[test]
-fn cli_accepts_multiple_message_files() {
+fn cli_positional_args_are_extra_files() {
+    // C-compatible syntax: -m specifies the first file, remaining positional
+    // args are additional files.  Repeated -m must NOT be accepted.
     let cli = Cli::try_parse_from([
         "minisign_rs",
         "-S",
         "-m",
         "file1.txt",
-        "-m",
         "file2.txt",
-        "-m",
         "file3.txt",
     ])
     .unwrap();
 
-    assert_eq!(cli.message_files.len(), 3);
-    assert_eq!(cli.message_files[0].to_str().unwrap(), "file1.txt");
-    assert_eq!(cli.message_files[1].to_str().unwrap(), "file2.txt");
-    assert_eq!(cli.message_files[2].to_str().unwrap(), "file3.txt");
+    assert_eq!(
+        cli.message_file.as_ref().unwrap().to_str().unwrap(),
+        "file1.txt"
+    );
+    assert_eq!(cli.extra_files.len(), 2);
+    assert_eq!(cli.extra_files[0].to_str().unwrap(), "file2.txt");
+    assert_eq!(cli.extra_files[1].to_str().unwrap(), "file3.txt");
 }
 
 #[test]
-fn cli_accepts_single_message_file() {
+fn cli_all_message_files_merges_m_and_positional() {
+    let cli = Cli::try_parse_from([
+        "minisign_rs",
+        "-S",
+        "-m",
+        "first.txt",
+        "second.txt",
+        "third.txt",
+    ])
+    .unwrap();
+
+    let all = cli.all_message_files();
+    assert_eq!(all.len(), 3);
+    assert_eq!(all[0].to_str().unwrap(), "first.txt");
+    assert_eq!(all[1].to_str().unwrap(), "second.txt");
+    assert_eq!(all[2].to_str().unwrap(), "third.txt");
+}
+
+#[test]
+fn cli_single_message_file_no_positional() {
     let cli = Cli::try_parse_from(["minisign_rs", "-S", "-m", "file.txt"]).unwrap();
 
-    assert_eq!(cli.message_files.len(), 1);
-    assert_eq!(cli.message_files[0].to_str().unwrap(), "file.txt");
+    let all = cli.all_message_files();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].to_str().unwrap(), "file.txt");
+}
+
+#[test]
+fn cli_no_message_file_returns_empty() {
+    // -m is optional at the parser level; validation happens in handle_sign/handle_verify
+    let cli = Cli::try_parse_from(["minisign_rs", "-S"]).unwrap();
+
+    let all = cli.all_message_files();
+    assert!(all.is_empty());
 }
 
 #[test]

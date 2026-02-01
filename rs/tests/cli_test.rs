@@ -1575,19 +1575,18 @@ fn cli_sign_multiple_files() {
     fs::write(&file2, b"Message 2").unwrap();
     fs::write(&file3, b"Message 3").unwrap();
 
+    // C-compatible syntax: -m first_file extra1 extra2
     minisign_cmd()
         .args([
             "-S",
             "-s",
             "tests/fixtures/keys/unencrypted.key",
-            "-m",
-            file1.to_str().unwrap(),
-            "-m",
-            file2.to_str().unwrap(),
-            "-m",
-            file3.to_str().unwrap(),
             "-W",
             "-q",
+            "-m",
+            file1.to_str().unwrap(),
+            file2.to_str().unwrap(),
+            file3.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -1612,13 +1611,12 @@ fn cli_sign_multiple_files_sequential() {
             "-S",
             "-s",
             "tests/fixtures/keys/unencrypted.key",
-            "-m",
-            file1.to_str().unwrap(),
-            "-m",
-            file2.to_str().unwrap(),
             "--sequential",
             "-W",
             "-q",
+            "-m",
+            file1.to_str().unwrap(),
+            file2.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -1641,12 +1639,11 @@ fn cli_sign_multiple_files_partial_failure_exit_code() {
             "-S",
             "-s",
             "tests/fixtures/keys/unencrypted.key",
-            "-m",
-            file1.to_str().unwrap(),
-            "-m",
-            file2.to_str().unwrap(),
             "-W",
             "-q",
+            "-m",
+            file1.to_str().unwrap(),
+            file2.to_str().unwrap(),
         ])
         .assert()
         .failure()
