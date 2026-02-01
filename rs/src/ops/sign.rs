@@ -48,11 +48,12 @@ pub struct SignResult {
     pub key_id_words: String,
 }
 
-/// Sign a file with a secret key
+/// Sign a single file with a secret key (pure function for multi-file support)
 ///
 /// # Arguments
 ///
-/// * `options` - Signing options including key, message, and comment settings
+/// * `message_file` - Path to the message file
+/// * `options` - Signing options (all fields except message_file are used)
 /// * `password` - Password to decrypt the secret key (if encrypted)
 ///
 /// # Returns
@@ -66,7 +67,11 @@ pub struct SignResult {
 /// - The message file cannot be read
 /// - The signature file already exists (unless force is true)
 /// - File I/O operations fail
-pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
+pub fn sign_single_file(
+    message_file: &Path,
+    options: &SignOptions,
+    password: Option<&[u8]>,
+) -> Result<SignResult> {
     // Load and decrypt the secret key
     let seckey = load_secret_key(&options.secret_key_file)?;
 
@@ -82,13 +87,13 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     let sig_file_path = options
         .signature_file
         .clone()
-        .unwrap_or_else(|| format!("{}.minisig", options.message_file));
+        .unwrap_or_else(|| format!("{}.minisig", message_file.display()));
 
     // Create the signature
     let sig_box = create_signature(
         &secret_key,
         keynum,
-        &options.message_file,
+        &message_file.to_string_lossy(),
         options.prehashed,
         options.trusted_comment.as_deref(),
         options.untrusted_comment.as_deref(),
@@ -108,6 +113,28 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
         key_id,
         key_id_words,
     })
+}
+
+/// Sign a file with a secret key (backwards compatibility wrapper)
+///
+/// # Arguments
+///
+/// * `options` - Signing options including key, message, and comment settings
+/// * `password` - Password to decrypt the secret key (if encrypted)
+///
+/// # Returns
+///
+/// A `SignResult` containing the signature file path and trusted comment
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The secret key cannot be loaded or decrypted
+/// - The message file cannot be read
+/// - The signature file already exists (unless force is true)
+/// - File I/O operations fail
+pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
+    sign_single_file(Path::new(&options.message_file), options, password)
 }
 
 /// Create a signature for a message

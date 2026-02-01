@@ -9,11 +9,12 @@ use minisign::{
     keys::{PubkeyStruct, SeckeyStruct},
     ops::sign::{
         SignOptions, check_file_size_limit, create_global_signature_data, create_signature,
-        generate_default_trusted_comment, sign, write_signature_file,
+        generate_default_trusted_comment, sign, sign_single_file, write_signature_file,
     },
     signature::{SigStruct, SignatureBox},
 };
 use std::fs;
+use std::path::Path;
 use tempfile::TempDir;
 
 #[test]
@@ -601,4 +602,31 @@ fn test_sign_with_weak_kdf_key() {
     // Verify signature file was created
     let sig_path = temp_dir.path().join("message.txt.minisig");
     assert!(sig_path.exists(), "signature file should be created");
+}
+
+#[test]
+fn test_sign_single_file_success() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"Test message").unwrap();
+
+    let opts = SignOptions {
+        secret_key_file: "tests/fixtures/keys/unencrypted.key".to_string(),
+        message_file: message_path.display().to_string(),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: Some("Test".to_string()),
+        untrusted_comment: None,
+        force: false,
+    };
+
+    let result = sign_single_file(Path::new(&opts.message_file), &opts, None);
+    assert!(result.is_ok());
+
+    let sign_result = result.unwrap();
+    assert_eq!(sign_result.trusted_comment, "Test");
+
+    // Signature file should exist
+    let sig_path = format!("{}.minisig", message_path.display());
+    assert!(Path::new(&sig_path).exists());
 }
