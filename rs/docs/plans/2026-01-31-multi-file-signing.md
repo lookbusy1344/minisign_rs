@@ -1396,21 +1396,21 @@ Expected: Clean, descriptive commit messages following conventional format
 
 ## Success Criteria Checklist
 
-- [ ] Rayon dependency added
-- [ ] CLI accepts multiple `-m` flags
-- [ ] `--sequential` flag works
-- [ ] Single-file behavior unchanged (backwards compatible)
-- [ ] Multi-file signing works in parallel mode
-- [ ] Multi-file signing works in sequential mode
-- [ ] Partial failures handled correctly (continue-on-error)
-- [ ] Summary shows success/failure counts
-- [ ] Exit code 1 on any failure
-- [ ] All unit tests pass (fast + slow)
-- [ ] All integration tests pass
-- [ ] Zero clippy warnings (pedantic)
-- [ ] Code formatted with `cargo fmt`
-- [ ] Documentation written
-- [ ] Manual testing completed
+- [x] Rayon dependency added
+- [x] CLI accepts multiple `-m` flags
+- [x] `--sequential` flag works
+- [x] Single-file behavior unchanged (backwards compatible)
+- [x] Multi-file signing works in parallel mode
+- [x] Multi-file signing works in sequential mode
+- [x] Partial failures handled correctly (continue-on-error)
+- [x] Summary shows success/failure counts
+- [x] Exit code 1 on any failure
+- [x] All unit tests pass (fast + slow)
+- [x] All integration tests pass
+- [x] Zero clippy warnings (pedantic)
+- [x] Code formatted with `cargo fmt`
+- [x] Documentation written
+- [x] Manual testing completed
 
 ## Estimated Time
 
