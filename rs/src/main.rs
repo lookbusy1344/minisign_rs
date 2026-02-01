@@ -1,5 +1,4 @@
 use clap::Parser;
-use is_terminal::IsTerminal;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::{
     Error, Result,
@@ -9,6 +8,7 @@ use minisign::{
         SignOptions, VerifyOptions, change, generate, inspect, recreate, sign, verify,
     },
 };
+use std::io::IsTerminal;
 use std::io::{self, Write};
 use std::process;
 use subtle::ConstantTimeEq;
