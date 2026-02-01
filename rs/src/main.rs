@@ -1,5 +1,6 @@
 use clap::Parser;
 use minisign::ops::sign::sign_multiple_files;
+use minisign::ops::verify::verify_multiple_files;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
@@ -212,15 +213,6 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         ));
     }
 
-    // Verification only supports single file
-    if message_files.len() > 1 {
-        return Err(Error::Usage(
-            "Verification only supports a single message file".into(),
-        ));
-    }
-
-    let message_file = &message_files[0];
-
     // Get public key source (either -p or -P, one is required)
     let default_pk;
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
@@ -239,34 +231,56 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         }
     };
 
-    // Get signature file path
-    let signature_file = match &cli.signature_file {
-        Some(path) => path.clone(),
-        None => Cli::default_signature_path(message_file)?,
-    };
+    if message_files.len() == 1 {
+        // Single file path - preserve original behavior and output format
+        let message_file = &message_files[0];
 
-    let options = VerifyOptions {
-        public_key,
-        signature_file: &signature_file,
-        message_file,
-        output: cli.output,
-        quiet: cli.quiet,
-    };
+        // Get signature file path
+        let signature_file = match &cli.signature_file {
+            Some(path) => path.clone(),
+            None => Cli::default_signature_path(message_file)?,
+        };
 
-    let result = verify(&options)?;
+        let options = VerifyOptions {
+            public_key,
+            signature_file: &signature_file,
+            message_file,
+            output: cli.output,
+            quiet: cli.quiet,
+        };
 
-    // Handle output modes
-    if cli.pretty_quiet {
-        // -Q: Only show trusted comment
-        println!("{}", result.trusted_comment);
-    } else if !cli.quiet {
-        // Normal output
-        println!(
-            "Verified with key: {} ({})",
-            result.key_id, result.key_id_words
-        );
-        println!("Signature and comment signature verified");
-        println!("Trusted comment: {}", result.trusted_comment);
+        let result = verify(&options)?;
+
+        // Handle output modes
+        if cli.pretty_quiet {
+            // -Q: Only show trusted comment
+            println!("{}", result.trusted_comment);
+        } else if !cli.quiet {
+            // Normal output
+            println!(
+                "Verified with key: {} ({})",
+                result.key_id, result.key_id_words
+            );
+            println!("Signature and comment signature verified");
+            println!("Trusted comment: {}", result.trusted_comment);
+        }
+    } else {
+        // Multiple files path - use multi-file API
+        if cli.signature_file.is_some() {
+            return Err(Error::Usage(
+                "Custom signature file (-x) not supported with multiple message files".into(),
+            ));
+        }
+
+        let options = VerifyOptions {
+            public_key,
+            signature_file: std::path::Path::new(""),
+            message_file: std::path::Path::new(""),
+            output: cli.output,
+            quiet: cli.quiet,
+        };
+
+        verify_multiple_files(message_files, &options, cli.sequential)?;
     }
 
     Ok(())
