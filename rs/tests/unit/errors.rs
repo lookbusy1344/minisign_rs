@@ -31,6 +31,15 @@ fn test_error_constructors() {
 }
 
 #[test]
+fn partial_failure_error_displays_correctly() {
+    let err = Error::PartialFailure;
+    assert_eq!(
+        err.to_string(),
+        "Partial failure: some files could not be signed"
+    );
+}
+
+#[test]
 fn test_base64_error_conversion() {
     use base64::{Engine, engine::general_purpose::STANDARD};
 

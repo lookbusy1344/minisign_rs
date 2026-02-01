@@ -25,6 +25,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - ✅ Password management (add/remove/change passwords)
 - ✅ Key security inspection (KDF parameter auditing)
 - ✅ Weak key detection with persistent warnings
+- ✅ Multi-file signing with parallel execution (Rayon)
 - ✅ Full compatibility with C minisign file formats
 
 ### Test Coverage
@@ -119,7 +120,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-s <FILE>` | `--secretkey-path <FILE>` | Secret key file path |
 | `-p <FILE>` | `--publickey-path <FILE>` | Public key file path |
 | `-P <STRING>` | `--publickey <STRING>` | Public key as BASE64-encoded string |
-| `-m <FILE>` | `--input <FILE>` | Input file (message to sign/verify) |
+| `-m <FILE>` | `--input <FILE>` | Input file (message to sign/verify). Additional files to sign can follow as positional args: `-m file1 file2 file3` |
 | `-x <FILE>` | `--signature <FILE>` | Signature file (default: `<file>.minisig`) |
 
 #### Comment Options
@@ -140,6 +141,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-f` | `--force` | Force overwrite of existing files |
 | `-o` | `--output` | Output verification result to stdout |
 | `-W` | `--no-password` | Do not use password (generate and change only) |
+| | `--sequential` | Sign multiple files sequentially instead of in parallel |
 
 #### Additional Options
 
@@ -189,6 +191,27 @@ minisign_rs -S -m file.txt --legacy
 # Sign without password (for unencrypted keys)
 minisign_rs -S -m file.txt -W
 ```
+
+#### Sign multiple files
+
+Multiple files are signed in a single command using the same syntax as C minisign: `-m` specifies the first file, and any remaining positional arguments are additional files. Each file gets its own `.minisig` signature file. By default files are signed in parallel across all available CPU cores.
+
+```bash
+# Sign three files in parallel (default)
+minisign_rs -S -m file1.txt file2.bin release.tar.gz
+
+# Sign sequentially (single-threaded)
+minisign_rs -S --sequential -m file1.txt file2.bin release.tar.gz
+
+# With a custom key and trusted comment
+minisign_rs -S -s release.key -t "v2.1.0 release" -m file1.txt file2.txt file3.txt
+```
+
+**Note:** All flags must appear before `-m` and the file list. Positional arguments (the extra files) must be the final tokens on the command line — this matches the C version's getopt behaviour.
+
+**Error handling:** If any file fails (e.g. missing), signing continues for the remaining files. A summary is printed at the end and the exit code is 1. Successfully signed files retain their `.minisig` files.
+
+**Limitation:** `-x` (custom signature path) is not supported when signing multiple files — each file automatically gets `<filename>.minisig`.
 
 #### Verify a signature
 
@@ -398,6 +421,7 @@ src/
 
 ### Utilities
 
+- `rayon` - Data-parallel iteration for multi-file signing
 - `base64` - Base64 encoding/decoding
 - `rand` - Cryptographic random number generation
 - `thiserror` - Library error types
@@ -609,6 +633,7 @@ All workflows use caching for faster builds.
 - [Performance Benchmark Report](docs/benchmark-report.md) - C vs Rust performance comparison
 - [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed analysis of both implementations
 - [rsign2 Comparison](docs/rsign2-comparison.md) - Comprehensive comparison with rsign2 Rust implementation
+- [Multi-File Signing](docs/multi-file-signing.md) - Parallel and sequential multi-file signing
 - [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) - Security implications of weak KDF parameters
 - [Development Guidelines](CLAUDE.md) - Essential development workflow
 - [Design Document](../docs/plans/2026-01-23-rust-rewrite-design.md) - Original implementation plan

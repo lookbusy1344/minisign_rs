@@ -115,6 +115,10 @@ pub enum Error {
     #[error("I/O error: {0}")]
     Io(String),
 
+    // Multi-file signing errors
+    #[error("Partial failure: some files could not be signed")]
+    PartialFailure,
+
     // Generic errors
     #[error("{0}")]
     Other(String),

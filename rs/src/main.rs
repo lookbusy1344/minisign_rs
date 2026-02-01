@@ -1,5 +1,5 @@
 use clap::Parser;
-use is_terminal::IsTerminal;
+use minisign::ops::sign::sign_multiple_files;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
@@ -8,6 +8,7 @@ use minisign::{
         SignOptions, VerifyOptions, change, generate, inspect, recreate, sign, verify,
     },
 };
+use std::io::IsTerminal;
 use std::io::{self, Write};
 use std::process;
 use subtle::ConstantTimeEq;
@@ -121,23 +122,20 @@ fn handle_generate(cli: &Cli) -> Result<()> {
 }
 
 fn handle_sign(cli: &Cli) -> Result<()> {
+    let message_files = cli.all_message_files();
+
     // Validate required arguments
-    let message_file = cli
-        .message_file
-        .as_ref()
-        .ok_or_else(|| Error::Usage("Message file (-m) is required for signing".into()))?;
+    if message_files.is_empty() {
+        return Err(Error::Usage(
+            "Message file (-m) is required for signing".into(),
+        ));
+    }
 
     // Get secret key path
     let secret_key_file = cli
         .secret_key_file
         .clone()
         .unwrap_or_else(Cli::default_secret_key_path);
-
-    // Get signature file path
-    let signature_file = match &cli.signature_file {
-        Some(path) => path.clone(),
-        None => Cli::default_signature_path(message_file)?,
-    };
 
     // Prompt for password (we'll check if the key needs it later)
     let password = if cli.no_password {
@@ -146,39 +144,85 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
-    let options = SignOptions {
-        secret_key_file: secret_key_file.to_string_lossy().to_string(),
-        message_file: message_file.to_string_lossy().to_string(),
-        signature_file: Some(signature_file.to_string_lossy().to_string()),
-        trusted_comment: cli.trusted_comment.clone(),
-        untrusted_comment: cli.untrusted_comment.clone(),
-        // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
-        // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
-        prehashed: !cli.legacy,
-        force: cli.force,
-    };
+    if message_files.len() == 1 {
+        // Single file path - preserve original behavior and output format
+        let message_file = &message_files[0];
 
-    let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
+        let signature_file = match &cli.signature_file {
+            Some(path) => path.clone(),
+            None => Cli::default_signature_path(message_file)?,
+        };
 
-    if !cli.quiet {
-        // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
-        println!(
-            "Signing with key: {} ({})",
-            result.key_id, result.key_id_words
-        );
-        // codeql[rust/cleartext-logging] - Logging file path, not sensitive data
-        println!("Signature written to {}", result.signature_file);
+        let options = SignOptions {
+            secret_key_file: secret_key_file.to_string_lossy().to_string(),
+            message_file: message_file.to_string_lossy().to_string(),
+            signature_file: Some(signature_file.to_string_lossy().to_string()),
+            trusted_comment: cli.trusted_comment.clone(),
+            untrusted_comment: cli.untrusted_comment.clone(),
+            // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
+            // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
+            prehashed: !cli.legacy,
+            force: cli.force,
+        };
+
+        let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
+
+        if !cli.quiet {
+            // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
+            println!(
+                "Signing with key: {} ({})",
+                result.key_id, result.key_id_words
+            );
+            // codeql[rust/cleartext-logging] - Logging file path, not sensitive data
+            println!("Signature written to {}", result.signature_file);
+        }
+    } else {
+        // Multiple files path - use multi-file API
+        if cli.signature_file.is_some() {
+            return Err(Error::Usage(
+                "Custom signature file (-x) not supported with multiple message files".into(),
+            ));
+        }
+
+        let options = SignOptions {
+            secret_key_file: secret_key_file.to_string_lossy().to_string(),
+            message_file: String::new(),
+            signature_file: None,
+            trusted_comment: cli.trusted_comment.clone(),
+            untrusted_comment: cli.untrusted_comment.clone(),
+            prehashed: !cli.legacy,
+            force: cli.force,
+        };
+
+        sign_multiple_files(
+            message_files,
+            &options,
+            password.as_ref().map(|p| p.as_bytes()),
+            cli.sequential,
+        )?;
     }
 
     Ok(())
 }
 
 fn handle_verify(cli: &Cli) -> Result<()> {
+    let message_files = cli.all_message_files();
+
     // Validate required arguments
-    let message_file = cli
-        .message_file
-        .as_ref()
-        .ok_or_else(|| Error::Usage("Message file (-m) is required for verification".into()))?;
+    if message_files.is_empty() {
+        return Err(Error::Usage(
+            "Message file (-m) is required for verification".into(),
+        ));
+    }
+
+    // Verification only supports single file
+    if message_files.len() > 1 {
+        return Err(Error::Usage(
+            "Verification only supports a single message file".into(),
+        ));
+    }
+
+    let message_file = &message_files[0];
 
     // Get public key source (either -p or -P, one is required)
     let public_key = if let Some(ref pk_file) = cli.public_key_file {

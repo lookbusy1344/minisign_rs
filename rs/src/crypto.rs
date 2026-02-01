@@ -7,7 +7,7 @@ use crate::errors::{Error, Result};
 use blake2::digest::consts::U32;
 use blake2::{Blake2b, Blake2b512, Digest};
 use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
+use rand_core::OsRng;
 use scrypt::{Params as ScryptParams, scrypt};
 use std::io::Read;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};

@@ -15,18 +15,19 @@ scrypt = "~0.11.0"
 zeroize = { version = "~1.8.2", features = ["derive"] }
 subtle = "~2.6.1"
 getrandom = "~0.3.4"
+rand_core = { version = "~0.6.4", features = ["getrandom"] }
 
 # Other dependencies - using tilde for stability
-rand = "~0.8.5"  # 0.9 available but causes compatibility issues
 base64 = "~0.22.1"
 clap = { version = "~4.5.55", features = ["derive"] }
 thiserror = "~2.0.18"
 rpassword = "~7.4.0"
 dirs = "~6.0.0"
-is-terminal = "~0.4.17"
 git-version = "~0.3.9"
+rayon = "~1.11.0"
 
 [dev-dependencies]
+rand = "~0.8.5"
 assert_cmd = "~2.0"
 predicates = "~3.1"
 tempfile = "~3.15"
@@ -46,3 +47,6 @@ path = "src/lib.rs"
 # Scrypt is CPU-intensive and >30x slower without optimizations
 [profile.dev.package.scrypt]
 opt-level = 3
+
+[profile.release]
+strip = true

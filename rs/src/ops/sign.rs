@@ -14,7 +14,12 @@ use crate::{
     },
     validation::validate_comment,
 };
-use std::{fs::OpenOptions, io::Write, path::Path};
+use rayon::prelude::*;
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 /// Options for signing files
 #[derive(Debug, Clone)]
@@ -48,11 +53,21 @@ pub struct SignResult {
     pub key_id_words: String,
 }
 
-/// Sign a file with a secret key
+/// Result of a single file signing operation (for batch processing)
+#[derive(Debug)]
+pub struct FileSignResult {
+    /// Path to the file that was signed
+    pub file: PathBuf,
+    /// Result of the signing operation
+    pub result: Result<SignResult>,
+}
+
+/// Sign a single file with a secret key (pure function for multi-file support)
 ///
 /// # Arguments
 ///
-/// * `options` - Signing options including key, message, and comment settings
+/// * `message_file` - Path to the message file
+/// * `options` - Signing options (all fields except `message_file` are used)
 /// * `password` - Password to decrypt the secret key (if encrypted)
 ///
 /// # Returns
@@ -66,7 +81,11 @@ pub struct SignResult {
 /// - The message file cannot be read
 /// - The signature file already exists (unless force is true)
 /// - File I/O operations fail
-pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
+pub fn sign_single_file(
+    message_file: &Path,
+    options: &SignOptions,
+    password: Option<&[u8]>,
+) -> Result<SignResult> {
     // Load and decrypt the secret key
     let seckey = load_secret_key(&options.secret_key_file)?;
 
@@ -82,13 +101,13 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
     let sig_file_path = options
         .signature_file
         .clone()
-        .unwrap_or_else(|| format!("{}.minisig", options.message_file));
+        .unwrap_or_else(|| format!("{}.minisig", message_file.display()));
 
     // Create the signature
     let sig_box = create_signature(
         &secret_key,
         keynum,
-        &options.message_file,
+        &message_file.to_string_lossy(),
         options.prehashed,
         options.trusted_comment.as_deref(),
         options.untrusted_comment.as_deref(),
@@ -108,6 +127,122 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
         key_id,
         key_id_words,
     })
+}
+
+/// Sign a file with a secret key (backwards compatibility wrapper)
+///
+/// # Arguments
+///
+/// * `options` - Signing options including key, message, and comment settings
+/// * `password` - Password to decrypt the secret key (if encrypted)
+///
+/// # Returns
+///
+/// A `SignResult` containing the signature file path and trusted comment
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The secret key cannot be loaded or decrypted
+/// - The message file cannot be read
+/// - The signature file already exists (unless force is true)
+/// - File I/O operations fail
+pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
+    sign_single_file(Path::new(&options.message_file), options, password)
+}
+
+/// Sign multiple files (parallel or sequential)
+///
+/// # Arguments
+///
+/// * `files` - Vector of file paths to sign
+/// * `options` - Signing options (`message_file` field is ignored)
+/// * `password` - Password to decrypt the secret key (if encrypted)
+/// * `sequential` - If true, process files sequentially; if false, use parallel execution
+///
+/// # Returns
+///
+/// `Ok(())` if all files signed successfully, `Err(PartialFailure)` if any failed
+///
+/// # Errors
+///
+/// Returns `PartialFailure` error if any files could not be signed.
+/// Individual file errors are reported to stderr during execution.
+pub fn sign_multiple_files(
+    files: Vec<PathBuf>,
+    options: &SignOptions,
+    password: Option<&[u8]>,
+    sequential: bool,
+) -> Result<()> {
+    // Fast path for single file
+    if files.len() == 1 {
+        sign_single_file(&files[0], options, password)?;
+        println!(
+            "Signed: {} → {}.minisig",
+            files[0].display(),
+            files[0].display()
+        );
+        return Ok(());
+    }
+
+    // Multi-file path
+    let results: Vec<FileSignResult> = if sequential {
+        files
+            .into_iter()
+            .map(|file| {
+                let result = sign_single_file(&file, options, password);
+                report_file_result(&file, &result);
+                FileSignResult { file, result }
+            })
+            .collect()
+    } else {
+        files
+            .par_iter()
+            .map(|file| {
+                let result = sign_single_file(file, options, password);
+                report_file_result(file, &result);
+                FileSignResult {
+                    file: file.clone(),
+                    result,
+                }
+            })
+            .collect()
+    };
+
+    print_summary(&results)
+}
+
+/// Report the result of signing a single file (called for each file)
+fn report_file_result(file: &Path, result: &Result<SignResult>) {
+    match result {
+        Ok(_) => println!("Signed: {} → {}.minisig", file.display(), file.display()),
+        Err(e) => eprintln!("Failed: {} ({})", file.display(), e),
+    }
+}
+
+/// Print summary of batch signing operation
+fn print_summary(results: &[FileSignResult]) -> Result<()> {
+    let failures: Vec<_> = results
+        .iter()
+        .filter_map(|r| r.result.as_ref().err().map(|e| (&r.file, e)))
+        .collect();
+
+    let success_count = results.len() - failures.len();
+
+    if !failures.is_empty() {
+        eprintln!(
+            "\nSummary: {} signed, {} failed",
+            success_count,
+            failures.len()
+        );
+        eprintln!("Failed files:");
+        for (file, err) in &failures {
+            eprintln!("  - {}: {}", file.display(), err);
+        }
+        return Err(Error::PartialFailure);
+    }
+
+    Ok(())
 }
 
 /// Create a signature for a message
