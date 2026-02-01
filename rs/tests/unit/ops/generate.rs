@@ -17,8 +17,8 @@ fn test_generate_encrypted_key() {
     let pk_path = temp_dir.path().join("test.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: Some("Test key".to_string()),
         force: false,
         no_password: false,
@@ -59,8 +59,8 @@ fn test_generate_encrypted_key_fast() {
     let pk_path = temp_dir.path().join("test_fast.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: Some("Fast test key".to_string()),
         force: false,
         no_password: false,
@@ -100,8 +100,8 @@ fn test_generate_unencrypted_key() {
     let pk_path = temp_dir.path().join("test.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: None,
         force: false,
         no_password: true,
@@ -132,8 +132,8 @@ fn test_generate_without_password_fails() {
     let pk_path = temp_dir.path().join("test.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path,
+        secret_key_file: &sk_path,
+        public_key_file: &pk_path,
         comment: None,
         force: false,
         no_password: false, // Password required
@@ -158,8 +158,8 @@ fn test_generate_file_exists_without_force() {
     fs::write(&pk_path, "existing").unwrap();
 
     let options = GenerateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path,
+        secret_key_file: &sk_path,
+        public_key_file: &pk_path,
         comment: None,
         force: false,
         no_password: true,
@@ -184,8 +184,8 @@ fn test_generate_force_overwrite() {
     fs::write(&pk_path, "existing").unwrap();
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: None,
         force: true,
         no_password: true,
@@ -209,8 +209,8 @@ fn test_generate_creates_parent_directories() {
     let pk_path = nested_dir.join("test.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: None,
         force: false,
         no_password: true,
@@ -236,8 +236,8 @@ fn test_secret_key_permissions() {
     let pk_path = temp_dir.path().join("test.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path,
+        secret_key_file: sk_path.as_path(),
+        public_key_file: &pk_path,
         comment: None,
         force: false,
         no_password: true,
@@ -278,8 +278,8 @@ fn test_roundtrip_generated_keys() {
     let pk_path = temp_dir.path().join("test.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: Some("Roundtrip test".to_string()),
         force: false,
         no_password: true,
@@ -312,8 +312,8 @@ fn test_atomic_file_creation_prevents_race() {
     fs::write(&sk_path, "existing secret key").unwrap();
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path,
+        secret_key_file: sk_path.as_path(),
+        public_key_file: &pk_path,
         comment: None,
         force: false,
         no_password: true,
@@ -342,8 +342,8 @@ fn test_atomic_file_creation_pubkey_prevents_race() {
     fs::write(&pk_path, "existing public key").unwrap();
 
     let options = GenerateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path.clone(),
+        secret_key_file: &sk_path,
+        public_key_file: pk_path.as_path(),
         comment: None,
         force: false,
         no_password: true,
@@ -373,8 +373,8 @@ fn test_atomic_file_creation_both_files_check() {
     fs::write(&pk_path, "existing pk").unwrap();
 
     let options = GenerateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path,
+        secret_key_file: &sk_path,
+        public_key_file: &pk_path,
         comment: None,
         force: false,
         no_password: true,
@@ -397,8 +397,8 @@ fn test_encrypted_keypair_has_matching_key_ids() {
     let pk_path = temp_dir.path().join("encrypted.pub");
 
     let options = GenerateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: Some("Encrypted key ID test".to_string()),
         force: false,
         no_password: false,

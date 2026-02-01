@@ -2,10 +2,9 @@
 //!
 //! This module implements the core signing logic for minisign.
 
-use super::file_utils::load_secret_key;
+use super::file_utils::{check_file_size_limit, load_secret_key};
 use crate::{
     Result,
-    constants::MAX_MESSAGE_SIZE_BYTES,
     crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
     errors::Error,
     signature::{
@@ -23,13 +22,13 @@ use std::{
 
 /// Options for signing files
 #[derive(Debug, Clone)]
-pub struct SignOptions {
+pub struct SignOptions<'a> {
     /// Path to the secret key file
-    pub secret_key_file: String,
+    pub secret_key_file: &'a Path,
     /// Path to the message file
-    pub message_file: String,
+    pub message_file: &'a Path,
     /// Path to output signature file (optional, defaults to `message_file.minisig`)
-    pub signature_file: Option<String>,
+    pub signature_file: Option<&'a Path>,
     /// Use prehashed mode (hash the message with Blake2b-512 before signing)
     pub prehashed: bool,
     /// Trusted comment to include in the signature
@@ -44,7 +43,7 @@ pub struct SignOptions {
 #[derive(Debug, Clone)]
 pub struct SignResult {
     /// Path where the signature was written
-    pub signature_file: String,
+    pub signature_file: PathBuf,
     /// The trusted comment used
     pub trusted_comment: String,
     /// Key ID in base64 format
@@ -62,7 +61,60 @@ pub struct FileSignResult {
     pub result: Result<SignResult>,
 }
 
-/// Sign a single file with a secret key (pure function for multi-file support)
+/// Load and decrypt a secret key from a file
+///
+/// Handles both encrypted and unencrypted keys. For encrypted keys, the weak
+/// KDF warning is emitted by `decrypt()` if applicable.
+fn load_and_decrypt_key(
+    secret_key_file: &Path,
+    password: Option<&[u8]>,
+) -> Result<(SecretKey, crate::crypto::KeyNum)> {
+    let seckey = load_secret_key(secret_key_file)?;
+
+    if seckey.is_encrypted() {
+        let pwd = password.ok_or(Error::PasswordRequired)?;
+        seckey.decrypt(pwd)
+    } else {
+        Ok((seckey.get_unencrypted_secret_key()?, *seckey.keynum()))
+    }
+}
+
+/// Sign a single file with an already-loaded secret key
+fn sign_file_with_key(
+    message_file: &Path,
+    secret_key: &SecretKey,
+    keynum: crate::crypto::KeyNum,
+    options: &SignOptions<'_>,
+) -> Result<SignResult> {
+    let sig_file_path = options.signature_file.map_or_else(
+        || PathBuf::from(format!("{}.minisig", message_file.display())),
+        Path::to_path_buf,
+    );
+
+    let sig_box = create_signature(
+        secret_key,
+        keynum,
+        message_file,
+        options.prehashed,
+        options.trusted_comment.as_deref(),
+        options.untrusted_comment.as_deref(),
+    )?;
+
+    let sig_contents = sig_box.to_file_contents();
+    write_signature_file(&sig_file_path, &sig_contents, options.force)?;
+
+    let key_id = keynum.to_key_id();
+    let key_id_words = crate::wordlist::keynum_to_words(&keynum);
+
+    Ok(SignResult {
+        signature_file: sig_file_path,
+        trusted_comment: sig_box.trusted_comment().to_string(),
+        key_id,
+        key_id_words,
+    })
+}
+
+/// Sign a single file with a secret key
 ///
 /// # Arguments
 ///
@@ -83,50 +135,11 @@ pub struct FileSignResult {
 /// - File I/O operations fail
 pub fn sign_single_file(
     message_file: &Path,
-    options: &SignOptions,
+    options: &SignOptions<'_>,
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
-    // Load and decrypt the secret key
-    let seckey = load_secret_key(&options.secret_key_file)?;
-
-    // Decrypt if necessary (weak KDF warning is shown by decrypt() if applicable)
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
-
-    // Determine the signature file path
-    let sig_file_path = options
-        .signature_file
-        .clone()
-        .unwrap_or_else(|| format!("{}.minisig", message_file.display()));
-
-    // Create the signature
-    let sig_box = create_signature(
-        &secret_key,
-        keynum,
-        &message_file.to_string_lossy(),
-        options.prehashed,
-        options.trusted_comment.as_deref(),
-        options.untrusted_comment.as_deref(),
-    )?;
-
-    // Write the signature file atomically
-    let sig_contents = sig_box.to_file_contents();
-    write_signature_file(Path::new(&sig_file_path), &sig_contents, options.force)?;
-
-    // Generate key ID display formats
-    let key_id = keynum.to_key_id();
-    let key_id_words = crate::wordlist::keynum_to_words(&keynum);
-
-    Ok(SignResult {
-        signature_file: sig_file_path,
-        trusted_comment: sig_box.trusted_comment().to_string(),
-        key_id,
-        key_id_words,
-    })
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file, password)?;
+    sign_file_with_key(message_file, &secret_key, keynum, options)
 }
 
 /// Sign a file with a secret key (backwards compatibility wrapper)
@@ -147,8 +160,8 @@ pub fn sign_single_file(
 /// - The message file cannot be read
 /// - The signature file already exists (unless force is true)
 /// - File I/O operations fail
-pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
-    sign_single_file(Path::new(&options.message_file), options, password)
+pub fn sign(options: &SignOptions<'_>, password: Option<&[u8]>) -> Result<SignResult> {
+    sign_single_file(options.message_file, options, password)
 }
 
 /// Sign multiple files (parallel or sequential)
@@ -170,7 +183,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
 /// Individual file errors are reported to stderr during execution.
 pub fn sign_multiple_files(
     files: Vec<PathBuf>,
-    options: &SignOptions,
+    options: &SignOptions<'_>,
     password: Option<&[u8]>,
     sequential: bool,
 ) -> Result<()> {
@@ -185,12 +198,15 @@ pub fn sign_multiple_files(
         return Ok(());
     }
 
-    // Multi-file path
+    // Load and decrypt key once — avoids N-1 redundant scrypt derivations
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file, password)?;
+
+    // Multi-file path: sign all files with the already-loaded key
     let results: Vec<FileSignResult> = if sequential {
         files
             .into_iter()
             .map(|file| {
-                let result = sign_single_file(&file, options, password);
+                let result = sign_file_with_key(&file, &secret_key, keynum, options);
                 report_file_result(&file, &result);
                 FileSignResult { file, result }
             })
@@ -199,7 +215,7 @@ pub fn sign_multiple_files(
         files
             .par_iter()
             .map(|file| {
-                let result = sign_single_file(file, options, password);
+                let result = sign_file_with_key(file, &secret_key, keynum, options);
                 report_file_result(file, &result);
                 FileSignResult {
                     file: file.clone(),
@@ -261,7 +277,7 @@ fn print_summary(results: &[FileSignResult]) -> Result<()> {
 pub fn create_signature(
     secret_key: &SecretKey,
     keynum: crate::crypto::KeyNum,
-    message_file: &str,
+    message_file: &Path,
     prehashed: bool,
     trusted_comment: Option<&str>,
     untrusted_comment: Option<&str>,
@@ -390,33 +406,6 @@ pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<
 
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
-}
-
-/// Check that a file doesn't exceed the maximum size for non-prehashed mode
-///
-/// Files larger than `MAX_MESSAGE_SIZE_BYTES` (1 GB) should use prehashed mode,
-/// which streams the file through Blake2b-512 without loading it into memory.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File metadata cannot be read
-/// - File size exceeds the maximum allowed
-///
-/// # Note
-///
-/// This function is public for unit testing purposes but is not part of the stable API.
-pub fn check_file_size_limit(path: &str) -> Result<()> {
-    let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
-
-    let file_size = metadata.len();
-    if file_size > MAX_MESSAGE_SIZE_BYTES {
-        return Err(Error::Other(format!(
-            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-p) for files larger than 1 GB."
-        )));
-    }
 
     Ok(())
 }

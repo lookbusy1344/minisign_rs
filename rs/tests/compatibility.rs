@@ -239,8 +239,8 @@ fn test_c_verify_rust_legacy_signature() {
 
     // Generate key with Rust
     let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.clone(),
-        public_key_file: public_key.clone(),
+        secret_key_file: secret_key.as_path(),
+        public_key_file: public_key.as_path(),
         comment: None,
         force: true,
         no_password: true,
@@ -252,9 +252,9 @@ fn test_c_verify_rust_legacy_signature() {
 
     // Sign with Rust in legacy mode (non-prehashed)
     let sign_opts = SignOptions {
-        secret_key_file: secret_key.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key.as_path(),
+        message_file: message_file.as_path(),
+        signature_file: Some(sig_file.as_path()),
         prehashed: false, // Legacy mode = non-prehashed
         trusted_comment: None,
         untrusted_comment: None,

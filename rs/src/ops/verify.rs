@@ -2,9 +2,9 @@
 //!
 //! This module implements the core verification logic for minisign signatures.
 
+use super::file_utils::check_file_size_limit;
 use crate::{
     Result,
-    constants::MAX_MESSAGE_SIZE_BYTES,
     crypto::{blake2b_512_stream, verify as crypto_verify},
     errors::Error,
     keys::PubkeyStruct,
@@ -14,13 +14,13 @@ use std::path::Path;
 
 /// Options for signature verification
 #[derive(Debug, Clone)]
-pub struct VerifyOptions {
+pub struct VerifyOptions<'a> {
     /// Public key (either from file or provided directly)
-    pub public_key: PublicKeySource,
+    pub public_key: PublicKeySource<'a>,
     /// Path to the signature file
-    pub signature_file: String,
+    pub signature_file: &'a Path,
     /// Path to the message file
-    pub message_file: String,
+    pub message_file: &'a Path,
     /// Output verification result to stdout
     pub output: bool,
     /// Quiet mode (no output)
@@ -29,9 +29,9 @@ pub struct VerifyOptions {
 
 /// Source of the public key
 #[derive(Debug, Clone)]
-pub enum PublicKeySource {
+pub enum PublicKeySource<'a> {
     /// Read from a file
-    File(String),
+    File(&'a Path),
     /// Provided as base64-encoded string
     Base64(String),
 }
@@ -69,15 +69,15 @@ pub struct VerifyResult {
 /// - The message file cannot be read
 /// - The signature is invalid
 /// - The global signature is invalid
-pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
+pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     // Load the public key
     let pubkey = load_public_key(&options.public_key)?;
 
     // Load the signature
-    let sig_box = load_signature(&options.signature_file)?;
+    let sig_box = load_signature(options.signature_file)?;
 
     // Verify the signature on the message
-    verify_message_signature(&pubkey, &sig_box, &options.message_file)?;
+    verify_message_signature(&pubkey, &sig_box, options.message_file)?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
@@ -106,11 +106,10 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
 /// # Note
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
-pub fn load_public_key(source: &PublicKeySource) -> Result<PubkeyStruct> {
+pub fn load_public_key(source: &PublicKeySource<'_>) -> Result<PubkeyStruct> {
     match source {
         PublicKeySource::File(path) => {
-            let contents =
-                std::fs::read_to_string(path).map_err(|e| Error::file_read(path.clone(), e))?;
+            let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
             PubkeyStruct::from_file_contents(&contents)
         }
         PublicKeySource::Base64(base64_str) => {
@@ -153,7 +152,7 @@ pub fn load_signature(path: impl AsRef<Path>) -> Result<SignatureBox> {
 pub fn verify_message_signature(
     pubkey: &PubkeyStruct,
     sig_box: &SignatureBox,
-    message_file: &str,
+    message_file: &Path,
 ) -> Result<()> {
     // First, verify that the keynum matches
     if pubkey.keynum() != sig_box.sig_struct().keynum() {
@@ -182,31 +181,4 @@ pub fn verify_message_signature(
         &data_to_verify,
         sig_box.sig_struct().signature(),
     )
-}
-
-/// Check that a file doesn't exceed the maximum size for non-prehashed mode
-///
-/// Files larger than `MAX_MESSAGE_SIZE_BYTES` (1 GB) should use prehashed mode,
-/// which streams the file through Blake2b-512 without loading it into memory.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File metadata cannot be read
-/// - File size exceeds the maximum allowed
-///
-/// # Note
-///
-/// This function is public for unit testing purposes but is not part of the stable API.
-pub fn check_file_size_limit(path: &str) -> Result<()> {
-    let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
-
-    let file_size = metadata.len();
-    if file_size > MAX_MESSAGE_SIZE_BYTES {
-        return Err(Error::Other(format!(
-            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). This signature uses non-prehashed mode."
-        )));
-    }
-
-    Ok(())
 }

@@ -3,9 +3,12 @@
 //! This module provides functionality to inspect minisign key files
 //! and display their security parameters and KDF configuration.
 
+use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
+use crate::signature::SignatureAlgorithm;
 use std::fs;
+use std::path::Path;
 
 /// Security level classification for encrypted keys
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,16 +25,16 @@ pub enum SecurityLevel {
 
 /// Options for inspecting a key file
 #[derive(Debug, Clone)]
-pub struct InspectOptions {
+pub struct InspectOptions<'a> {
     /// Path to the key file (can be secret or public key)
-    pub key_file: String,
+    pub key_file: &'a std::path::Path,
 }
 
 /// Options for inspecting an encrypted private key (with decryption)
 #[derive(Debug, Clone)]
-pub struct InspectPrivateOptions {
+pub struct InspectPrivateOptions<'a> {
     /// Path to the secret key file
-    pub key_file: String,
+    pub key_file: &'a std::path::Path,
 }
 
 /// Result of inspecting a key file
@@ -77,8 +80,8 @@ pub struct KdfInfo {
 /// - The file cannot be read
 /// - The file format is invalid
 /// - The key structure cannot be parsed
-pub fn inspect(options: &InspectOptions) -> Result<InspectResult> {
-    let contents = fs::read_to_string(&options.key_file)
+pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
+    let contents = fs::read_to_string(options.key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first
@@ -120,8 +123,11 @@ pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
 /// - The file cannot be read
 /// - The file is not a valid key
 /// - For encrypted keys: password is incorrect or decryption fails
-pub fn inspect_private(options: &InspectPrivateOptions, password: &[u8]) -> Result<InspectResult> {
-    let contents = fs::read_to_string(&options.key_file)
+pub fn inspect_private(
+    options: &InspectPrivateOptions<'_>,
+    password: &[u8],
+) -> Result<InspectResult> {
+    let contents = fs::read_to_string(options.key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first
@@ -180,10 +186,6 @@ pub fn inspect_private(options: &InspectPrivateOptions, password: &[u8]) -> Resu
         "File is not a valid minisign key".to_string(),
     ))
 }
-
-// Production-strength KDF parameters (N=2^20, r=8, p=1)
-const PRODUCTION_OPSLIMIT: u64 = 33_554_432;
-const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
 
 /// Inspect a secret key structure
 fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
@@ -261,15 +263,6 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
     }
 }
 
-/// Signature algorithm type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SignatureAlgorithm {
-    /// Normal signature ("Ed")
-    Normal,
-    /// Prehashed signature ("ED")
-    Prehashed,
-}
-
 /// Result of inspecting a signature file
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureInspectResult {
@@ -288,7 +281,7 @@ pub struct SignatureInspectResult {
 /// Returns an error if:
 /// - The file cannot be read
 /// - The file format is invalid
-pub fn inspect_signature(signature_file: &str) -> Result<SignatureInspectResult> {
+pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult> {
     use crate::signature::SignatureBox;
 
     let contents = std::fs::read_to_string(signature_file)
@@ -299,12 +292,7 @@ pub fn inspect_signature(signature_file: &str) -> Result<SignatureInspectResult>
     let keynum = sig_box.sig_struct().keynum();
     let key_id = keynum.to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(keynum);
-
-    let algorithm = if sig_box.sig_struct().is_prehashed() {
-        SignatureAlgorithm::Prehashed
-    } else {
-        SignatureAlgorithm::Normal
-    };
+    let algorithm = sig_box.sig_struct().algorithm();
 
     Ok(SignatureInspectResult {
         key_id,
@@ -313,54 +301,9 @@ pub fn inspect_signature(signature_file: &str) -> Result<SignatureInspectResult>
     })
 }
 
-/// Convert opslimit/memlimit to scrypt parameters
+/// Convert opslimit/memlimit to scrypt parameters (`log_n`, r, p)
 ///
-/// This is a copy of the logic from `SeckeyStruct::opslimit_memlimit_to_params`
-/// but made available for inspection purposes.
+/// Delegates to the shared implementation in [`crate::crypto::opslimit_memlimit_to_params`].
 fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
-    const SCRYPT_R_STANDARD: u32 = 8;
-    const SCRYPT_P_STANDARD: u32 = 1;
-    const LIBSODIUM_OPSLIMIT_MULTIPLIER: u64 = 4;
-    const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
-
-    let r = SCRYPT_R_STANDARD;
-    let p = SCRYPT_P_STANDARD;
-
-    let divisor = LIBSODIUM_MEMLIMIT_MULTIPLIER
-        .checked_mul(u64::from(r))
-        .ok_or_else(|| Error::ScryptParamError("overflow calculating divisor".into()))?;
-
-    let n = memlimit
-        .checked_div(divisor)
-        .ok_or_else(|| Error::ScryptParamError("division by zero".into()))?;
-
-    if n == 0 {
-        return Err(Error::ScryptParamError("N cannot be zero".into()));
-    }
-
-    let log_n = n
-        .checked_ilog2()
-        .and_then(|v| u8::try_from(v).ok())
-        .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
-
-    let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
-        .checked_mul(n)
-        .and_then(|v| v.checked_mul(u64::from(r)))
-        .ok_or_else(|| Error::ScryptParamError("overflow calculating expected opslimit".into()))?;
-
-    if expected_opslimit != opslimit {
-        let derived_r = opslimit
-            .checked_div(
-                LIBSODIUM_OPSLIMIT_MULTIPLIER
-                    .checked_mul(n)
-                    .ok_or_else(|| {
-                        Error::ScryptParamError("overflow calculating derived r".into())
-                    })?,
-            )
-            .and_then(|v| u32::try_from(v).ok())
-            .unwrap_or(r);
-        return Ok((log_n, derived_r, p));
-    }
-
-    Ok((log_n, r, p))
+    crate::crypto::opslimit_memlimit_to_params(opslimit, memlimit)
 }

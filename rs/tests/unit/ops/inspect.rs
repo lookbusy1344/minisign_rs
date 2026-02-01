@@ -6,6 +6,7 @@ use minisign::ops::inspect::{InspectOptions, KeyType, SecurityLevel, inspect, in
 use rand::Rng;
 use std::fs;
 use std::io::Write;
+use std::path::Path;
 use tempfile::NamedTempFile;
 
 // Helper to create a temporary key file
@@ -44,7 +45,7 @@ fn test_inspect_production_strength_encrypted_key() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     let result = inspect(&options).unwrap();
@@ -90,7 +91,7 @@ fn test_inspect_medium_strength_fallback_key() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     let result = inspect(&options).unwrap();
@@ -132,7 +133,7 @@ fn test_inspect_low_strength_fallback_key() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     let result = inspect(&options).unwrap();
@@ -158,7 +159,7 @@ fn test_inspect_unencrypted_secret_key() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     let result = inspect(&options).unwrap();
@@ -177,7 +178,7 @@ fn test_inspect_public_key() {
     let temp_file = create_temp_key_file(&contents);
 
     let options = InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     let result = inspect(&options).unwrap();
@@ -196,7 +197,7 @@ fn test_inspect_invalid_file() {
     let temp_file = create_temp_key_file("not a valid key file\n");
 
     let options = InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     let result = inspect(&options);
@@ -206,7 +207,7 @@ fn test_inspect_invalid_file() {
 #[test]
 fn test_inspect_missing_file() {
     let options = InspectOptions {
-        key_file: "/nonexistent/path/to/key.file".to_string(),
+        key_file: std::path::Path::new("/nonexistent/path/to/key.file"),
     };
 
     let result = inspect(&options);
@@ -237,7 +238,7 @@ fn test_security_level_classification() {
     let high_contents = high_key.to_file_contents("high");
     let high_file = create_temp_key_file(&high_contents);
     let result = inspect(&InspectOptions {
-        key_file: high_file.path().to_string_lossy().to_string(),
+        key_file: high_file.path(),
     })
     .unwrap();
     assert_eq!(result.security_level, Some(SecurityLevel::High));
@@ -258,7 +259,7 @@ fn test_security_level_classification() {
     let medium_contents = medium_key.to_file_contents("medium");
     let medium_file = create_temp_key_file(&medium_contents);
     let result = inspect(&InspectOptions {
-        key_file: medium_file.path().to_string_lossy().to_string(),
+        key_file: medium_file.path(),
     })
     .unwrap();
     assert_eq!(result.security_level, Some(SecurityLevel::Medium));
@@ -279,7 +280,7 @@ fn test_security_level_classification() {
     let low_contents = low_key.to_file_contents("low");
     let low_file = create_temp_key_file(&low_contents);
     let result = inspect(&InspectOptions {
-        key_file: low_file.path().to_string_lossy().to_string(),
+        key_file: low_file.path(),
     })
     .unwrap();
     assert_eq!(result.security_level, Some(SecurityLevel::Low));
@@ -325,7 +326,7 @@ fn test_weakness_multiplier_calculation() {
         let file = create_temp_key_file(&contents);
 
         let result = inspect(&InspectOptions {
-            key_file: file.path().to_string_lossy().to_string(),
+            key_file: file.path(),
         })
         .unwrap();
 
@@ -346,7 +347,7 @@ fn test_inspect_c_generated_production_key() {
     let temp_file = create_temp_key_file(&contents);
 
     let result = inspect(&InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     })
     .unwrap();
 
@@ -369,7 +370,7 @@ fn test_inspect_c_generated_unencrypted_key() {
     let temp_file = create_temp_key_file(&contents);
 
     let result = inspect(&InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     })
     .unwrap();
 
@@ -387,7 +388,7 @@ fn test_inspect_c_generated_public_key() {
     let temp_file = create_temp_key_file(&contents);
 
     let result = inspect(&InspectOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     })
     .unwrap();
 
@@ -460,7 +461,7 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectPrivateOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     // Decrypt and inspect
@@ -500,7 +501,7 @@ fn test_inspect_private_fails_with_wrong_password() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectPrivateOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     // Try with wrong password
@@ -519,7 +520,7 @@ fn test_inspect_private_works_with_unencrypted_key() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectPrivateOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     // Should work without password (password is ignored for unencrypted keys)
@@ -541,7 +542,7 @@ fn test_inspect_private_works_with_public_key() {
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectPrivateOptions {
-        key_file: temp_file.path().to_string_lossy().to_string(),
+        key_file: temp_file.path(),
     };
 
     // Should work with public key (password is ignored)
@@ -576,7 +577,7 @@ fn test_inspect_signature_normal() {
     let sig_contents = sig_box.to_file_contents();
     let temp_file = create_temp_key_file(&sig_contents);
 
-    let result = inspect_signature(&temp_file.path().to_string_lossy()).unwrap();
+    let result = inspect_signature(temp_file.path()).unwrap();
 
     // Should extract key ID matching the keynum
     assert_eq!(result.key_id, keynum.to_key_id());
@@ -588,7 +589,7 @@ fn test_inspect_signature_normal() {
     // Should detect normal algorithm
     assert_eq!(
         result.algorithm,
-        minisign::ops::inspect::SignatureAlgorithm::Normal
+        minisign::signature::SignatureAlgorithm::Normal
     );
 }
 
@@ -597,7 +598,8 @@ fn test_inspect_signature_prehashed() {
     use minisign::ops::inspect::inspect_signature;
 
     // Use existing signature fixture (this one is prehashed)
-    let result = inspect_signature("tests/fixtures/signatures/hello.txt.minisig").unwrap();
+    let result =
+        inspect_signature(Path::new("tests/fixtures/signatures/hello.txt.minisig")).unwrap();
 
     // Should extract key ID
     assert!(!result.key_id.is_empty());
@@ -617,7 +619,7 @@ fn test_inspect_signature_prehashed() {
     // Should detect prehashed algorithm
     assert_eq!(
         result.algorithm,
-        minisign::ops::inspect::SignatureAlgorithm::Prehashed
+        minisign::signature::SignatureAlgorithm::Prehashed
     );
 }
 
@@ -627,7 +629,7 @@ fn test_inspect_signature_invalid_file() {
 
     let temp_file = create_temp_key_file("not a valid signature\n");
 
-    let result = inspect_signature(&temp_file.path().to_string_lossy());
+    let result = inspect_signature(temp_file.path());
     assert!(result.is_err());
 }
 
@@ -635,6 +637,6 @@ fn test_inspect_signature_invalid_file() {
 fn test_inspect_signature_nonexistent_file() {
     use minisign::ops::inspect::inspect_signature;
 
-    let result = inspect_signature("/nonexistent/signature.minisig");
+    let result = inspect_signature(Path::new("/nonexistent/signature.minisig"));
     assert!(result.is_err());
 }

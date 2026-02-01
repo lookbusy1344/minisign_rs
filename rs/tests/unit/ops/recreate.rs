@@ -21,8 +21,8 @@ fn test_recreate_from_unencrypted_key() {
     // Recreate public key
     let pk_path = temp_dir.path().join("test.pub");
     let options = RecreateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: Some("Recreated key".to_string()),
         force: false,
     };
@@ -77,8 +77,8 @@ fn test_recreate_from_encrypted_key_fast() {
     // Recreate public key
     let pk_path = temp_dir.path().join("recreated.pub");
     let options = RecreateOptions {
-        secret_key_file: sk_path.clone(),
-        public_key_file: pk_path.clone(),
+        secret_key_file: sk_path.as_path(),
+        public_key_file: pk_path.as_path(),
         comment: None,
         force: false,
     };
@@ -122,8 +122,8 @@ fn test_recreate_without_password_fails() {
     // Try to recreate without password
     let pk_path = temp_dir.path().join("test.pub");
     let options = RecreateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path,
+        secret_key_file: &sk_path,
+        public_key_file: &pk_path,
         comment: None,
         force: false,
     };
@@ -164,8 +164,8 @@ fn test_recreate_wrong_password_fails() {
     // Try with wrong password
     let pk_path = temp_dir.path().join("test.pub");
     let options = RecreateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path,
+        secret_key_file: &sk_path,
+        public_key_file: &pk_path,
         comment: None,
         force: false,
     };
@@ -193,8 +193,8 @@ fn test_recreate_file_exists_without_force() {
     fs::write(&pk_path, "existing content").unwrap();
 
     let options = RecreateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path,
+        secret_key_file: &sk_path,
+        public_key_file: &pk_path,
         comment: None,
         force: false,
     };
@@ -218,8 +218,8 @@ fn test_recreate_force_overwrite() {
     fs::write(&pk_path, "existing content").unwrap();
 
     let options = RecreateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path.clone(),
+        secret_key_file: &sk_path,
+        public_key_file: pk_path.as_path(),
         comment: Some("Forced recreation".to_string()),
         force: true,
     };
@@ -254,8 +254,8 @@ fn test_recreate_matches_original_public_key() {
     // Recreate public key
     let pk_path = temp_dir.path().join("recreated.pub");
     let options = RecreateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path.clone(),
+        secret_key_file: &sk_path,
+        public_key_file: pk_path.as_path(),
         comment: Some("test".to_string()),
         force: false,
     };
@@ -289,8 +289,8 @@ fn test_recreate_atomic_file_creation() {
     fs::write(&pk_path, "existing public key").unwrap();
 
     let options = RecreateOptions {
-        secret_key_file: sk_path,
-        public_key_file: pk_path.clone(),
+        secret_key_file: &sk_path,
+        public_key_file: pk_path.as_path(),
         comment: None,
         force: false,
     };

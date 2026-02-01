@@ -90,14 +90,6 @@ const SECKEY_SK_SIZE: usize = SECRET_KEY_BYTES;
 const SECKEY_CHECKSUM_OFFSET: usize = 126;
 const SECKEY_CHECKSUM_SIZE: usize = CHECKSUM_BYTES;
 
-// Libsodium KDF formula constants
-// opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
-// memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r
-// Import libsodium multipliers and scrypt parameters from centralized location
-use crate::constants::{
-    LIBSODIUM_MEMLIMIT_MULTIPLIER, LIBSODIUM_OPSLIMIT_MULTIPLIER, SCRYPT_P, SCRYPT_R,
-};
-
 /// Public key file structure (42 bytes)
 ///
 /// Binary layout:
@@ -280,10 +272,6 @@ pub struct SeckeyStruct {
 }
 
 impl SeckeyStruct {
-    // Production-strength KDF parameters (N=2^20, r=8, p=1)
-    const PRODUCTION_OPSLIMIT: u64 = 33_554_432;
-    const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
-
     /// Create a new secret key structure (unencrypted)
     ///
     /// Creates an unencrypted secret key structure with no password protection.
@@ -575,11 +563,8 @@ impl SeckeyStruct {
         }
 
         // Key is weak if either parameter is below production strength
-        // Production parameters: N = 2^20, r = 8, p = 1
-        // opslimit = 4 * N * r = 4 * 1,048,576 * 8 = 33,554,432
-        // memlimit = 128 * N * r = 128 * 1,048,576 * 8 = 1,073,741,824
-        self.kdf_opslimit < Self::PRODUCTION_OPSLIMIT
-            || self.kdf_memlimit < Self::PRODUCTION_MEMLIMIT
+        self.kdf_opslimit < crate::constants::PRODUCTION_OPSLIMIT
+            || self.kdf_memlimit < crate::constants::PRODUCTION_MEMLIMIT
     }
 
     /// Compute the checksum (Blake2b-256 of keynum + `secret_key`)
@@ -598,122 +583,15 @@ impl SeckeyStruct {
         blake2b_256(&data)
     }
 
-    /// Convert opslimit/memlimit to scrypt parameters
+    /// Convert opslimit/memlimit to scrypt parameters (`log_n`, r, p)
     ///
-    /// This function converts libsodium-style memory and operations limits into
-    /// scrypt parameters (`log_n`, r, p) suitable for key derivation.
-    ///
-    /// # Background
-    ///
-    /// The C minisign implementation uses libsodium's scrypt interface, which
-    /// expresses work factors as `opslimit` (CPU/time cost) and `memlimit`
-    /// (memory cost). These are derived from scrypt's native parameters:
-    /// - opslimit = `LIBSODIUM_OPSLIMIT_MULTIPLIER` * N * r
-    /// - memlimit = `LIBSODIUM_MEMLIMIT_MULTIPLIER` * N * r
-    ///
-    /// # Parameters
-    ///
-    /// - `opslimit`: CPU/time cost factor (operations limit)
-    /// - `memlimit`: Memory cost factor in bytes
-    ///
-    /// # Returns
-    ///
-    /// A tuple of (`log_n`, r, p) where:
-    /// - `log_n`: Base-2 logarithm of N (the main work factor)
-    ///   - Typical range: 14-22 (N = 2^14 to 2^22)
-    ///   - Default for minisign: 20 (N = 2^20 = 1,048,576)
-    ///   - Test configurations often use 14 (N = 2^14 = 16,384)
-    /// - `r`: Block size parameter (typically 8)
-    /// - `p`: Parallelization parameter (typically 1)
-    ///
-    /// # Algorithm
-    ///
-    /// 1. Assumes standard minisign values (r=8, p=1)
-    /// 2. Derives N from memlimit: N = memlimit / (128 * r)
-    /// 3. Computes `log_n` using floating-point log2
-    /// 4. Validates against opslimit to detect non-standard parameters
-    /// 5. Falls back to deriving r from opslimit if validation fails
-    ///
-    /// # Floating-Point Behavior
-    ///
-    /// Uses floating-point arithmetic for log2 calculation. This is safe because:
-    /// - N values are always powers of 2 in standard usage
-    /// - The result is immediately cast to u8
-    /// - Any minor floating-point error is eliminated by truncation
-    /// - The max value of log2(2^64) is 64, well within u8 range
-    ///
-    /// # Non-Standard Parameters
-    ///
-    /// If opslimit doesn't match the expected value (indicating non-standard
-    /// r or p), the function attempts to recover by deriving r from opslimit.
-    /// The `unwrap_or(r)` fallback ensures safe behavior even if recovery fails.
-    ///
-    /// # Security Notes
-    ///
-    /// - Higher `log_n` = exponentially more secure but slower
-    /// - `log_n` < 14: Not recommended (too weak for key derivation)
-    /// - `log_n` = 20: Production default (1-5 seconds per operation)
-    /// - `log_n` > 22: May be excessive for most use cases
+    /// Delegates to [`crate::crypto::opslimit_memlimit_to_params`].
     ///
     /// # Errors
     ///
-    /// Returns `Error::ScryptParamError` if:
-    /// - N value is 0 or cannot be calculated
-    /// - `log_n` is out of valid range (0-255)
-    /// - Arithmetic overflow occurs during calculation
+    /// See [`crate::crypto::opslimit_memlimit_to_params`] for error conditions.
     pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
-        // pub(crate) for unit tests
-        // Standard minisign uses r=8, p=1
-        // We can derive N from either formula, using memlimit is simpler
-        let r = SCRYPT_R;
-        let p = SCRYPT_P;
-
-        // N = memlimit / (LIBSODIUM_MEMLIMIT_MULTIPLIER * r)
-        // Use checked arithmetic to prevent overflow/underflow
-        let divisor = LIBSODIUM_MEMLIMIT_MULTIPLIER
-            .checked_mul(u64::from(r))
-            .ok_or_else(|| Error::ScryptParamError("overflow calculating divisor".into()))?;
-
-        let n = memlimit
-            .checked_div(divisor)
-            .ok_or_else(|| Error::ScryptParamError("division by zero".into()))?;
-
-        if n == 0 {
-            return Err(Error::ScryptParamError("N cannot be zero".into()));
-        }
-
-        // Use checked_ilog2 instead of f64 cast to avoid undefined behavior with 0 or overflow
-        let log_n = n
-            .checked_ilog2()
-            .and_then(|v| u8::try_from(v).ok())
-            .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
-
-        // Verify our calculation is consistent with opslimit
-        // opslimit should equal LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r
-        let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
-            .checked_mul(n)
-            .and_then(|v| v.checked_mul(u64::from(r)))
-            .ok_or_else(|| {
-                Error::ScryptParamError("overflow calculating expected opslimit".into())
-            })?;
-
-        if expected_opslimit != opslimit {
-            // If they don't match, the key might use non-standard parameters
-            // Fall back to deriving r from opslimit
-            let derived_r = opslimit
-                .checked_div(
-                    LIBSODIUM_OPSLIMIT_MULTIPLIER
-                        .checked_mul(n)
-                        .ok_or_else(|| {
-                            Error::ScryptParamError("overflow calculating derived r".into())
-                        })?,
-                )
-                .and_then(|v| u32::try_from(v).ok())
-                .unwrap_or(r);
-            return Ok((log_n, derived_r, p));
-        }
-
-        Ok((log_n, r, p))
+        crate::crypto::opslimit_memlimit_to_params(opslimit, memlimit)
     }
 
     /// Get the key number

@@ -11,14 +11,14 @@ use crate::{
     errors::Error,
     keys::SeckeyStruct,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Options for changing secret key password
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
-pub struct ChangeOptions {
+pub struct ChangeOptions<'a> {
     /// Path to the secret key file
-    pub secret_key_file: PathBuf,
+    pub secret_key_file: &'a Path,
     /// Remove password (make unencrypted)
     pub remove_password: bool,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
@@ -57,7 +57,7 @@ pub struct ChangeResult {
 /// - The new password is not provided when encryption is requested
 /// - File I/O operations fail
 pub fn change(
-    options: &ChangeOptions,
+    options: &ChangeOptions<'_>,
     old_password: Option<&[u8]>,
     new_password: Option<&[u8]>,
 ) -> Result<ChangeResult> {
@@ -80,13 +80,13 @@ pub fn change(
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
 pub fn change_with_log_n(
-    options: &ChangeOptions,
+    options: &ChangeOptions<'_>,
     old_password: Option<&[u8]>,
     new_password: Option<&[u8]>,
     log_n: u8,
 ) -> Result<ChangeResult> {
     // Load the secret key
-    let seckey = load_secret_key(&options.secret_key_file)?;
+    let seckey = load_secret_key(options.secret_key_file)?;
 
     // Decrypt the secret key with old password
     let (secret_key, keynum) = if seckey.is_encrypted() {
@@ -154,10 +154,10 @@ pub fn change_with_log_n(
     };
     let seckey_contents = new_seckey.to_file_contents(seckey_comment);
     // Always overwrite when changing password (force=true)
-    write_secret_key_file(&options.secret_key_file, &seckey_contents, true)?;
+    write_secret_key_file(options.secret_key_file, &seckey_contents, true)?;
 
     Ok(ChangeResult {
-        secret_key_file: options.secret_key_file.clone(),
+        secret_key_file: options.secret_key_file.to_path_buf(),
         encrypted: !options.remove_password,
     })
 }

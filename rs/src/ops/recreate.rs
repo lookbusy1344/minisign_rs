@@ -4,15 +4,15 @@
 
 use super::file_utils::{load_secret_key, write_public_key_file};
 use crate::{Result, crypto::PublicKey, errors::Error, keys::PubkeyStruct};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Options for recreating a public key
 #[derive(Debug, Clone)]
-pub struct RecreateOptions {
+pub struct RecreateOptions<'a> {
     /// Path to the secret key file
-    pub secret_key_file: PathBuf,
+    pub secret_key_file: &'a Path,
     /// Path to write the public key file
-    pub public_key_file: PathBuf,
+    pub public_key_file: &'a Path,
     /// Comment for the public key file
     pub comment: Option<String>,
     /// Force overwrite existing public key file
@@ -46,9 +46,9 @@ pub struct RecreateResult {
 /// - The secret key cannot be decrypted (wrong password or corrupted)
 /// - The public key file already exists (unless force is true)
 /// - File I/O operations fail
-pub fn recreate(options: &RecreateOptions, password: Option<&[u8]>) -> Result<RecreateResult> {
+pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Result<RecreateResult> {
     // Load the secret key
-    let seckey = load_secret_key(&options.secret_key_file)?;
+    let seckey = load_secret_key(options.secret_key_file)?;
 
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = if seckey.is_encrypted() {
@@ -74,10 +74,10 @@ pub fn recreate(options: &RecreateOptions, password: Option<&[u8]>) -> Result<Re
 
     // Write the public key file with atomic creation
     let pubkey_contents = pubkey.to_file_contents(&comment);
-    write_public_key_file(&options.public_key_file, &pubkey_contents, options.force)?;
+    write_public_key_file(options.public_key_file, &pubkey_contents, options.force)?;
 
     Ok(RecreateResult {
-        public_key_file: options.public_key_file.clone(),
+        public_key_file: options.public_key_file.to_path_buf(),
         keynum_hex,
     })
 }

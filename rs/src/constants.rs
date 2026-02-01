@@ -49,6 +49,20 @@ pub use crate::signature::{
 // Re-export file format constants from keys module
 pub use crate::keys::{ENCRYPTED_BLOB_SIZE, PUBKEY_STRUCT_SIZE, SECKEY_STRUCT_SIZE};
 
+/// Production-strength scrypt opslimit (N=2^20, r=8, p=1)
+///
+/// Computed as `LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r = 4 * 1_048_576 * 8`.
+/// Keys created with a lower opslimit were generated with reduced security
+/// (see KDF fallback mechanism).
+pub const PRODUCTION_OPSLIMIT: u64 = 33_554_432;
+
+/// Production-strength scrypt memlimit (N=2^20, r=8, p=1)
+///
+/// Computed as `LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r = 128 * 1_048_576 * 8` (1 GiB).
+/// Keys created with a lower memlimit were generated with reduced security
+/// (see KDF fallback mechanism).
+pub const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
+
 /// Maximum file size for non-prehashed signing/verification (1 GB)
 ///
 /// This limit prevents resource exhaustion from maliciously large files.
