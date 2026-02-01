@@ -260,6 +260,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     // Handle output modes
     if cli.pretty_quiet {
         // -Q: Only show trusted comment
+        // codeql[rust/cleartext-logging] - Trusted comment is public metadata embedded in the signature, not sensitive
         println!("{}", result.trusted_comment);
     } else if !cli.quiet {
         // Normal output
