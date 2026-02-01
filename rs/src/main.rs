@@ -144,6 +144,11 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
+    // Display working message for signing operation
+    if !cli.quiet {
+        eprintln!("Working...");
+    }
+
     if message_files.len() == 1 {
         // Single file path - preserve original behavior and output format
         let message_file = &message_files[0];
