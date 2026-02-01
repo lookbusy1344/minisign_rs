@@ -61,7 +61,60 @@ pub struct FileSignResult {
     pub result: Result<SignResult>,
 }
 
-/// Sign a single file with a secret key (pure function for multi-file support)
+/// Load and decrypt a secret key from a file
+///
+/// Handles both encrypted and unencrypted keys. For encrypted keys, the weak
+/// KDF warning is emitted by `decrypt()` if applicable.
+fn load_and_decrypt_key(
+    secret_key_file: &Path,
+    password: Option<&[u8]>,
+) -> Result<(SecretKey, crate::crypto::KeyNum)> {
+    let seckey = load_secret_key(secret_key_file)?;
+
+    if seckey.is_encrypted() {
+        let pwd = password.ok_or(Error::PasswordRequired)?;
+        seckey.decrypt(pwd)
+    } else {
+        Ok((seckey.get_unencrypted_secret_key()?, *seckey.keynum()))
+    }
+}
+
+/// Sign a single file with an already-loaded secret key
+fn sign_file_with_key(
+    message_file: &Path,
+    secret_key: &SecretKey,
+    keynum: crate::crypto::KeyNum,
+    options: &SignOptions,
+) -> Result<SignResult> {
+    let sig_file_path = options
+        .signature_file
+        .clone()
+        .unwrap_or_else(|| format!("{}.minisig", message_file.display()));
+
+    let sig_box = create_signature(
+        secret_key,
+        keynum,
+        &message_file.to_string_lossy(),
+        options.prehashed,
+        options.trusted_comment.as_deref(),
+        options.untrusted_comment.as_deref(),
+    )?;
+
+    let sig_contents = sig_box.to_file_contents();
+    write_signature_file(Path::new(&sig_file_path), &sig_contents, options.force)?;
+
+    let key_id = keynum.to_key_id();
+    let key_id_words = crate::wordlist::keynum_to_words(&keynum);
+
+    Ok(SignResult {
+        signature_file: sig_file_path,
+        trusted_comment: sig_box.trusted_comment().to_string(),
+        key_id,
+        key_id_words,
+    })
+}
+
+/// Sign a single file with a secret key
 ///
 /// # Arguments
 ///
@@ -85,47 +138,8 @@ pub fn sign_single_file(
     options: &SignOptions,
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
-    // Load and decrypt the secret key
-    let seckey = load_secret_key(&options.secret_key_file)?;
-
-    // Decrypt if necessary (weak KDF warning is shown by decrypt() if applicable)
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
-
-    // Determine the signature file path
-    let sig_file_path = options
-        .signature_file
-        .clone()
-        .unwrap_or_else(|| format!("{}.minisig", message_file.display()));
-
-    // Create the signature
-    let sig_box = create_signature(
-        &secret_key,
-        keynum,
-        &message_file.to_string_lossy(),
-        options.prehashed,
-        options.trusted_comment.as_deref(),
-        options.untrusted_comment.as_deref(),
-    )?;
-
-    // Write the signature file atomically
-    let sig_contents = sig_box.to_file_contents();
-    write_signature_file(Path::new(&sig_file_path), &sig_contents, options.force)?;
-
-    // Generate key ID display formats
-    let key_id = keynum.to_key_id();
-    let key_id_words = crate::wordlist::keynum_to_words(&keynum);
-
-    Ok(SignResult {
-        signature_file: sig_file_path,
-        trusted_comment: sig_box.trusted_comment().to_string(),
-        key_id,
-        key_id_words,
-    })
+    let (secret_key, keynum) = load_and_decrypt_key(Path::new(&options.secret_key_file), password)?;
+    sign_file_with_key(message_file, &secret_key, keynum, options)
 }
 
 /// Sign a file with a secret key (backwards compatibility wrapper)
@@ -184,12 +198,15 @@ pub fn sign_multiple_files(
         return Ok(());
     }
 
-    // Multi-file path
+    // Load and decrypt key once — avoids N-1 redundant scrypt derivations
+    let (secret_key, keynum) = load_and_decrypt_key(Path::new(&options.secret_key_file), password)?;
+
+    // Multi-file path: sign all files with the already-loaded key
     let results: Vec<FileSignResult> = if sequential {
         files
             .into_iter()
             .map(|file| {
-                let result = sign_single_file(&file, options, password);
+                let result = sign_file_with_key(&file, &secret_key, keynum, options);
                 report_file_result(&file, &result);
                 FileSignResult { file, result }
             })
@@ -198,7 +215,7 @@ pub fn sign_multiple_files(
         files
             .par_iter()
             .map(|file| {
-                let result = sign_single_file(file, options, password);
+                let result = sign_file_with_key(file, &secret_key, keynum, options);
                 report_file_result(file, &result);
                 FileSignResult {
                     file: file.clone(),
