@@ -114,7 +114,6 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
         println!();
-        // codeql[rust/cleartext-logging] - Public key is meant to be shared, not sensitive
         println!("minisign_rs -Vm <file> -P {}", result.public_key_base64);
     }
 
@@ -168,12 +167,10 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
         if !cli.quiet {
-            // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
             println!(
                 "Signing with key: {} ({})",
                 result.key_id, result.key_id_words
             );
-            // codeql[rust/cleartext-logging] - Logging file path, not sensitive data
             println!("Signature written to {}", result.signature_file);
         }
     } else {
@@ -260,11 +257,9 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     // Handle output modes
     if cli.pretty_quiet {
         // -Q: Only show trusted comment
-        // codeql[rust/cleartext-logging] - Trusted comment is public metadata embedded in the signature, not sensitive
         println!("{}", result.trusted_comment);
     } else if !cli.quiet {
         // Normal output
-        // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
         println!(
             "Verified with key: {} ({})",
             result.key_id, result.key_id_words
@@ -393,30 +388,24 @@ fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
     }
 
     // Display key information
-    // codeql[rust/cleartext-logging] - Logging non-sensitive key metadata only
     println!("Key Information:");
 
     // For encrypted secret keys, key ID is not available without decryption
     if result.key_type == KeyType::SecretEncrypted && result.key_id == "0000000000000000" {
-        // codeql[rust/cleartext-logging] - Logging non-sensitive informational message
         println!("├─ Key ID: [encrypted - password required to view]");
         println!("├─ Key ID (words): [decrypt key to view]");
     } else {
-        // codeql[rust/cleartext-logging] - Key ID is public identifier, not sensitive
         println!("├─ Key ID: {}", result.key_id);
-        // codeql[rust/cleartext-logging] - Human-readable key ID (PGP Word List)
         println!("├─ Key ID (words): {}", result.key_id_words);
     }
 
     match result.key_type {
         KeyType::SecretEncrypted => {
             println!("├─ Encrypted: Yes");
-            // codeql[rust/cleartext-logging] - Logging algorithm name, not sensitive data
             println!("├─ KDF Algorithm: Scrypt");
 
             if let Some(kdf) = &result.kdf_info {
                 println!("└─ KDF Parameters:");
-                // codeql[rust/cleartext-logging] - KDF parameters are public metadata, not sensitive
                 println!(
                     "   ├─ opslimit: {} (N=2^{}, r={}, p={})",
                     kdf.opslimit, kdf.log_n, kdf.r, kdf.p
@@ -430,7 +419,6 @@ fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
                 if kdf.is_fallback {
                     println!("   ├─ Creation: Fallback (reduced parameters)");
                     if let Some(multiplier) = kdf.weakness_multiplier {
-                        // codeql[rust/cleartext-logging] - Logging security strength metadata, not sensitive data
                         println!(
                             "   └─ Brute-force resistance: {multiplier}x weaker than production strength"
                         );
