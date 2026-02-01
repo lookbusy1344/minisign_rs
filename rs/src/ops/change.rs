@@ -56,8 +56,8 @@ pub struct ChangeResult {
 /// - The old password is incorrect
 /// - The new password is not provided when encryption is requested
 /// - File I/O operations fail
-pub fn change<'a>(
-    options: &ChangeOptions<'a>,
+pub fn change(
+    options: &ChangeOptions<'_>,
     old_password: Option<&[u8]>,
     new_password: Option<&[u8]>,
 ) -> Result<ChangeResult> {
@@ -79,8 +79,8 @@ pub fn change<'a>(
 /// # Note
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
-pub fn change_with_log_n<'a>(
-    options: &ChangeOptions<'a>,
+pub fn change_with_log_n(
+    options: &ChangeOptions<'_>,
     old_password: Option<&[u8]>,
     new_password: Option<&[u8]>,
     log_n: u8,

@@ -69,15 +69,15 @@ pub struct VerifyResult {
 /// - The message file cannot be read
 /// - The signature is invalid
 /// - The global signature is invalid
-pub fn verify<'a>(options: &VerifyOptions<'a>) -> Result<VerifyResult> {
+pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     // Load the public key
     let pubkey = load_public_key(&options.public_key)?;
 
     // Load the signature
-    let sig_box = load_signature(&options.signature_file)?;
+    let sig_box = load_signature(options.signature_file)?;
 
     // Verify the signature on the message
-    verify_message_signature(&pubkey, &sig_box, &options.message_file)?;
+    verify_message_signature(&pubkey, &sig_box, options.message_file)?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;

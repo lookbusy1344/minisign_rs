@@ -46,9 +46,9 @@ pub struct RecreateResult {
 /// - The secret key cannot be decrypted (wrong password or corrupted)
 /// - The public key file already exists (unless force is true)
 /// - File I/O operations fail
-pub fn recreate<'a>(options: &RecreateOptions<'a>, password: Option<&[u8]>) -> Result<RecreateResult> {
+pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Result<RecreateResult> {
     // Load the secret key
-    let seckey = load_secret_key(&options.secret_key_file)?;
+    let seckey = load_secret_key(options.secret_key_file)?;
 
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = if seckey.is_encrypted() {
@@ -74,7 +74,7 @@ pub fn recreate<'a>(options: &RecreateOptions<'a>, password: Option<&[u8]>) -> R
 
     // Write the public key file with atomic creation
     let pubkey_contents = pubkey.to_file_contents(&comment);
-    write_public_key_file(&options.public_key_file, &pubkey_contents, options.force)?;
+    write_public_key_file(options.public_key_file, &pubkey_contents, options.force)?;
 
     Ok(RecreateResult {
         public_key_file: options.public_key_file.to_path_buf(),

@@ -71,7 +71,7 @@ pub struct GenerateResult {
 /// # Panics
 ///
 /// Will not panic. The function uses `?` operator for all fallible operations.
-pub fn generate<'a>(options: &GenerateOptions<'a>, password: Option<&[u8]>) -> Result<GenerateResult> {
+pub fn generate(options: &GenerateOptions<'_>, password: Option<&[u8]>) -> Result<GenerateResult> {
     generate_with_log_n(options, password, SCRYPT_LOG_N)
 }
 
@@ -164,8 +164,8 @@ pub fn generate_with_log_n(
         .unwrap_or_else(|| format!("minisign public key {keynum_hex}"));
 
     // Ensure parent directories exist
-    ensure_parent_directory(&options.secret_key_file)?;
-    ensure_parent_directory(&options.public_key_file)?;
+    ensure_parent_directory(options.secret_key_file)?;
+    ensure_parent_directory(options.public_key_file)?;
 
     // Write the secret key file with appropriate comment
     let seckey_comment = if options.no_password {

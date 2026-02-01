@@ -79,7 +79,7 @@ pub struct KdfInfo {
 /// - The file cannot be read
 /// - The file format is invalid
 /// - The key structure cannot be parsed
-pub fn inspect<'a>(options: &InspectOptions<'a>) -> Result<InspectResult> {
+pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
     let contents = fs::read_to_string(options.key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
