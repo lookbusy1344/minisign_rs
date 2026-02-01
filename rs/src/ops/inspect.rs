@@ -6,6 +6,7 @@
 use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
+use crate::signature::SignatureAlgorithm;
 use std::fs;
 use std::path::Path;
 
@@ -262,15 +263,6 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
     }
 }
 
-/// Signature algorithm type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SignatureAlgorithm {
-    /// Normal signature ("Ed")
-    Normal,
-    /// Prehashed signature ("ED")
-    Prehashed,
-}
-
 /// Result of inspecting a signature file
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureInspectResult {
@@ -300,12 +292,7 @@ pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult
     let keynum = sig_box.sig_struct().keynum();
     let key_id = keynum.to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(keynum);
-
-    let algorithm = if sig_box.sig_struct().is_prehashed() {
-        SignatureAlgorithm::Prehashed
-    } else {
-        SignatureAlgorithm::Normal
-    };
+    let algorithm = sig_box.sig_struct().algorithm();
 
     Ok(SignatureInspectResult {
         key_id,

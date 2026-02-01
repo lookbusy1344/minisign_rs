@@ -589,7 +589,7 @@ fn test_inspect_signature_normal() {
     // Should detect normal algorithm
     assert_eq!(
         result.algorithm,
-        minisign::ops::inspect::SignatureAlgorithm::Normal
+        minisign::signature::SignatureAlgorithm::Normal
     );
 }
 
@@ -619,7 +619,7 @@ fn test_inspect_signature_prehashed() {
     // Should detect prehashed algorithm
     assert_eq!(
         result.algorithm,
-        minisign::ops::inspect::SignatureAlgorithm::Prehashed
+        minisign::signature::SignatureAlgorithm::Prehashed
     );
 }
 

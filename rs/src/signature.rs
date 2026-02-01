@@ -32,6 +32,15 @@ const SIG_ALG_NORMAL: &[u8; 2] = b"Ed";
 /// Signature algorithm identifier for prehashed mode
 const SIG_ALG_PREHASHED: &[u8; 2] = b"ED";
 
+/// Signature algorithm type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignatureAlgorithm {
+    /// Normal signature ("Ed")
+    Normal,
+    /// Prehashed signature ("ED")
+    Prehashed,
+}
+
 // Signature structure byte offsets
 const SIG_ALG_OFFSET: usize = 0;
 const SIG_ALG_SIZE: usize = 2;
@@ -97,6 +106,16 @@ impl SigStruct {
     #[must_use]
     pub fn is_prehashed(&self) -> bool {
         self.prehashed
+    }
+
+    /// Get the signature algorithm
+    #[must_use]
+    pub fn algorithm(&self) -> SignatureAlgorithm {
+        if self.prehashed {
+            SignatureAlgorithm::Prehashed
+        } else {
+            SignatureAlgorithm::Normal
+        }
     }
 
     /// Get the key number

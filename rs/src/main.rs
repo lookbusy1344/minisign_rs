@@ -361,7 +361,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
 /// Display the signature inspection result
 fn display_signature_inspect_result(result: &minisign::ops::inspect::SignatureInspectResult) {
-    use minisign::ops::inspect::SignatureAlgorithm;
+    use minisign::signature::SignatureAlgorithm;
 
     println!("Signature Information:");
     println!("├─ Key ID: {}", result.key_id);
