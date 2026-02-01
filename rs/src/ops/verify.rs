@@ -10,7 +10,7 @@ use crate::{
     keys::PubkeyStruct,
     signature::SignatureBox,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Options for signature verification
 #[derive(Debug, Clone)]
@@ -18,9 +18,9 @@ pub struct VerifyOptions {
     /// Public key (either from file or provided directly)
     pub public_key: PublicKeySource,
     /// Path to the signature file
-    pub signature_file: String,
+    pub signature_file: PathBuf,
     /// Path to the message file
-    pub message_file: String,
+    pub message_file: PathBuf,
     /// Output verification result to stdout
     pub output: bool,
     /// Quiet mode (no output)
@@ -31,7 +31,7 @@ pub struct VerifyOptions {
 #[derive(Debug, Clone)]
 pub enum PublicKeySource {
     /// Read from a file
-    File(String),
+    File(PathBuf),
     /// Provided as base64-encoded string
     Base64(String),
 }
@@ -79,6 +79,7 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
     // Verify the signature on the message
     verify_message_signature(&pubkey, &sig_box, &options.message_file)?;
 
+
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
 
@@ -110,7 +111,7 @@ pub fn load_public_key(source: &PublicKeySource) -> Result<PubkeyStruct> {
     match source {
         PublicKeySource::File(path) => {
             let contents =
-                std::fs::read_to_string(path).map_err(|e| Error::file_read(path.clone(), e))?;
+                std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
             PubkeyStruct::from_file_contents(&contents)
         }
         PublicKeySource::Base64(base64_str) => {
@@ -153,7 +154,7 @@ pub fn load_signature(path: impl AsRef<Path>) -> Result<SignatureBox> {
 pub fn verify_message_signature(
     pubkey: &PubkeyStruct,
     sig_box: &SignatureBox,
-    message_file: &str,
+    message_file: &Path,
 ) -> Result<()> {
     // First, verify that the keynum matches
     if pubkey.keynum() != sig_box.sig_struct().keynum() {

@@ -15,14 +15,15 @@ use minisign::{
     signature::SignatureBox,
 };
 use std::fs;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 #[test]
 fn test_verify_c_generated_signature() {
     let options = VerifyOptions {
-        public_key: PublicKeySource::File("tests/fixtures/keys/unencrypted.pub".to_string()),
-        signature_file: "tests/fixtures/signatures/hello.txt.minisig".to_string(),
-        message_file: "tests/fixtures/messages/hello.txt".to_string(),
+        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub")),
+        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: PathBuf::from("tests/fixtures/messages/hello.txt"),
         output: false,
         quiet: false,
     };
@@ -41,9 +42,9 @@ fn test_verify_wrong_message_fails() {
     fs::write(&wrong_message_path, b"Wrong message").unwrap();
 
     let options = VerifyOptions {
-        public_key: PublicKeySource::File("tests/fixtures/keys/unencrypted.pub".to_string()),
-        signature_file: "tests/fixtures/signatures/hello.txt.minisig".to_string(),
-        message_file: wrong_message_path.display().to_string(),
+        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub")),
+        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: wrong_message_path.clone(),
         output: false,
         quiet: false,
     };
@@ -55,9 +56,9 @@ fn test_verify_wrong_message_fails() {
 #[test]
 fn test_verify_wrong_key_fails() {
     let options = VerifyOptions {
-        public_key: PublicKeySource::File("tests/fixtures/keys/test.pub".to_string()),
-        signature_file: "tests/fixtures/signatures/hello.txt.minisig".to_string(),
-        message_file: "tests/fixtures/messages/hello.txt".to_string(),
+        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/test.pub")),
+        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: PathBuf::from("tests/fixtures/messages/hello.txt"),
         output: false,
         quiet: false,
     };
@@ -69,9 +70,9 @@ fn test_verify_wrong_key_fails() {
 #[test]
 fn test_verify_nonexistent_file() {
     let options = VerifyOptions {
-        public_key: PublicKeySource::File("tests/fixtures/keys/unencrypted.pub".to_string()),
-        signature_file: "tests/fixtures/signatures/hello.txt.minisig".to_string(),
-        message_file: "nonexistent.txt".to_string(),
+        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub")),
+        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: PathBuf::from("nonexistent.txt"),
         output: false,
         quiet: false,
     };
@@ -82,7 +83,7 @@ fn test_verify_nonexistent_file() {
 
 #[test]
 fn test_load_public_key_from_file() {
-    let source = PublicKeySource::File("tests/fixtures/keys/unencrypted.pub".to_string());
+    let source = PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub"));
     let pubkey = load_public_key(&source).expect("should load public key");
     assert_eq!(pubkey.public_key().as_bytes().len(), 32);
 }
@@ -103,7 +104,7 @@ fn test_verify_message_signature_prehashed() {
     let sig_contents = fs::read_to_string("tests/fixtures/signatures/hello.txt.minisig").unwrap();
     let sig_box = SignatureBox::from_file_contents(&sig_contents).unwrap();
 
-    let message_file = "tests/fixtures/messages/hello.txt";
+    let message_file = Path::new("tests/fixtures/messages/hello.txt");
 
     // Should succeed with correct message
     verify_message_signature(&pubkey, &sig_box, message_file)
@@ -114,7 +115,7 @@ fn test_verify_message_signature_prehashed() {
     let wrong_message_file = temp_dir.path().join("wrong.txt");
     fs::write(&wrong_message_file, b"Wrong message").unwrap();
 
-    let result = verify_message_signature(&pubkey, &sig_box, wrong_message_file.to_str().unwrap());
+    let result = verify_message_signature(&pubkey, &sig_box, &wrong_message_file);
     assert!(result.is_err(), "should fail with wrong message");
 }
 
@@ -147,9 +148,9 @@ fn test_verify_with_wrong_keynum() {
 
     // Sign with key 1
     let sign_opts = SignOptions {
-        secret_key_file: secret_key_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
-        signature_file: Some(sig_file.to_str().unwrap().to_string()),
+        secret_key_file: secret_key_file.clone(),
+        message_file: message_file.clone(),
+        signature_file: Some(sig_file.clone()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -159,9 +160,9 @@ fn test_verify_with_wrong_keynum() {
 
     // Try to verify with key 2 (different keynum) - should fail
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(wrong_pubkey_file.to_str().unwrap().to_string()),
-        signature_file: sig_file.to_str().unwrap().to_string(),
-        message_file: message_file.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(wrong_pubkey_file.clone()),
+        signature_file: sig_file.clone(),
+        message_file: message_file.clone(),
         output: false,
         quiet: false,
     };
@@ -187,7 +188,7 @@ fn test_check_file_size_limit_small_file() {
     std::fs::write(temp_file.path(), vec![0u8; 1024]).unwrap();
 
     // Should pass size check
-    check_file_size_limit(temp_file.path().to_str().unwrap()).expect("small file should pass");
+    check_file_size_limit(temp_file.path()).expect("small file should pass");
 }
 
 #[test]
@@ -210,9 +211,9 @@ fn test_verify_file_too_large_fails() {
 
     let sig_path = temp_dir.path().join("message.txt.minisig");
     let sign_opts = SignOptions {
-        secret_key_file: sk_path.to_str().unwrap().to_string(),
-        message_file: message_path.to_str().unwrap().to_string(),
-        signature_file: Some(sig_path.to_str().unwrap().to_string()),
+        secret_key_file: sk_path.clone(),
+        message_file: message_path.clone(),
+        signature_file: Some(sig_path.clone()),
         prehashed: false, // Non-prehashed signature
         trusted_comment: None,
         untrusted_comment: None,
@@ -223,9 +224,9 @@ fn test_verify_file_too_large_fails() {
 
     // Verify with small file should succeed
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.to_str().unwrap().to_string()),
-        signature_file: sig_path.to_str().unwrap().to_string(),
-        message_file: message_path.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(pk_path.clone()),
+        signature_file: sig_path.clone(),
+        message_file: message_path.clone(),
         output: false,
         quiet: false,
     };
@@ -257,9 +258,9 @@ fn test_verify_prehashed_mode_no_size_limit() {
 
     let sig_path = temp_dir.path().join("large.bin.minisig");
     let sign_opts = SignOptions {
-        secret_key_file: sk_path.to_str().unwrap().to_string(),
-        message_file: message_path.to_str().unwrap().to_string(),
-        signature_file: Some(sig_path.to_str().unwrap().to_string()),
+        secret_key_file: sk_path.clone(),
+        message_file: message_path.clone(),
+        signature_file: Some(sig_path.clone()),
         prehashed: true, // Prehashed mode - no size limit
         trusted_comment: None,
         untrusted_comment: None,
@@ -270,9 +271,9 @@ fn test_verify_prehashed_mode_no_size_limit() {
 
     // Verify should succeed with prehashed mode (streaming)
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.to_str().unwrap().to_string()),
-        signature_file: sig_path.to_str().unwrap().to_string(),
-        message_file: message_path.to_str().unwrap().to_string(),
+        public_key: PublicKeySource::File(pk_path.clone()),
+        signature_file: sig_path.clone(),
+        message_file: message_path.clone(),
         output: false,
         quiet: false,
     };

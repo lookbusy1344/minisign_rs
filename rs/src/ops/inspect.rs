@@ -7,6 +7,7 @@ use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
 use std::fs;
+use std::path::Path;
 
 /// Security level classification for encrypted keys
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,14 +26,14 @@ pub enum SecurityLevel {
 #[derive(Debug, Clone)]
 pub struct InspectOptions {
     /// Path to the key file (can be secret or public key)
-    pub key_file: String,
+    pub key_file: std::path::PathBuf,
 }
 
 /// Options for inspecting an encrypted private key (with decryption)
 #[derive(Debug, Clone)]
 pub struct InspectPrivateOptions {
     /// Path to the secret key file
-    pub key_file: String,
+    pub key_file: std::path::PathBuf,
 }
 
 /// Result of inspecting a key file
@@ -285,7 +286,7 @@ pub struct SignatureInspectResult {
 /// Returns an error if:
 /// - The file cannot be read
 /// - The file format is invalid
-pub fn inspect_signature(signature_file: &str) -> Result<SignatureInspectResult> {
+pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult> {
     use crate::signature::SignatureBox;
 
     let contents = std::fs::read_to_string(signature_file)

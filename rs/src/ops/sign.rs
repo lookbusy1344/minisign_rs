@@ -24,11 +24,11 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct SignOptions {
     /// Path to the secret key file
-    pub secret_key_file: String,
+    pub secret_key_file: PathBuf,
     /// Path to the message file
-    pub message_file: String,
+    pub message_file: PathBuf,
     /// Path to output signature file (optional, defaults to `message_file.minisig`)
-    pub signature_file: Option<String>,
+    pub signature_file: Option<PathBuf>,
     /// Use prehashed mode (hash the message with Blake2b-512 before signing)
     pub prehashed: bool,
     /// Trusted comment to include in the signature
@@ -43,7 +43,7 @@ pub struct SignOptions {
 #[derive(Debug, Clone)]
 pub struct SignResult {
     /// Path where the signature was written
-    pub signature_file: String,
+    pub signature_file: PathBuf,
     /// The trusted comment used
     pub trusted_comment: String,
     /// Key ID in base64 format
@@ -89,19 +89,19 @@ fn sign_file_with_key(
     let sig_file_path = options
         .signature_file
         .clone()
-        .unwrap_or_else(|| format!("{}.minisig", message_file.display()));
+        .unwrap_or_else(|| PathBuf::from(format!("{}.minisig", message_file.display())));
 
     let sig_box = create_signature(
         secret_key,
         keynum,
-        &message_file.to_string_lossy(),
+        message_file,
         options.prehashed,
         options.trusted_comment.as_deref(),
         options.untrusted_comment.as_deref(),
     )?;
 
     let sig_contents = sig_box.to_file_contents();
-    write_signature_file(Path::new(&sig_file_path), &sig_contents, options.force)?;
+    write_signature_file(&sig_file_path, &sig_contents, options.force)?;
 
     let key_id = keynum.to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(&keynum);
@@ -138,7 +138,7 @@ pub fn sign_single_file(
     options: &SignOptions,
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
-    let (secret_key, keynum) = load_and_decrypt_key(Path::new(&options.secret_key_file), password)?;
+    let (secret_key, keynum) = load_and_decrypt_key(&options.secret_key_file, password)?;
     sign_file_with_key(message_file, &secret_key, keynum, options)
 }
 
@@ -161,7 +161,7 @@ pub fn sign_single_file(
 /// - The signature file already exists (unless force is true)
 /// - File I/O operations fail
 pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
-    sign_single_file(Path::new(&options.message_file), options, password)
+    sign_single_file(&options.message_file, options, password)
 }
 
 /// Sign multiple files (parallel or sequential)
@@ -199,7 +199,7 @@ pub fn sign_multiple_files(
     }
 
     // Load and decrypt key once — avoids N-1 redundant scrypt derivations
-    let (secret_key, keynum) = load_and_decrypt_key(Path::new(&options.secret_key_file), password)?;
+    let (secret_key, keynum) = load_and_decrypt_key(&options.secret_key_file, password)?;
 
     // Multi-file path: sign all files with the already-loaded key
     let results: Vec<FileSignResult> = if sequential {
@@ -277,7 +277,7 @@ fn print_summary(results: &[FileSignResult]) -> Result<()> {
 pub fn create_signature(
     secret_key: &SecretKey,
     keynum: crate::crypto::KeyNum,
-    message_file: &str,
+    message_file: &Path,
     prehashed: bool,
     trusted_comment: Option<&str>,
     untrusted_comment: Option<&str>,

@@ -136,7 +136,7 @@ pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool
 /// Returns an error if:
 /// - File metadata cannot be read
 /// - File size exceeds the maximum allowed
-pub fn check_file_size_limit(path: &str) -> Result<()> {
+pub fn check_file_size_limit(path: &Path) -> Result<()> {
     let metadata = std::fs::metadata(path).map_err(|e| Error::file_read(path, e))?;
 
     let file_size = metadata.len();

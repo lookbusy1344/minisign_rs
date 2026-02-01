@@ -153,9 +153,9 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         };
 
         let options = SignOptions {
-            secret_key_file: secret_key_file.to_string_lossy().to_string(),
-            message_file: message_file.to_string_lossy().to_string(),
-            signature_file: Some(signature_file.to_string_lossy().to_string()),
+            secret_key_file: secret_key_file.clone(),
+            message_file: message_file.clone(),
+            signature_file: Some(signature_file),
             trusted_comment: cli.trusted_comment.clone(),
             untrusted_comment: cli.untrusted_comment.clone(),
             // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
@@ -171,7 +171,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
                 "Signing with key: {} ({})",
                 result.key_id, result.key_id_words
             );
-            println!("Signature written to {}", result.signature_file);
+            println!("Signature written to {}", result.signature_file.display());
         }
     } else {
         // Multiple files path - use multi-file API
@@ -182,8 +182,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         }
 
         let options = SignOptions {
-            secret_key_file: secret_key_file.to_string_lossy().to_string(),
-            message_file: String::new(),
+            secret_key_file,
+            message_file: std::path::PathBuf::new(),
             signature_file: None,
             trusted_comment: cli.trusted_comment.clone(),
             untrusted_comment: cli.untrusted_comment.clone(),
@@ -223,14 +223,14 @@ fn handle_verify(cli: &Cli) -> Result<()> {
 
     // Get public key source (either -p or -P, one is required)
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
-        PublicKeySource::File(pk_file.to_string_lossy().to_string())
+        PublicKeySource::File(pk_file.clone())
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
         PublicKeySource::Base64(pk_base64.clone())
     } else {
         // Try default public key file
         let default_pk = Cli::default_public_key_path();
         if default_pk.exists() {
-            PublicKeySource::File(default_pk.to_string_lossy().to_string())
+            PublicKeySource::File(default_pk)
         } else {
             return Err(Error::Usage(
                 "Public key is required for verification. Use -p <file> or -P <key>".into(),
@@ -246,8 +246,8 @@ fn handle_verify(cli: &Cli) -> Result<()> {
 
     let options = VerifyOptions {
         public_key,
-        signature_file: signature_file.to_string_lossy().to_string(),
-        message_file: message_file.to_string_lossy().to_string(),
+        signature_file,
+        message_file: message_file.clone(),
         output: cli.output,
         quiet: cli.quiet,
     };
@@ -455,10 +455,9 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
 
     // Check if we're inspecting a signature file
     if let Some(ref sig_file) = cli.signature_file {
-        let path = sig_file.to_string_lossy().to_string();
-        let result = inspect_signature(&path)?;
+        let result = inspect_signature(sig_file)?;
 
-        println!("Inspecting: {path}\n");
+        println!("Inspecting: {}\n", sig_file.display());
         display_signature_inspect_result(&result);
         return Ok(());
     }
@@ -467,24 +466,22 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
-            let path = sk_file.to_string_lossy().to_string();
             let options = InspectOptions {
-                key_file: path.clone(),
+                key_file: sk_file.clone(),
             };
             (
                 inspect(&options)?,
-                format!("Inspecting: {path}"),
-                Some(path),
+                format!("Inspecting: {}", sk_file.display()),
+                Some(sk_file.clone()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
-            let path = pk_file.to_string_lossy().to_string();
             let options = InspectOptions {
-                key_file: path.clone(),
+                key_file: pk_file.clone(),
             };
             (
                 inspect(&options)?,
-                format!("Inspecting: {path}"),
-                Some(path),
+                format!("Inspecting: {}", pk_file.display()),
+                Some(pk_file.clone()),
             )
         } else if let Some(ref pk_base64) = cli.public_key_base64 {
             // Inspect public key from base64 string
@@ -495,13 +492,13 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else {
             // Default to secret key path
-            let path = Cli::default_secret_key_path().to_string_lossy().to_string();
+            let path = Cli::default_secret_key_path();
             let options = InspectOptions {
                 key_file: path.clone(),
             };
             (
                 inspect(&options)?,
-                format!("Inspecting: {path} (default)"),
+                format!("Inspecting: {} (default)", path.display()),
                 Some(path),
             )
         };
