@@ -147,6 +147,9 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     // Display working message for signing operation
     if !cli.quiet {
         eprintln!("Working...");
+        io::stderr()
+            .flush()
+            .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
     }
 
     if message_files.len() == 1 {
