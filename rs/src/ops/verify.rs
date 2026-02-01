@@ -247,13 +247,15 @@ pub fn verify_multiple_files(
     if files.len() == 1 {
         let result =
             verify_file_with_key(&files[0], &load_public_key(&options.public_key)?, options)?;
-        println!(
-            "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
-            files[0].display(),
-            result.trusted_comment,
-            result.key_id,
-            result.key_id_words
-        );
+        if !options.quiet {
+            println!(
+                "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
+                files[0].display(),
+                result.trusted_comment,
+                result.key_id,
+                result.key_id_words
+            );
+        }
         return Ok(());
     }
 
@@ -266,7 +268,7 @@ pub fn verify_multiple_files(
             .into_iter()
             .map(|file| {
                 let result = verify_file_with_key(&file, &pubkey, options);
-                report_file_result(&file, &result);
+                report_file_result(&file, &result, options);
                 FileVerifyResult { file, result }
             })
             .collect()
@@ -275,7 +277,7 @@ pub fn verify_multiple_files(
             .par_iter()
             .map(|file| {
                 let result = verify_file_with_key(file, &pubkey, options);
-                report_file_result(file, &result);
+                report_file_result(file, &result, options);
                 FileVerifyResult {
                     file: file.clone(),
                     result,
@@ -284,27 +286,33 @@ pub fn verify_multiple_files(
             .collect()
     };
 
-    print_summary(&results)
+    print_summary(&results, options)
 }
 
 /// Report the result of verifying a single file (called for each file)
-fn report_file_result(file: &Path, result: &Result<VerifyResult>) {
+fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &VerifyOptions<'_>) {
     match result {
         Ok(verify_result) => {
-            println!(
-                "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
-                file.display(),
-                verify_result.trusted_comment,
-                verify_result.key_id,
-                verify_result.key_id_words
-            );
+            if !options.quiet {
+                println!(
+                    "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
+                    file.display(),
+                    verify_result.trusted_comment,
+                    verify_result.key_id,
+                    verify_result.key_id_words
+                );
+            }
         }
-        Err(e) => eprintln!("Failed: {} ({})", file.display(), e),
+        Err(e) => {
+            if !options.quiet {
+                eprintln!("Failed: {} ({})", file.display(), e);
+            }
+        }
     }
 }
 
 /// Print summary of batch verification operation
-fn print_summary(results: &[FileVerifyResult]) -> Result<()> {
+fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> Result<()> {
     let failures: Vec<_> = results
         .iter()
         .filter_map(|r| r.result.as_ref().err().map(|e| (&r.file, e)))
@@ -313,14 +321,16 @@ fn print_summary(results: &[FileVerifyResult]) -> Result<()> {
     let success_count = results.len() - failures.len();
 
     if !failures.is_empty() {
-        eprintln!(
-            "\nSummary: {} verified, {} failed",
-            success_count,
-            failures.len()
-        );
-        eprintln!("Failed files:");
-        for (file, err) in &failures {
-            eprintln!("  - {}: {}", file.display(), err);
+        if !options.quiet {
+            eprintln!(
+                "\nSummary: {} verified, {} failed",
+                success_count,
+                failures.len()
+            );
+            eprintln!("Failed files:");
+            for (file, err) in &failures {
+                eprintln!("  - {}: {}", file.display(), err);
+            }
         }
         return Err(Error::PartialFailure);
     }

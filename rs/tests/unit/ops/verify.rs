@@ -533,3 +533,53 @@ fn test_verify_multiple_files_all_attempted() {
     // file2 should have no signature
     assert!(!file2.with_extension("txt.minisig").exists());
 }
+
+#[test]
+fn test_verify_multiple_files_quiet_mode() {
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create and sign files
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+
+    fs::write(&file1, b"M1").unwrap();
+    fs::write(&file2, b"M2").unwrap();
+
+    let sign_paths = vec![file1.clone(), file2.clone()];
+    let sign_opts = SignOptions {
+        secret_key_file: sk_path.as_path(),
+        message_file: Path::new(""),
+        signature_file: None,
+        prehashed: true,
+        trusted_comment: None,
+        untrusted_comment: None,
+        force: false,
+    };
+
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+
+    // Verify with quiet mode (should suppress output)
+    let verify_paths = vec![file1.clone(), file2.clone()];
+    let verify_opts = VerifyOptions {
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: Path::new(""),
+        message_file: Path::new(""),
+        output: false,
+        quiet: true, // Quiet mode enabled
+    };
+
+    let result = verify_multiple_files(verify_paths, &verify_opts, true);
+    assert!(result.is_ok(), "verification should succeed");
+}
