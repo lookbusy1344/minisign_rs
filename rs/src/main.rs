@@ -122,10 +122,12 @@ fn handle_generate(cli: &Cli) -> Result<()> {
 
 fn handle_sign(cli: &Cli) -> Result<()> {
     // Validate required arguments
-    let message_file = cli
-        .message_file
-        .as_ref()
-        .ok_or_else(|| Error::Usage("Message file (-m) is required for signing".into()))?;
+    if cli.message_files.is_empty() {
+        return Err(Error::Usage("Message file (-m) is required for signing".into()));
+    }
+
+    // For now, only handle single file (multi-file coming in later task)
+    let message_file = &cli.message_files[0];
 
     // Get secret key path
     let secret_key_file = cli
@@ -175,10 +177,16 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
 fn handle_verify(cli: &Cli) -> Result<()> {
     // Validate required arguments
-    let message_file = cli
-        .message_file
-        .as_ref()
-        .ok_or_else(|| Error::Usage("Message file (-m) is required for verification".into()))?;
+    if cli.message_files.is_empty() {
+        return Err(Error::Usage("Message file (-m) is required for verification".into()));
+    }
+
+    // Verification only supports single file
+    if cli.message_files.len() > 1 {
+        return Err(Error::Usage("Verification only supports a single message file".into()));
+    }
+
+    let message_file = &cli.message_files[0];
 
     // Get public key source (either -p or -P, one is required)
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
