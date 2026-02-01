@@ -40,7 +40,7 @@ fn test_change_password_fast() {
     // Change to new password
     let new_password = b"newpassword";
     let options = ChangeOptions {
-        secret_key_file: sk_path.clone(),
+        secret_key_file: sk_path.as_path(),
         remove_password: false,
         allow_kdf_fallback: false,
         #[cfg(debug_assertions)]
@@ -97,7 +97,7 @@ fn test_remove_password_from_encrypted_key() {
 
     // Remove password
     let options = ChangeOptions {
-        secret_key_file: sk_path.clone(),
+        secret_key_file: sk_path.as_path(),
         remove_password: true,
         allow_kdf_fallback: false,
         #[cfg(debug_assertions)]
@@ -133,7 +133,7 @@ fn test_add_password_to_unencrypted_key() {
     // Add password
     let new_password = b"newpassword";
     let options = ChangeOptions {
-        secret_key_file: sk_path.clone(),
+        secret_key_file: sk_path.as_path(),
         remove_password: false,
         allow_kdf_fallback: false,
         #[cfg(debug_assertions)]
@@ -185,7 +185,7 @@ fn test_change_without_old_password_fails() {
 
     // Try to change without old password
     let options = ChangeOptions {
-        secret_key_file: sk_path,
+        secret_key_file: &sk_path,
         remove_password: false,
         allow_kdf_fallback: false,
         #[cfg(debug_assertions)]
@@ -227,7 +227,7 @@ fn test_change_with_wrong_old_password_fails() {
 
     // Try with wrong old password
     let options = ChangeOptions {
-        secret_key_file: sk_path,
+        secret_key_file: &sk_path,
         remove_password: false,
         allow_kdf_fallback: false,
         #[cfg(debug_assertions)]
@@ -250,7 +250,7 @@ fn test_encrypt_without_new_password_fails() {
 
     // Try to encrypt without providing new password
     let options = ChangeOptions {
-        secret_key_file: sk_path,
+        secret_key_file: &sk_path,
         remove_password: false,
         allow_kdf_fallback: false,
         #[cfg(debug_assertions)]
@@ -283,7 +283,7 @@ fn test_change_preserves_file_permissions() {
 
     // Add password
     let options = ChangeOptions {
-        secret_key_file: sk_path.clone(),
+        secret_key_file: sk_path.as_path(),
         remove_password: false,
         allow_kdf_fallback: false,
         #[cfg(debug_assertions)]
@@ -329,7 +329,7 @@ fn test_change_password_with_force_weak_kdf() {
     // Change password with force_weak_kdf
     let new_password = b"newpassword";
     let options = ChangeOptions {
-        secret_key_file: sk_path.clone(),
+        secret_key_file: sk_path.as_path(),
         remove_password: false,
         allow_kdf_fallback: false,
         force_weak_kdf: true, // Force weak parameters

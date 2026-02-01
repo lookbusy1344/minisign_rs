@@ -42,8 +42,8 @@ fn test_concurrent_key_generation_same_path() {
 
             // All threads attempt to create keys at the same time
             let opts = GenerateOptions {
-                secret_key_file: secret_key.as_ref().clone(),
-                public_key_file: public_key.as_ref().clone(),
+                secret_key_file: secret_key.as_ref(),
+                public_key_file: public_key.as_ref(),
                 comment: None,
                 force: false, // Important: no force, should fail if exists
                 no_password: true,
@@ -100,8 +100,8 @@ fn test_concurrent_signature_creation() {
     let public_key = temp_dir.path().join("sign.pub");
 
     let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.clone(),
-        public_key_file: public_key.clone(),
+        secret_key_file: secret_key.as_path(),
+        public_key_file: public_key.as_path(),
         comment: None,
         force: true,
         no_password: true,
@@ -140,9 +140,9 @@ fn test_concurrent_signature_creation() {
 
             // All threads attempt to sign at the same time
             let opts = SignOptions {
-                secret_key_file: (**secret_key).to_path_buf(),
-                message_file: (**message_file).to_path_buf(),
-                signature_file: Some((**sig_file).to_path_buf()),
+                secret_key_file: &**secret_key,
+                message_file: &**message_file,
+                signature_file: Some(&**sig_file),
                 prehashed: true,
                 trusted_comment: None,
                 untrusted_comment: None,
@@ -209,8 +209,8 @@ fn test_concurrent_key_generation_with_force() {
             barrier.wait();
 
             let opts = GenerateOptions {
-                secret_key_file: secret_key.as_ref().clone(),
-                public_key_file: public_key.as_ref().clone(),
+                secret_key_file: secret_key.as_ref(),
+                public_key_file: public_key.as_ref(),
                 comment: None,
                 force: true, // Force mode should allow overwrites
                 no_password: true,
@@ -249,8 +249,8 @@ fn test_sequential_key_generation() {
     let public_key = temp_dir.path().join("seq1.pub");
 
     let opts = GenerateOptions {
-        secret_key_file: secret_key.clone(),
-        public_key_file: public_key.clone(),
+        secret_key_file: secret_key.as_path(),
+        public_key_file: public_key.as_path(),
         comment: None,
         force: false,
         no_password: true,
@@ -272,8 +272,8 @@ fn test_sequential_key_generation() {
 
     // With force, should succeed
     let opts_force = GenerateOptions {
-        secret_key_file: secret_key.clone(),
-        public_key_file: public_key.clone(),
+        secret_key_file: secret_key.as_path(),
+        public_key_file: public_key.as_path(),
         comment: None,
         force: true,
         no_password: true,
@@ -318,8 +318,8 @@ fn test_toctou_prevention_with_existence_check() {
                 let public_key = PathBuf::from(format!("{}.{}.pub", test_file.display(), i));
 
                 let opts = GenerateOptions {
-                    secret_key_file: test_file.as_ref().clone(),
-                    public_key_file: public_key.clone(),
+                    secret_key_file: test_file.as_ref(),
+                    public_key_file: public_key.as_path(),
                     comment: None,
                     force: false,
                     no_password: true,
@@ -367,8 +367,8 @@ fn test_concurrent_different_files() {
             let public_key = temp_dir.join(format!("key_{i}.pub"));
 
             let opts = GenerateOptions {
-                secret_key_file: secret_key.clone(),
-                public_key_file: public_key.clone(),
+                secret_key_file: secret_key.as_path(),
+                public_key_file: public_key.as_path(),
                 comment: None,
                 force: false,
                 no_password: true,
@@ -413,8 +413,8 @@ fn test_multiprocess_signing_same_key() {
     let public_key = temp_dir.path().join("multi.pub");
 
     let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.clone(),
-        public_key_file: public_key.clone(),
+        secret_key_file: secret_key.as_path(),
+        public_key_file: public_key.as_path(),
         comment: None,
         force: true,
         no_password: true,
@@ -444,9 +444,9 @@ fn test_multiprocess_signing_same_key() {
         let handle = thread::spawn(move || {
             // Call sign operation directly (simulates separate process behavior)
             let opts = SignOptions {
-                secret_key_file: secret_key_str.into(),
-                message_file: msg_file_str.into(),
-                signature_file: Some(sig_file_str.into()),
+                secret_key_file: secret_key_str.as_ref(),
+                message_file: msg_file_str.as_ref(),
+                signature_file: Some(sig_file_str.as_ref()),
                 prehashed: true,
                 trusted_comment: None,
                 untrusted_comment: None,
@@ -499,8 +499,8 @@ fn test_read_during_write() {
     let public_key_writer = Arc::clone(&public_key);
     let writer = thread::spawn(move || {
         let opts = GenerateOptions {
-            secret_key_file: secret_key_writer.as_ref().clone(),
-            public_key_file: public_key_writer.as_ref().clone(),
+            secret_key_file: secret_key_writer.as_ref(),
+            public_key_file: public_key_writer.as_ref(),
             comment: None,
             force: true,
             no_password: true,
@@ -578,8 +578,8 @@ fn test_atomic_file_creation_stress() {
             thread::sleep(std::time::Duration::from_nanos(100));
 
             let opts = GenerateOptions {
-                secret_key_file: target_file.as_ref().clone(),
-                public_key_file: public_key,
+                secret_key_file: target_file.as_ref(),
+                public_key_file: &public_key,
                 comment: None,
                 force: false,
                 no_password: true,

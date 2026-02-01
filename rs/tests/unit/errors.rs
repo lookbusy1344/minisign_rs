@@ -1,3 +1,4 @@
+use std::path::Path;
 use minisign::errors::*;
 use std::io;
 use std::path::PathBuf;
@@ -20,7 +21,7 @@ fn test_error_display() {
 
 #[test]
 fn test_error_constructors() {
-    let path = PathBuf::from("/test");
+    let path = Path::new("/test");
     let io_err = io::Error::new(io::ErrorKind::NotFound, "test");
 
     let err = Error::file_read(&path, io_err);

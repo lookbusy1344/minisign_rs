@@ -18,11 +18,11 @@ use std::path::{Path, PathBuf};
 /// Options for key generation
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
-pub struct GenerateOptions {
+pub struct GenerateOptions<'a> {
     /// Path to write the secret key file
-    pub secret_key_file: PathBuf,
+    pub secret_key_file: &'a Path,
     /// Path to write the public key file
-    pub public_key_file: PathBuf,
+    pub public_key_file: &'a Path,
     /// Comment for the key files
     pub comment: Option<String>,
     /// Force overwrite existing files
@@ -71,7 +71,7 @@ pub struct GenerateResult {
 /// # Panics
 ///
 /// Will not panic. The function uses `?` operator for all fallible operations.
-pub fn generate(options: &GenerateOptions, password: Option<&[u8]>) -> Result<GenerateResult> {
+pub fn generate<'a>(options: &GenerateOptions<'a>, password: Option<&[u8]>) -> Result<GenerateResult> {
     generate_with_log_n(options, password, SCRYPT_LOG_N)
 }
 
@@ -174,18 +174,18 @@ pub fn generate_with_log_n(
         "minisign encrypted secret key"
     };
     let seckey_contents = seckey.to_file_contents(seckey_comment);
-    write_secret_key_file(&options.secret_key_file, &seckey_contents, options.force)?;
+    write_secret_key_file(options.secret_key_file, &seckey_contents, options.force)?;
 
     // Write the public key file
     let pubkey_contents = pubkey.to_file_contents(&comment);
-    write_public_key_file(&options.public_key_file, &pubkey_contents, options.force)?;
+    write_public_key_file(options.public_key_file, &pubkey_contents, options.force)?;
 
     // Encode the public key for command-line usage
     let public_key_base64 = encode_base64(pubkey.to_bytes());
 
     Ok(GenerateResult {
-        secret_key_file: options.secret_key_file.clone(),
-        public_key_file: options.public_key_file.clone(),
+        secret_key_file: options.secret_key_file.to_path_buf(),
+        public_key_file: options.public_key_file.to_path_buf(),
         keynum_hex,
         public_key_base64,
     })

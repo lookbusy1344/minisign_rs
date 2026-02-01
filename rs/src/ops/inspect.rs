@@ -24,16 +24,16 @@ pub enum SecurityLevel {
 
 /// Options for inspecting a key file
 #[derive(Debug, Clone)]
-pub struct InspectOptions {
+pub struct InspectOptions<'a> {
     /// Path to the key file (can be secret or public key)
-    pub key_file: std::path::PathBuf,
+    pub key_file: &'a std::path::Path,
 }
 
 /// Options for inspecting an encrypted private key (with decryption)
 #[derive(Debug, Clone)]
-pub struct InspectPrivateOptions {
+pub struct InspectPrivateOptions<'a> {
     /// Path to the secret key file
-    pub key_file: std::path::PathBuf,
+    pub key_file: &'a std::path::Path,
 }
 
 /// Result of inspecting a key file
@@ -79,8 +79,8 @@ pub struct KdfInfo {
 /// - The file cannot be read
 /// - The file format is invalid
 /// - The key structure cannot be parsed
-pub fn inspect(options: &InspectOptions) -> Result<InspectResult> {
-    let contents = fs::read_to_string(&options.key_file)
+pub fn inspect<'a>(options: &InspectOptions<'a>) -> Result<InspectResult> {
+    let contents = fs::read_to_string(options.key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first
@@ -122,8 +122,8 @@ pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
 /// - The file cannot be read
 /// - The file is not a valid key
 /// - For encrypted keys: password is incorrect or decryption fails
-pub fn inspect_private(options: &InspectPrivateOptions, password: &[u8]) -> Result<InspectResult> {
-    let contents = fs::read_to_string(&options.key_file)
+pub fn inspect_private(options: &InspectPrivateOptions<'_>, password: &[u8]) -> Result<InspectResult> {
+    let contents = fs::read_to_string(options.key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first

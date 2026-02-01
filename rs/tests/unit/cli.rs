@@ -1,3 +1,4 @@
+use std::path::Path;
 use clap::Parser;
 use minisign::cli::*;
 use serial_test::serial;
@@ -119,7 +120,7 @@ fn test_default_paths() {
     assert!(secret_path.to_string_lossy().contains("minisign.key"));
 
     let public_path = Cli::default_public_key_path();
-    assert_eq!(public_path, PathBuf::from("./minisign.pub"));
+    assert_eq!(public_path, Path::new("./minisign.pub"));
 }
 
 #[test]
@@ -128,11 +129,11 @@ fn test_signature_path() {
 
     let msg = Path::new("test.txt");
     let sig = Cli::default_signature_path(msg).unwrap();
-    assert_eq!(sig, PathBuf::from("test.txt.minisig"));
+    assert_eq!(sig, Path::new("test.txt.minisig"));
 
     let msg = Path::new("/path/to/file.dat");
     let sig = Cli::default_signature_path(msg).unwrap();
-    assert_eq!(sig, PathBuf::from("/path/to/file.dat.minisig"));
+    assert_eq!(sig, Path::new("/path/to/file.dat.minisig"));
 }
 
 #[test]
@@ -143,7 +144,7 @@ fn test_default_signature_path_edge_cases() {
     // Path with regular file - should work
     let path = Path::new("/some/path/file.txt");
     let sig = Cli::default_signature_path(path).unwrap();
-    assert_eq!(sig, PathBuf::from("/some/path/file.txt.minisig"));
+    assert_eq!(sig, Path::new("/some/path/file.txt.minisig"));
 
     // Root path - file_name() returns None, should return error
     let root = Path::new("/");
@@ -248,7 +249,7 @@ fn test_minisign_config_dir_override() {
     // Should use the custom path from env var
     assert_eq!(
         secret_path,
-        PathBuf::from("/custom/config/path").join("minisign.key")
+        Path::new("/custom/config/path").join("minisign.key")
     );
 
     // SAFETY: Clean up the env var we set above
@@ -273,7 +274,7 @@ fn test_minisign_config_dir_fallback_to_home() {
     if let Some(home) = dirs::home_dir() {
         assert_eq!(secret_path, home.join(".minisign").join("minisign.key"));
     } else {
-        assert_eq!(secret_path, PathBuf::from(".minisign.key"));
+        assert_eq!(secret_path, Path::new(".minisign.key"));
     }
 }
 

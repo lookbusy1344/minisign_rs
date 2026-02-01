@@ -22,13 +22,13 @@ use std::{
 
 /// Options for signing files
 #[derive(Debug, Clone)]
-pub struct SignOptions {
+pub struct SignOptions<'a> {
     /// Path to the secret key file
-    pub secret_key_file: PathBuf,
+    pub secret_key_file: &'a Path,
     /// Path to the message file
-    pub message_file: PathBuf,
+    pub message_file: &'a Path,
     /// Path to output signature file (optional, defaults to `message_file.minisig`)
-    pub signature_file: Option<PathBuf>,
+    pub signature_file: Option<&'a Path>,
     /// Use prehashed mode (hash the message with Blake2b-512 before signing)
     pub prehashed: bool,
     /// Trusted comment to include in the signature
@@ -84,12 +84,12 @@ fn sign_file_with_key(
     message_file: &Path,
     secret_key: &SecretKey,
     keynum: crate::crypto::KeyNum,
-    options: &SignOptions,
+    options: &SignOptions<'_>,
 ) -> Result<SignResult> {
-    let sig_file_path = options
-        .signature_file
-        .clone()
-        .unwrap_or_else(|| PathBuf::from(format!("{}.minisig", message_file.display())));
+    let sig_file_path = options.signature_file.map_or_else(
+        || PathBuf::from(format!("{}.minisig", message_file.display())),
+        Path::to_path_buf,
+    );
 
     let sig_box = create_signature(
         secret_key,
@@ -135,10 +135,10 @@ fn sign_file_with_key(
 /// - File I/O operations fail
 pub fn sign_single_file(
     message_file: &Path,
-    options: &SignOptions,
+    options: &SignOptions<'_>,
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
-    let (secret_key, keynum) = load_and_decrypt_key(&options.secret_key_file, password)?;
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file, password)?;
     sign_file_with_key(message_file, &secret_key, keynum, options)
 }
 
@@ -160,8 +160,8 @@ pub fn sign_single_file(
 /// - The message file cannot be read
 /// - The signature file already exists (unless force is true)
 /// - File I/O operations fail
-pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult> {
-    sign_single_file(&options.message_file, options, password)
+pub fn sign(options: &SignOptions<'_>, password: Option<&[u8]>) -> Result<SignResult> {
+    sign_single_file(options.message_file, options, password)
 }
 
 /// Sign multiple files (parallel or sequential)
@@ -183,7 +183,7 @@ pub fn sign(options: &SignOptions, password: Option<&[u8]>) -> Result<SignResult
 /// Individual file errors are reported to stderr during execution.
 pub fn sign_multiple_files(
     files: Vec<PathBuf>,
-    options: &SignOptions,
+    options: &SignOptions<'_>,
     password: Option<&[u8]>,
     sequential: bool,
 ) -> Result<()> {
@@ -199,7 +199,7 @@ pub fn sign_multiple_files(
     }
 
     // Load and decrypt key once — avoids N-1 redundant scrypt derivations
-    let (secret_key, keynum) = load_and_decrypt_key(&options.secret_key_file, password)?;
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file, password)?;
 
     // Multi-file path: sign all files with the already-loaded key
     let results: Vec<FileSignResult> = if sequential {

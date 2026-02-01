@@ -74,8 +74,8 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     };
 
     let options = GenerateOptions {
-        secret_key_file,
-        public_key_file,
+        secret_key_file: &secret_key_file,
+        public_key_file: &public_key_file,
         comment,
         force: cli.force,
         no_password: cli.no_password,
@@ -153,9 +153,9 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         };
 
         let options = SignOptions {
-            secret_key_file: secret_key_file.clone(),
-            message_file: message_file.clone(),
-            signature_file: Some(signature_file),
+            secret_key_file: &secret_key_file,
+            message_file: &message_file,
+            signature_file: Some(&signature_file),
             trusted_comment: cli.trusted_comment.clone(),
             untrusted_comment: cli.untrusted_comment.clone(),
             // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
@@ -182,8 +182,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         }
 
         let options = SignOptions {
-            secret_key_file,
-            message_file: std::path::PathBuf::new(),
+            secret_key_file: &secret_key_file,
+            message_file: std::path::Path::new(""),
             signature_file: None,
             trusted_comment: cli.trusted_comment.clone(),
             untrusted_comment: cli.untrusted_comment.clone(),
@@ -222,15 +222,16 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     let message_file = &message_files[0];
 
     // Get public key source (either -p or -P, one is required)
+    let default_pk;
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
-        PublicKeySource::File(pk_file.clone())
+        PublicKeySource::File(pk_file.as_path())
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
         PublicKeySource::Base64(pk_base64.clone())
     } else {
         // Try default public key file
-        let default_pk = Cli::default_public_key_path();
+        default_pk = Cli::default_public_key_path();
         if default_pk.exists() {
-            PublicKeySource::File(default_pk)
+            PublicKeySource::File(&default_pk)
         } else {
             return Err(Error::Usage(
                 "Public key is required for verification. Use -p <file> or -P <key>".into(),
@@ -246,8 +247,8 @@ fn handle_verify(cli: &Cli) -> Result<()> {
 
     let options = VerifyOptions {
         public_key,
-        signature_file,
-        message_file: message_file.clone(),
+        signature_file: &signature_file,
+        message_file,
         output: cli.output,
         quiet: cli.quiet,
     };
@@ -292,8 +293,8 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     };
 
     let options = RecreateOptions {
-        secret_key_file,
-        public_key_file,
+        secret_key_file: &secret_key_file,
+        public_key_file: &public_key_file,
         comment: cli.untrusted_comment.clone(),
         force: cli.force,
     };
@@ -338,7 +339,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
     };
 
     let options = ChangeOptions {
-        secret_key_file,
+        secret_key_file: &secret_key_file,
         remove_password: cli.no_password && new_password.is_none(),
         allow_kdf_fallback: cli.allow_kdf_fallback,
         #[cfg(debug_assertions)]
@@ -467,7 +468,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
             let options = InspectOptions {
-                key_file: sk_file.clone(),
+                key_file: sk_file.as_path(),
             };
             (
                 inspect(&options)?,
@@ -476,7 +477,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
             let options = InspectOptions {
-                key_file: pk_file.clone(),
+                key_file: pk_file.as_path(),
             };
             (
                 inspect(&options)?,
@@ -494,7 +495,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             // Default to secret key path
             let path = Cli::default_secret_key_path();
             let options = InspectOptions {
-                key_file: path.clone(),
+                key_file: &path,
             };
             (
                 inspect(&options)?,
@@ -513,7 +514,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         // Prompt for password and decrypt
         let password = prompt_password("Password: ", cli.password_file.as_deref())?;
         let options = InspectPrivateOptions {
-            key_file: path.clone(),
+            key_file: path.as_path(),
         };
         result = inspect_private(&options, password.as_bytes())?;
         decrypted = true;

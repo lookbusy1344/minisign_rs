@@ -21,9 +21,9 @@ use tempfile::TempDir;
 #[test]
 fn test_verify_c_generated_signature() {
     let options = VerifyOptions {
-        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub")),
-        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: PathBuf::from("tests/fixtures/messages/hello.txt"),
+        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
+        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: Path::new("tests/fixtures/messages/hello.txt"),
         output: false,
         quiet: false,
     };
@@ -42,9 +42,9 @@ fn test_verify_wrong_message_fails() {
     fs::write(&wrong_message_path, b"Wrong message").unwrap();
 
     let options = VerifyOptions {
-        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub")),
-        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: wrong_message_path.clone(),
+        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
+        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: wrong_message_path.as_path(),
         output: false,
         quiet: false,
     };
@@ -56,9 +56,9 @@ fn test_verify_wrong_message_fails() {
 #[test]
 fn test_verify_wrong_key_fails() {
     let options = VerifyOptions {
-        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/test.pub")),
-        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: PathBuf::from("tests/fixtures/messages/hello.txt"),
+        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/test.pub")),
+        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: Path::new("tests/fixtures/messages/hello.txt"),
         output: false,
         quiet: false,
     };
@@ -70,9 +70,9 @@ fn test_verify_wrong_key_fails() {
 #[test]
 fn test_verify_nonexistent_file() {
     let options = VerifyOptions {
-        public_key: PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub")),
-        signature_file: PathBuf::from("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: PathBuf::from("nonexistent.txt"),
+        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
+        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        message_file: Path::new("nonexistent.txt"),
         output: false,
         quiet: false,
     };
@@ -83,7 +83,7 @@ fn test_verify_nonexistent_file() {
 
 #[test]
 fn test_load_public_key_from_file() {
-    let source = PublicKeySource::File(PathBuf::from("tests/fixtures/keys/unencrypted.pub"));
+    let source = PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub"));
     let pubkey = load_public_key(&source).expect("should load public key");
     assert_eq!(pubkey.public_key().as_bytes().len(), 32);
 }
@@ -148,9 +148,9 @@ fn test_verify_with_wrong_keynum() {
 
     // Sign with key 1
     let sign_opts = SignOptions {
-        secret_key_file: secret_key_file.clone(),
-        message_file: message_file.clone(),
-        signature_file: Some(sig_file.clone()),
+        secret_key_file: secret_key_file.as_path(),
+        message_file: message_file.as_path(),
+        signature_file: Some(sig_file.as_path()),
         prehashed: true,
         trusted_comment: None,
         untrusted_comment: None,
@@ -160,9 +160,9 @@ fn test_verify_with_wrong_keynum() {
 
     // Try to verify with key 2 (different keynum) - should fail
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(wrong_pubkey_file.clone()),
-        signature_file: sig_file.clone(),
-        message_file: message_file.clone(),
+        public_key: PublicKeySource::File(wrong_pubkey_file.as_path()),
+        signature_file: sig_file.as_path(),
+        message_file: message_file.as_path(),
         output: false,
         quiet: false,
     };
@@ -211,9 +211,9 @@ fn test_verify_file_too_large_fails() {
 
     let sig_path = temp_dir.path().join("message.txt.minisig");
     let sign_opts = SignOptions {
-        secret_key_file: sk_path.clone(),
-        message_file: message_path.clone(),
-        signature_file: Some(sig_path.clone()),
+        secret_key_file: sk_path.as_path(),
+        message_file: message_path.as_path(),
+        signature_file: Some(sig_path.as_path()),
         prehashed: false, // Non-prehashed signature
         trusted_comment: None,
         untrusted_comment: None,
@@ -224,9 +224,9 @@ fn test_verify_file_too_large_fails() {
 
     // Verify with small file should succeed
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.clone()),
-        signature_file: sig_path.clone(),
-        message_file: message_path.clone(),
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: sig_path.as_path(),
+        message_file: message_path.as_path(),
         output: false,
         quiet: false,
     };
@@ -258,9 +258,9 @@ fn test_verify_prehashed_mode_no_size_limit() {
 
     let sig_path = temp_dir.path().join("large.bin.minisig");
     let sign_opts = SignOptions {
-        secret_key_file: sk_path.clone(),
-        message_file: message_path.clone(),
-        signature_file: Some(sig_path.clone()),
+        secret_key_file: sk_path.as_path(),
+        message_file: message_path.as_path(),
+        signature_file: Some(sig_path.as_path()),
         prehashed: true, // Prehashed mode - no size limit
         trusted_comment: None,
         untrusted_comment: None,
@@ -271,9 +271,9 @@ fn test_verify_prehashed_mode_no_size_limit() {
 
     // Verify should succeed with prehashed mode (streaming)
     let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.clone()),
-        signature_file: sig_path.clone(),
-        message_file: message_path.clone(),
+        public_key: PublicKeySource::File(pk_path.as_path()),
+        signature_file: sig_path.as_path(),
+        message_file: message_path.as_path(),
         output: false,
         quiet: false,
     };

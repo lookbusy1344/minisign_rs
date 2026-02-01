@@ -10,17 +10,17 @@ use crate::{
     keys::PubkeyStruct,
     signature::SignatureBox,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Options for signature verification
 #[derive(Debug, Clone)]
-pub struct VerifyOptions {
+pub struct VerifyOptions<'a> {
     /// Public key (either from file or provided directly)
-    pub public_key: PublicKeySource,
+    pub public_key: PublicKeySource<'a>,
     /// Path to the signature file
-    pub signature_file: PathBuf,
+    pub signature_file: &'a Path,
     /// Path to the message file
-    pub message_file: PathBuf,
+    pub message_file: &'a Path,
     /// Output verification result to stdout
     pub output: bool,
     /// Quiet mode (no output)
@@ -29,9 +29,9 @@ pub struct VerifyOptions {
 
 /// Source of the public key
 #[derive(Debug, Clone)]
-pub enum PublicKeySource {
+pub enum PublicKeySource<'a> {
     /// Read from a file
-    File(PathBuf),
+    File(&'a Path),
     /// Provided as base64-encoded string
     Base64(String),
 }
@@ -69,7 +69,7 @@ pub struct VerifyResult {
 /// - The message file cannot be read
 /// - The signature is invalid
 /// - The global signature is invalid
-pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
+pub fn verify<'a>(options: &VerifyOptions<'a>) -> Result<VerifyResult> {
     // Load the public key
     let pubkey = load_public_key(&options.public_key)?;
 
@@ -106,7 +106,7 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyResult> {
 /// # Note
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
-pub fn load_public_key(source: &PublicKeySource) -> Result<PubkeyStruct> {
+pub fn load_public_key(source: &PublicKeySource<'_>) -> Result<PubkeyStruct> {
     match source {
         PublicKeySource::File(path) => {
             let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
