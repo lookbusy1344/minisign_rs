@@ -31,7 +31,6 @@ fn test_action_detection() {
         no_password: false,
         password_file: None,
         allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
         force_weak_kdf: false,
         help: None,
         version: None,
@@ -67,7 +66,6 @@ fn test_no_action() {
         no_password: false,
         password_file: None,
         allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
         force_weak_kdf: false,
         help: None,
         version: None,
@@ -103,7 +101,6 @@ fn test_inspect_action_detection() {
         no_password: false,
         password_file: None,
         allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
         force_weak_kdf: false,
         help: None,
         version: None,
@@ -189,7 +186,6 @@ fn test_allow_kdf_fallback_flag_defaults_to_false() {
         help: None,
         version: None,
         allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
         force_weak_kdf: false,
     };
     assert!(!cli.allow_kdf_fallback);
@@ -226,7 +222,6 @@ fn test_allow_kdf_fallback_flag_can_be_enabled() {
         help: None,
         version: None,
         allow_kdf_fallback: true,
-        #[cfg(debug_assertions)]
         force_weak_kdf: false,
     };
     assert!(cli.allow_kdf_fallback);

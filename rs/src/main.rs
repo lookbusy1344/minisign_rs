@@ -70,8 +70,12 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    #[cfg(debug_assertions)]
-    let force_weak_kdf = cli.force_weak_kdf;
+    // In debug mode, allow CLI to override; in release mode, always false
+    let force_weak_kdf = if cfg!(debug_assertions) {
+        cli.force_weak_kdf
+    } else {
+        false
+    };
 
     let options = GenerateOptions::new(
         secret_key_file,
@@ -80,7 +84,6 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         cli.force,
         cli.no_password,
         cli.allow_kdf_fallback,
-        #[cfg(debug_assertions)]
         force_weak_kdf,
     );
 
@@ -348,14 +351,17 @@ fn handle_change(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    #[cfg(debug_assertions)]
-    let force_weak_kdf = cli.force_weak_kdf;
+    // In debug mode, allow CLI to override; in release mode, always false
+    let force_weak_kdf = if cfg!(debug_assertions) {
+        cli.force_weak_kdf
+    } else {
+        false
+    };
 
     let options = ChangeOptions::new(
         secret_key_file,
         cli.no_password && new_password.is_none(),
         cli.allow_kdf_fallback,
-        #[cfg(debug_assertions)]
         force_weak_kdf,
     );
 

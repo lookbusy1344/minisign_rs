@@ -335,7 +335,7 @@ fn test_generate_key_with_empty_password() {
         true,
         false, // Password is required
         false,
-        true, // Use weak KDF for faster test
+        cfg!(debug_assertions), // Use weak KDF in debug builds for faster test
     );
 
     // Empty password should work
@@ -399,7 +399,7 @@ fn test_change_password_to_empty() {
         secret_key.as_path(),
         false, // Not removing, just changing
         false,
-        true,
+        cfg!(debug_assertions), // Use weak KDF in debug builds for faster test
     );
 
     change(&change_opts, Some(b"original_password"), Some(b""))
@@ -444,7 +444,12 @@ fn test_change_password_from_empty() {
     generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
-    let change_opts = ChangeOptions::new(secret_key.as_path(), false, false, true);
+    let change_opts = ChangeOptions::new(
+        secret_key.as_path(),
+        false,
+        false,
+        cfg!(debug_assertions), // Use weak KDF in debug builds for faster test
+    );
 
     change(&change_opts, Some(b""), Some(b"new_password"))
         .expect("Should change from empty to non-empty password");

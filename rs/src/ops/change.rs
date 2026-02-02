@@ -23,8 +23,7 @@ pub struct ChangeOptions<'a> {
     remove_password: bool,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
     allow_kdf_fallback: bool,
-    /// Force weak KDF parameters for testing (DEBUG ONLY)
-    #[cfg(debug_assertions)]
+    /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
     force_weak_kdf: bool,
 }
 
@@ -43,13 +42,19 @@ impl<'a> ChangeOptions<'a> {
         secret_key_file: &'a Path,
         remove_password: bool,
         allow_kdf_fallback: bool,
-        #[cfg(debug_assertions)] force_weak_kdf: bool,
+        force_weak_kdf: bool,
     ) -> Self {
+        // In release builds, force_weak_kdf must always be false
+        #[cfg(not(debug_assertions))]
+        assert!(
+            !force_weak_kdf,
+            "force_weak_kdf must be false in release builds"
+        );
+
         Self {
             secret_key_file,
             remove_password,
             allow_kdf_fallback,
-            #[cfg(debug_assertions)]
             force_weak_kdf,
         }
     }

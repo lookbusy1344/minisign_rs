@@ -124,8 +124,9 @@ pub struct Cli {
     pub allow_kdf_fallback: bool,
 
     /// Force weak KDF parameters for testing (DEBUG ONLY - creates intentionally insecure keys)
-    #[cfg(debug_assertions)]
-    #[arg(long = "force-weak-kdf", hide = true)]
+    /// In release builds, this field exists but the CLI arg is not available (always false)
+    #[cfg_attr(not(debug_assertions), arg(skip))]
+    #[cfg_attr(debug_assertions, arg(long = "force-weak-kdf", hide = true))]
     pub force_weak_kdf: bool,
 
     /// Show help
