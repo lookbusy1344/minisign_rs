@@ -32,6 +32,7 @@ pub struct GenerateOptions<'a> {
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
     allow_kdf_fallback: bool,
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     force_weak_kdf: bool,
 }
 
