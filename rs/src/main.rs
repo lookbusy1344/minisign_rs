@@ -128,10 +128,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     }
 
     // Get secret key path
-    let secret_key_file = cli
-        .secret_key_file
-        .clone()
-        .unwrap_or_else(Cli::default_secret_key_path);
+    let default_secret_key = Cli::default_secret_key_path();
+    let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Prompt for password (we'll check if the key needs it later)
     let password = if cli.no_password {
@@ -152,15 +150,13 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         // Single file path - preserve original behavior and output format
         let message_file = &message_files[0];
 
-        let signature_file = match &cli.signature_file {
-            Some(path) => path.clone(),
-            None => Cli::default_signature_path(message_file)?,
-        };
+        let default_signature = Cli::default_signature_path(message_file)?;
+        let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
         let options = SignOptions {
-            secret_key_file: &secret_key_file,
+            secret_key_file,
             message_file,
-            signature_file: Some(&signature_file),
+            signature_file: Some(signature_file),
             trusted_comment: cli.trusted_comment.clone(),
             untrusted_comment: cli.untrusted_comment.clone(),
             // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
@@ -187,7 +183,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         }
 
         let options = SignOptions {
-            secret_key_file: &secret_key_file,
+            secret_key_file,
             message_file: std::path::Path::new(""),
             signature_file: None,
             trusted_comment: cli.trusted_comment.clone(),
@@ -240,14 +236,12 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         let message_file = &message_files[0];
 
         // Get signature file path
-        let signature_file = match &cli.signature_file {
-            Some(path) => path.clone(),
-            None => Cli::default_signature_path(message_file)?,
-        };
+        let default_signature = Cli::default_signature_path(message_file)?;
+        let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
         let options = VerifyOptions {
             public_key,
-            signature_file: &signature_file,
+            signature_file,
             message_file,
             output: cli.output,
             quiet: cli.quiet,
