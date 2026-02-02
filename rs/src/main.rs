@@ -346,13 +346,20 @@ fn handle_change(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    let options = ChangeOptions {
+    #[cfg(debug_assertions)]
+    let options = ChangeOptions::new_with_weak_kdf(
         secret_key_file,
-        remove_password: cli.no_password && new_password.is_none(),
-        allow_kdf_fallback: cli.allow_kdf_fallback,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: cli.force_weak_kdf,
-    };
+        cli.no_password && new_password.is_none(),
+        cli.allow_kdf_fallback,
+        cli.force_weak_kdf,
+    );
+
+    #[cfg(not(debug_assertions))]
+    let options = ChangeOptions::new(
+        secret_key_file,
+        cli.no_password && new_password.is_none(),
+        cli.allow_kdf_fallback,
+    );
 
     let result = change(
         &options,

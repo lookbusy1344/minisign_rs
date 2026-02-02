@@ -403,13 +403,19 @@ fn test_change_password_to_empty() {
     generate(&gen_opts, Some(b"original_password")).expect("Failed to generate key");
 
     // Change password to empty
-    let change_opts = ChangeOptions {
-        secret_key_file: secret_key.as_path(),
-        remove_password: false, // Not removing, just changing
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    #[cfg(debug_assertions)]
+    let change_opts = ChangeOptions::new_with_weak_kdf(
+        secret_key.as_path(),
+        false, // Not removing, just changing
+        false,
+        true,
+    );
+    #[cfg(not(debug_assertions))]
+    let change_opts = ChangeOptions::new(
+        secret_key.as_path(),
+        false, // Not removing, just changing
+        false,
+    );
 
     change(&change_opts, Some(b"original_password"), Some(b""))
         .expect("Should change password to empty");
@@ -454,13 +460,10 @@ fn test_change_password_from_empty() {
     generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
-    let change_opts = ChangeOptions {
-        secret_key_file: secret_key.as_path(),
-        remove_password: false,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    #[cfg(debug_assertions)]
+    let change_opts = ChangeOptions::new_with_weak_kdf(secret_key.as_path(), false, false, true);
+    #[cfg(not(debug_assertions))]
+    let change_opts = ChangeOptions::new(secret_key.as_path(), false, false);
 
     change(&change_opts, Some(b""), Some(b"new_password"))
         .expect("Should change from empty to non-empty password");
