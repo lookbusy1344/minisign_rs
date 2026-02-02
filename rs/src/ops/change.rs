@@ -30,22 +30,16 @@ pub struct ChangeOptions<'a> {
 
 impl<'a> ChangeOptions<'a> {
     /// Create new change options
+    ///
+    /// # Arguments
+    ///
+    /// * `secret_key_file` - Path to the secret key file
+    /// * `remove_password` - Remove password (make unencrypted)
+    /// * `allow_kdf_fallback` - Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
     #[allow(clippy::fn_params_excessive_bools)]
     #[must_use]
-    pub fn new(secret_key_file: &'a Path, remove_password: bool, allow_kdf_fallback: bool) -> Self {
-        Self {
-            secret_key_file,
-            remove_password,
-            allow_kdf_fallback,
-            #[cfg(debug_assertions)]
-            force_weak_kdf: false,
-        }
-    }
-
-    /// Create new change options with weak KDF (DEBUG ONLY)
-    #[cfg(debug_assertions)]
-    #[must_use]
-    pub fn new_with_weak_kdf(
+    pub fn new(
         secret_key_file: &'a Path,
         remove_password: bool,
         allow_kdf_fallback: bool,
@@ -55,7 +49,10 @@ impl<'a> ChangeOptions<'a> {
             secret_key_file,
             remove_password,
             allow_kdf_fallback,
+            #[cfg(debug_assertions)]
             force_weak_kdf,
+            #[cfg(not(debug_assertions))]
+            force_weak_kdf: false,
         }
     }
 }

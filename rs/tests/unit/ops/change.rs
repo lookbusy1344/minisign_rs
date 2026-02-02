@@ -39,10 +39,7 @@ fn test_change_password_fast() {
 
     // Change to new password
     let new_password = b"newpassword";
-    #[cfg(debug_assertions)]
-    let options = ChangeOptions::new_with_weak_kdf(sk_path.as_path(), false, false, false);
-    #[cfg(not(debug_assertions))]
-    let options = ChangeOptions::new(sk_path.as_path(), false, false);
+    let options = ChangeOptions::new(sk_path.as_path(), false, false, false);
 
     let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
         .expect("password change should succeed");
@@ -93,10 +90,7 @@ fn test_remove_password_from_encrypted_key() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Remove password
-    #[cfg(debug_assertions)]
-    let options = ChangeOptions::new_with_weak_kdf(sk_path.as_path(), true, false, false);
-    #[cfg(not(debug_assertions))]
-    let options = ChangeOptions::new(sk_path.as_path(), true, false);
+    let options = ChangeOptions::new(sk_path.as_path(), true, false, false);
 
     let result = change_with_log_n(&options, Some(password), None, 14)
         .expect("password removal should succeed");
@@ -126,10 +120,7 @@ fn test_add_password_to_unencrypted_key() {
 
     // Add password
     let new_password = b"newpassword";
-    #[cfg(debug_assertions)]
-    let options = ChangeOptions::new_with_weak_kdf(sk_path.as_path(), false, false, false);
-    #[cfg(not(debug_assertions))]
-    let options = ChangeOptions::new(sk_path.as_path(), false, false);
+    let options = ChangeOptions::new(sk_path.as_path(), false, false, false);
 
     let result = change_with_log_n(&options, None, Some(new_password), 14)
         .expect("adding password should succeed");
@@ -175,10 +166,7 @@ fn test_change_without_old_password_fails() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Try to change without old password
-    #[cfg(debug_assertions)]
-    let options = ChangeOptions::new_with_weak_kdf(&sk_path, false, false, false);
-    #[cfg(not(debug_assertions))]
-    let options = ChangeOptions::new(&sk_path, false, false);
+    let options = ChangeOptions::new(&sk_path, false, false, false);
 
     let result = change_with_log_n(&options, None, Some(b"newpass"), 14);
     assert!(result.is_err());
@@ -214,10 +202,7 @@ fn test_change_with_wrong_old_password_fails() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Try with wrong old password
-    #[cfg(debug_assertions)]
-    let options = ChangeOptions::new_with_weak_kdf(&sk_path, false, false, false);
-    #[cfg(not(debug_assertions))]
-    let options = ChangeOptions::new(&sk_path, false, false);
+    let options = ChangeOptions::new(&sk_path, false, false, false);
 
     let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
     assert!(result.is_err());
@@ -234,10 +219,7 @@ fn test_encrypt_without_new_password_fails() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Try to encrypt without providing new password
-    #[cfg(debug_assertions)]
-    let options = ChangeOptions::new_with_weak_kdf(&sk_path, false, false, false);
-    #[cfg(not(debug_assertions))]
-    let options = ChangeOptions::new(&sk_path, false, false);
+    let options = ChangeOptions::new(&sk_path, false, false, false);
 
     let result = change_with_log_n(&options, None, None, 14);
     assert!(result.is_err());
@@ -264,10 +246,7 @@ fn test_change_preserves_file_permissions() {
     fs::set_permissions(&sk_path, permissions).unwrap();
 
     // Add password
-    #[cfg(debug_assertions)]
-    let options = ChangeOptions::new_with_weak_kdf(sk_path.as_path(), false, false, false);
-    #[cfg(not(debug_assertions))]
-    let options = ChangeOptions::new(sk_path.as_path(), false, false);
+    let options = ChangeOptions::new(sk_path.as_path(), false, false, false);
 
     change_with_log_n(&options, None, Some(b"password"), 14)
         .expect("adding password should succeed");
@@ -307,7 +286,7 @@ fn test_change_password_with_force_weak_kdf() {
 
     // Change password with force_weak_kdf
     let new_password = b"newpassword";
-    let options = ChangeOptions::new_with_weak_kdf(
+    let options = ChangeOptions::new(
         sk_path.as_path(),
         false,
         false,

@@ -28,6 +28,7 @@ fn test_empty_file_signing() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -75,6 +76,7 @@ fn test_empty_file_legacy_mode() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -121,6 +123,7 @@ fn test_unicode_in_trusted_comment() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -172,6 +175,7 @@ fn test_unicode_in_untrusted_comment() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -219,6 +223,7 @@ fn test_large_file_prehashed() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -273,6 +278,7 @@ fn test_symlink_handling() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -322,17 +328,6 @@ fn test_generate_key_with_empty_password() {
     let public_key = temp_dir.path().join("test.pub");
 
     // Generate key with empty password
-    #[cfg(debug_assertions)]
-    let gen_opts = GenerateOptions::new_with_weak_kdf(
-        secret_key.as_path(),
-        public_key.as_path(),
-        None,
-        true,
-        false, // Password is required
-        false,
-        true, // Use weak KDF for faster test
-    );
-    #[cfg(not(debug_assertions))]
     let gen_opts = GenerateOptions::new(
         secret_key.as_path(),
         public_key.as_path(),
@@ -340,6 +335,7 @@ fn test_generate_key_with_empty_password() {
         true,
         false, // Password is required
         false,
+        true, // Use weak KDF for faster test
     );
 
     // Empty password should work
@@ -394,22 +390,16 @@ fn test_change_password_to_empty() {
         true,
         false,
         false,
+        false,
     );
     generate(&gen_opts, Some(b"original_password")).expect("Failed to generate key");
 
     // Change password to empty
-    #[cfg(debug_assertions)]
-    let change_opts = ChangeOptions::new_with_weak_kdf(
-        secret_key.as_path(),
-        false, // Not removing, just changing
-        false,
-        true,
-    );
-    #[cfg(not(debug_assertions))]
     let change_opts = ChangeOptions::new(
         secret_key.as_path(),
         false, // Not removing, just changing
         false,
+        true,
     );
 
     change(&change_opts, Some(b"original_password"), Some(b""))
@@ -449,14 +439,12 @@ fn test_change_password_from_empty() {
         true,
         false,
         false,
+        false,
     );
     generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
-    #[cfg(debug_assertions)]
-    let change_opts = ChangeOptions::new_with_weak_kdf(secret_key.as_path(), false, false, true);
-    #[cfg(not(debug_assertions))]
-    let change_opts = ChangeOptions::new(secret_key.as_path(), false, false);
+    let change_opts = ChangeOptions::new(secret_key.as_path(), false, false, true);
 
     change(&change_opts, Some(b""), Some(b"new_password"))
         .expect("Should change from empty to non-empty password");
@@ -498,6 +486,7 @@ fn test_untrusted_comment_max_valid_length() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -552,6 +541,7 @@ fn test_untrusted_comment_warning_threshold() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -604,6 +594,7 @@ fn test_trusted_comment_max_valid_length() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -658,6 +649,7 @@ fn test_trusted_comment_error_threshold() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -726,6 +718,7 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -789,6 +782,7 @@ fn test_symlink_outside_working_directory() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -849,6 +843,7 @@ fn test_parent_directory_symlink_no_escape() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -924,6 +919,7 @@ fn test_circular_symlink_handling() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -968,6 +964,7 @@ fn test_unicode_zero_width_joiners() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -1011,6 +1008,7 @@ fn test_unicode_rtl_override() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -1065,6 +1063,7 @@ fn test_unicode_homoglyphs() {
         true,
         true,
         false,
+        false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 
@@ -1114,6 +1113,7 @@ fn test_unicode_multibyte_at_byte_limit() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -1169,6 +1169,7 @@ fn test_unicode_multibyte_exceeds_limit() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");

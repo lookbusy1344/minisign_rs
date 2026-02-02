@@ -98,8 +98,8 @@ const SECKEY_CHECKSUM_SIZE: usize = CHECKSUM_BYTES;
 /// - 10-41: `public_key` (32 bytes)
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PubkeyStruct {
-    keynum: KeyNum,        // pub(crate) for unit tests
-    public_key: PublicKey, // pub(crate) for unit tests
+    keynum: KeyNum,
+    public_key: PublicKey,
 }
 
 impl PubkeyStruct {

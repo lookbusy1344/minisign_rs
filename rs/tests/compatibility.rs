@@ -245,6 +245,7 @@ fn test_c_verify_rust_legacy_signature() {
         true,  // force
         true,  // no_password
         false, // allow_kdf_fallback
+        false, // force_weak_kdf
     );
     generate(&gen_opts, None).expect("Failed to generate key");
 

@@ -38,33 +38,19 @@ pub struct GenerateOptions<'a> {
 
 impl<'a> GenerateOptions<'a> {
     /// Create new generate options
+    ///
+    /// # Arguments
+    ///
+    /// * `secret_key_file` - Path to write the secret key file
+    /// * `public_key_file` - Path to write the public key file
+    /// * `comment` - Optional comment for the key files
+    /// * `force` - Force overwrite existing files
+    /// * `no_password` - Create unencrypted key (no password)
+    /// * `allow_kdf_fallback` - Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
     #[allow(clippy::fn_params_excessive_bools)]
     #[must_use]
     pub fn new(
-        secret_key_file: &'a Path,
-        public_key_file: &'a Path,
-        comment: Option<String>,
-        force: bool,
-        no_password: bool,
-        allow_kdf_fallback: bool,
-    ) -> Self {
-        Self {
-            secret_key_file,
-            public_key_file,
-            comment,
-            force,
-            no_password,
-            allow_kdf_fallback,
-            #[cfg(debug_assertions)]
-            force_weak_kdf: false,
-        }
-    }
-
-    /// Create new generate options with weak KDF (DEBUG ONLY)
-    #[cfg(debug_assertions)]
-    #[allow(clippy::fn_params_excessive_bools)]
-    #[must_use]
-    pub fn new_with_weak_kdf(
         secret_key_file: &'a Path,
         public_key_file: &'a Path,
         comment: Option<String>,
@@ -80,7 +66,10 @@ impl<'a> GenerateOptions<'a> {
             force,
             no_password,
             allow_kdf_fallback,
+            #[cfg(debug_assertions)]
             force_weak_kdf,
+            #[cfg(not(debug_assertions))]
+            force_weak_kdf: false,
         }
     }
 }
@@ -101,13 +90,13 @@ pub struct GenerateResult {
 impl GenerateResult {
     /// Get the path where the secret key was written
     #[must_use]
-    pub fn secret_key_file(&self) -> &PathBuf {
+    pub fn secret_key_file(&self) -> &Path {
         &self.secret_key_file
     }
 
     /// Get the path where the public key was written
     #[must_use]
-    pub fn public_key_file(&self) -> &PathBuf {
+    pub fn public_key_file(&self) -> &Path {
         &self.public_key_file
     }
 

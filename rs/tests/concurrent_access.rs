@@ -48,6 +48,7 @@ fn test_concurrent_key_generation_same_path() {
                 false, // Important: no force, should fail if exists
                 true,
                 false,
+                false,
             );
 
             match generate(&opts, None) {
@@ -103,6 +104,7 @@ fn test_concurrent_signature_creation() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -212,6 +214,7 @@ fn test_concurrent_key_generation_with_force() {
                 true, // Force mode should allow overwrites
                 true,
                 false,
+                false,
             );
 
             // All operations should succeed (or fail for other reasons, not file exists)
@@ -250,6 +253,7 @@ fn test_sequential_key_generation() {
         false,
         true,
         false,
+        false,
     );
 
     generate(&opts, None).expect("First generation should succeed");
@@ -270,6 +274,7 @@ fn test_sequential_key_generation() {
         None,
         true,
         true,
+        false,
         false,
     );
 
@@ -314,6 +319,7 @@ fn test_toctou_prevention_with_existence_check() {
                     None,
                     false,
                     true,
+                    false,
                     false,
                 );
 
@@ -362,6 +368,7 @@ fn test_concurrent_different_files() {
                 false,
                 true,
                 false,
+                false,
             );
 
             generate(&opts, None).expect("Should succeed for different files");
@@ -405,6 +412,7 @@ fn test_multiprocess_signing_same_key() {
         None,
         true,
         true,
+        false,
         false,
     );
     generate(&gen_opts, None).expect("Failed to generate key");
@@ -491,6 +499,7 @@ fn test_read_during_write() {
             true,
             true,
             false,
+            false,
         );
 
         // Add small delay to let reader start first
@@ -561,8 +570,15 @@ fn test_atomic_file_creation_stress() {
             // Minimal delay to maximize contention
             thread::sleep(std::time::Duration::from_nanos(100));
 
-            let opts =
-                GenerateOptions::new(target_file.as_ref(), &public_key, None, false, true, false);
+            let opts = GenerateOptions::new(
+                target_file.as_ref(),
+                &public_key,
+                None,
+                false,
+                true,
+                false,
+                false,
+            );
 
             if generate(&opts, None).is_ok() {
                 *success.lock().unwrap() += 1;
