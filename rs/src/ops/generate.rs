@@ -158,10 +158,8 @@ pub fn generate_with_log_n(
 
     // Generate comments
     let keynum_hex = keynum.to_key_id();
-    let comment = options
-        .comment
-        .clone()
-        .unwrap_or_else(|| format!("minisign public key {keynum_hex}"));
+    let default_comment = format!("minisign public key {keynum_hex}");
+    let comment = options.comment.as_deref().unwrap_or(&default_comment);
 
     // Ensure parent directories exist
     ensure_parent_directory(options.secret_key_file)?;
@@ -177,7 +175,7 @@ pub fn generate_with_log_n(
     write_secret_key_file(options.secret_key_file, &seckey_contents, options.force)?;
 
     // Write the public key file
-    let pubkey_contents = pubkey.to_file_contents(&comment);
+    let pubkey_contents = pubkey.to_file_contents(comment);
     write_public_key_file(options.public_key_file, &pubkey_contents, options.force)?;
 
     // Encode the public key for command-line usage
