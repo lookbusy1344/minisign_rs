@@ -137,16 +137,16 @@ fn test_concurrent_signature_creation() {
             barrier.wait();
 
             // All threads attempt to sign at the same time
-            let opts = SignOptions {
-                secret_key_file: &secret_key,
-                message_file: &message_file,
-                signature_file: Some(&sig_file),
-                prehashed: true,
-                trusted_comment: None,
-                untrusted_comment: None,
-                force: false, // No force - should fail if exists
-                quiet: false,
-            };
+            let opts = SignOptions::new(
+                &secret_key,
+                &message_file,
+                Some(&sig_file),
+                true,
+                None,
+                None,
+                false,
+                false,
+            );
 
             match sign(&opts, None) {
                 Ok(_) => {
@@ -436,16 +436,16 @@ fn test_multiprocess_signing_same_key() {
 
         let handle = thread::spawn(move || {
             // Call sign operation directly (simulates separate process behavior)
-            let opts = SignOptions {
-                secret_key_file: secret_key_str.as_ref(),
-                message_file: msg_file_str.as_ref(),
-                signature_file: Some(sig_file_str.as_ref()),
-                prehashed: true,
-                trusted_comment: None,
-                untrusted_comment: None,
-                force: false,
-                quiet: false,
-            };
+            let opts = SignOptions::new(
+                secret_key_str.as_ref(),
+                msg_file_str.as_ref(),
+                Some(sig_file_str.as_ref()),
+                true,
+                None,
+                None,
+                false,
+                false,
+            );
 
             sign(&opts, None)
         });

@@ -152,18 +152,17 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         let default_signature = Cli::default_signature_path(message_file)?;
         let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-        let options = SignOptions {
+        let options = SignOptions::new(
             secret_key_file,
             message_file,
-            signature_file: Some(signature_file),
-            trusted_comment: cli.trusted_comment.clone(),
-            untrusted_comment: cli.untrusted_comment.clone(),
-            // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
+            Some(signature_file),
+            !cli.legacy, // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
             // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
-            prehashed: !cli.legacy,
-            force: cli.force,
-            quiet: cli.quiet,
-        };
+            cli.trusted_comment.clone(),
+            cli.untrusted_comment.clone(),
+            cli.force,
+            cli.quiet,
+        );
 
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
@@ -182,16 +181,16 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             ));
         }
 
-        let options = SignOptions {
+        let options = SignOptions::new(
             secret_key_file,
-            message_file: std::path::Path::new(""),
-            signature_file: None,
-            trusted_comment: cli.trusted_comment.clone(),
-            untrusted_comment: cli.untrusted_comment.clone(),
-            prehashed: !cli.legacy,
-            force: cli.force,
-            quiet: cli.quiet,
-        };
+            std::path::Path::new(""),
+            None,
+            !cli.legacy,
+            cli.trusted_comment.clone(),
+            cli.untrusted_comment.clone(),
+            cli.force,
+            cli.quiet,
+        );
 
         sign_multiple_files(
             message_files.into_owned(),

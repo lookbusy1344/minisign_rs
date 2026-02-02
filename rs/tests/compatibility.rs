@@ -250,16 +250,16 @@ fn test_c_verify_rust_legacy_signature() {
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Sign with Rust in legacy mode (non-prehashed)
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: false, // Legacy mode = non-prehashed
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        false,
+        None,
+        None,
+        true,
+        false,
+    );
     sign(&sign_opts, None).expect("Failed to sign");
 
     // Verify with C minisign

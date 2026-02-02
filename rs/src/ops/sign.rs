@@ -22,23 +22,111 @@ use std::{
 
 /// Options for signing files
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SignOptions<'a> {
     /// Path to the secret key file
-    pub secret_key_file: &'a Path,
+    secret_key_file: &'a Path,
     /// Path to the message file
-    pub message_file: &'a Path,
+    message_file: &'a Path,
     /// Path to output signature file (optional, defaults to `message_file.minisig`)
-    pub signature_file: Option<&'a Path>,
+    signature_file: Option<&'a Path>,
     /// Use prehashed mode (hash the message with Blake2b-512 before signing)
-    pub prehashed: bool,
+    prehashed: bool,
     /// Trusted comment to include in the signature
-    pub trusted_comment: Option<String>,
+    trusted_comment: Option<String>,
     /// Untrusted comment to include in the signature
-    pub untrusted_comment: Option<String>,
+    untrusted_comment: Option<String>,
     /// Force overwrite existing signature file
-    pub force: bool,
+    force: bool,
     /// Suppress informational output
-    pub quiet: bool,
+    quiet: bool,
+}
+
+impl<'a> SignOptions<'a> {
+    /// Create new sign options
+    ///
+    /// # Arguments
+    ///
+    /// * `secret_key_file` - Path to the secret key file
+    /// * `message_file` - Path to the message file
+    /// * `signature_file` - Optional path to output signature file (defaults to `message_file.minisig`)
+    /// * `prehashed` - Use prehashed mode (hash the message with Blake2b-512 before signing)
+    /// * `trusted_comment` - Optional trusted comment to include in the signature
+    /// * `untrusted_comment` - Optional untrusted comment to include in the signature
+    /// * `force` - Force overwrite existing signature file
+    /// * `quiet` - Suppress informational output
+    #[allow(clippy::fn_params_excessive_bools)]
+    #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn new(
+        secret_key_file: &'a Path,
+        message_file: &'a Path,
+        signature_file: Option<&'a Path>,
+        prehashed: bool,
+        trusted_comment: Option<String>,
+        untrusted_comment: Option<String>,
+        force: bool,
+        quiet: bool,
+    ) -> Self {
+        Self {
+            secret_key_file,
+            message_file,
+            signature_file,
+            prehashed,
+            trusted_comment,
+            untrusted_comment,
+            force,
+            quiet,
+        }
+    }
+
+    /// Get the secret key file path
+    #[must_use]
+    pub fn secret_key_file(&self) -> &Path {
+        self.secret_key_file
+    }
+
+    /// Get the message file path
+    #[must_use]
+    pub fn message_file(&self) -> &Path {
+        self.message_file
+    }
+
+    /// Get the signature file path
+    #[must_use]
+    pub fn signature_file(&self) -> Option<&Path> {
+        self.signature_file
+    }
+
+    /// Get the prehashed flag
+    #[must_use]
+    pub fn prehashed(&self) -> bool {
+        self.prehashed
+    }
+
+    /// Get the trusted comment
+    #[must_use]
+    pub fn trusted_comment(&self) -> Option<&str> {
+        self.trusted_comment.as_deref()
+    }
+
+    /// Get the untrusted comment
+    #[must_use]
+    pub fn untrusted_comment(&self) -> Option<&str> {
+        self.untrusted_comment.as_deref()
+    }
+
+    /// Get the force flag
+    #[must_use]
+    pub fn force(&self) -> bool {
+        self.force
+    }
+
+    /// Get the quiet flag
+    #[must_use]
+    pub fn quiet(&self) -> bool {
+        self.quiet
+    }
 }
 
 /// Result of signing operation
@@ -88,7 +176,7 @@ fn sign_file_with_key(
     keynum: crate::crypto::KeyNum,
     options: &SignOptions<'_>,
 ) -> Result<SignResult> {
-    let sig_file_path = options.signature_file.map_or_else(
+    let sig_file_path = options.signature_file().map_or_else(
         || PathBuf::from(format!("{}.minisig", message_file.display())),
         Path::to_path_buf,
     );
@@ -97,13 +185,13 @@ fn sign_file_with_key(
         secret_key,
         keynum,
         message_file,
-        options.prehashed,
-        options.trusted_comment.as_deref(),
-        options.untrusted_comment.as_deref(),
+        options.prehashed(),
+        options.trusted_comment(),
+        options.untrusted_comment(),
     )?;
 
     let sig_contents = sig_box.to_file_contents();
-    write_signature_file(&sig_file_path, &sig_contents, options.force)?;
+    write_signature_file(&sig_file_path, &sig_contents, options.force())?;
 
     let key_id = keynum.to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(&keynum);
@@ -140,7 +228,7 @@ pub fn sign_single_file(
     options: &SignOptions<'_>,
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
-    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file, password)?;
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password)?;
     sign_file_with_key(message_file, &secret_key, keynum, options)
 }
 
@@ -163,7 +251,7 @@ pub fn sign_single_file(
 /// - The signature file already exists (unless force is true)
 /// - File I/O operations fail
 pub fn sign(options: &SignOptions<'_>, password: Option<&[u8]>) -> Result<SignResult> {
-    sign_single_file(options.message_file, options, password)
+    sign_single_file(options.message_file(), options, password)
 }
 
 /// Sign multiple files (parallel or sequential)
@@ -201,10 +289,10 @@ pub fn sign_multiple_files(
     }
 
     // Load and decrypt key once — avoids N-1 redundant scrypt derivations
-    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file, password)?;
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password)?;
 
     // Show key ID once at the top (like verification does)
-    if !options.quiet {
+    if !options.quiet() {
         let key_id = keynum.to_key_id();
         let key_id_words = crate::wordlist::keynum_to_words(&keynum);
         println!("Signing with key: {key_id} ({key_id_words})");
