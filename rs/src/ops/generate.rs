@@ -57,7 +57,7 @@ impl<'a> GenerateOptions<'a> {
         force: bool,
         no_password: bool,
         allow_kdf_fallback: bool,
-        force_weak_kdf: bool,
+        #[cfg(debug_assertions)] force_weak_kdf: bool,
     ) -> Self {
         Self {
             secret_key_file,
@@ -68,8 +68,6 @@ impl<'a> GenerateOptions<'a> {
             allow_kdf_fallback,
             #[cfg(debug_assertions)]
             force_weak_kdf,
-            #[cfg(not(debug_assertions))]
-            force_weak_kdf: false,
         }
     }
 }

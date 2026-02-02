@@ -43,7 +43,7 @@ impl<'a> ChangeOptions<'a> {
         secret_key_file: &'a Path,
         remove_password: bool,
         allow_kdf_fallback: bool,
-        force_weak_kdf: bool,
+        #[cfg(debug_assertions)] force_weak_kdf: bool,
     ) -> Self {
         Self {
             secret_key_file,
@@ -51,8 +51,6 @@ impl<'a> ChangeOptions<'a> {
             allow_kdf_fallback,
             #[cfg(debug_assertions)]
             force_weak_kdf,
-            #[cfg(not(debug_assertions))]
-            force_weak_kdf: false,
         }
     }
 }

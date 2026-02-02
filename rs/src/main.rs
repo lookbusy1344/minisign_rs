@@ -70,6 +70,9 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         )?)
     };
 
+    #[cfg(debug_assertions)]
+    let force_weak_kdf = cli.force_weak_kdf;
+
     let options = GenerateOptions::new(
         secret_key_file,
         public_key_file,
@@ -77,7 +80,8 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         cli.force,
         cli.no_password,
         cli.allow_kdf_fallback,
-        cli.force_weak_kdf,
+        #[cfg(debug_assertions)]
+        force_weak_kdf,
     );
 
     // Display working message for slow key generation
@@ -344,11 +348,15 @@ fn handle_change(cli: &Cli) -> Result<()> {
         )?)
     };
 
+    #[cfg(debug_assertions)]
+    let force_weak_kdf = cli.force_weak_kdf;
+
     let options = ChangeOptions::new(
         secret_key_file,
         cli.no_password && new_password.is_none(),
         cli.allow_kdf_fallback,
-        cli.force_weak_kdf,
+        #[cfg(debug_assertions)]
+        force_weak_kdf,
     );
 
     let result = change(
