@@ -27,14 +27,50 @@ pub enum SecurityLevel {
 #[derive(Debug, Clone)]
 pub struct InspectOptions<'a> {
     /// Path to the key file (can be secret or public key)
-    pub key_file: &'a std::path::Path,
+    key_file: &'a std::path::Path,
+}
+
+impl<'a> InspectOptions<'a> {
+    /// Create new inspect options
+    ///
+    /// # Arguments
+    ///
+    /// * `key_file` - Path to the key file (can be secret or public key)
+    #[must_use]
+    pub fn new(key_file: &'a std::path::Path) -> Self {
+        Self { key_file }
+    }
+
+    /// Get the key file path
+    #[must_use]
+    pub fn key_file(&self) -> &std::path::Path {
+        self.key_file
+    }
 }
 
 /// Options for inspecting an encrypted private key (with decryption)
 #[derive(Debug, Clone)]
 pub struct InspectPrivateOptions<'a> {
     /// Path to the secret key file
-    pub key_file: &'a std::path::Path,
+    key_file: &'a std::path::Path,
+}
+
+impl<'a> InspectPrivateOptions<'a> {
+    /// Create new inspect private options
+    ///
+    /// # Arguments
+    ///
+    /// * `key_file` - Path to the secret key file
+    #[must_use]
+    pub fn new(key_file: &'a std::path::Path) -> Self {
+        Self { key_file }
+    }
+
+    /// Get the key file path
+    #[must_use]
+    pub fn key_file(&self) -> &std::path::Path {
+        self.key_file
+    }
 }
 
 /// Result of inspecting a key file
@@ -81,7 +117,7 @@ pub struct KdfInfo {
 /// - The file format is invalid
 /// - The key structure cannot be parsed
 pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
-    let contents = fs::read_to_string(options.key_file)
+    let contents = fs::read_to_string(options.key_file())
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first
@@ -127,7 +163,7 @@ pub fn inspect_private(
     options: &InspectPrivateOptions<'_>,
     password: &[u8],
 ) -> Result<InspectResult> {
-    let contents = fs::read_to_string(options.key_file)
+    let contents = fs::read_to_string(options.key_file())
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first

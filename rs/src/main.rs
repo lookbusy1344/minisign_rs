@@ -474,18 +474,14 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
-            let options = InspectOptions {
-                key_file: sk_file.as_path(),
-            };
+            let options = InspectOptions::new(sk_file.as_path());
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", sk_file.display()),
                 Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
-            let options = InspectOptions {
-                key_file: pk_file.as_path(),
-            };
+            let options = InspectOptions::new(pk_file.as_path());
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", pk_file.display()),
@@ -500,9 +496,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else {
             // Default to secret key path
-            let options = InspectOptions {
-                key_file: &default_secret_key,
-            };
+            let options = InspectOptions::new(&default_secret_key);
             (
                 inspect(&options)?,
                 format!("Inspecting: {} (default)", default_secret_key.display()),
@@ -519,7 +513,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     {
         // Prompt for password and decrypt
         let password = prompt_password("Password: ", cli.password_file.as_deref())?;
-        let options = InspectPrivateOptions { key_file: path };
+        let options = InspectPrivateOptions::new(path);
         result = inspect_private(&options, password.as_bytes())?;
         decrypted = true;
     }
