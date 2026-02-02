@@ -193,7 +193,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         };
 
         sign_multiple_files(
-            message_files,
+            message_files.into_owned(),
             &options,
             password.as_ref().map(|p| p.as_bytes()),
             cli.sequential,
@@ -278,7 +278,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             quiet: cli.quiet,
         };
 
-        verify_multiple_files(message_files, &options, cli.sequential)?;
+        verify_multiple_files(message_files.into_owned(), &options, cli.sequential)?;
     }
 
     Ok(())

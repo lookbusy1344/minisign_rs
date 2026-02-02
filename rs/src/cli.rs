@@ -5,6 +5,7 @@
 use crate::errors::{Error, Result};
 use clap::Parser;
 use git_version::git_version;
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 const VERSION: &str = git_version!(
@@ -172,16 +173,18 @@ impl Cli {
     ///
     /// Matches C minisign semantics: `-m` specifies the first file, any
     /// remaining positional arguments are additional files to sign.
+    ///
+    /// Returns a `Cow` to avoid cloning when only `extra_files` are present.
     #[must_use]
-    pub fn all_message_files(&self) -> Vec<PathBuf> {
+    pub fn all_message_files(&self) -> Cow<'_, [PathBuf]> {
         match &self.message_file {
             Some(first) => {
                 let mut files = Vec::with_capacity(1 + self.extra_files.len());
                 files.push(first.clone());
                 files.extend_from_slice(&self.extra_files);
-                files
+                Cow::Owned(files)
             }
-            None => self.extra_files.clone(),
+            None => Cow::Borrowed(&self.extra_files),
         }
     }
 
