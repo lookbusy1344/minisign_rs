@@ -12,6 +12,13 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - No `.unwrap()`/`.expect()` in production paths
 - Use `?` operator for errors
 
+## Performance & Memory Efficiency
+- **Avoid cloning** - NOT idiomatic, expensive
+- **Prefer references** (`&Path`, `&str`, `&[T]`) over owned types
+- Use `as_ref()`/`as_deref()` to extract references from `Option<T>`
+- Use `Cow<T>` for conditional ownership
+- Only clone when required (threading, owned returns, API constraints)
+
 ## Pre-Commit Checklist
 **ALWAYS run in this exact order before committing:**
 ```bash
