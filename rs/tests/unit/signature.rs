@@ -135,14 +135,14 @@ proptest! {
         keynum_data in prop::array::uniform8(any::<u8>()),
         sig_data in prop::collection::vec(any::<u8>(), 64..=64)
     ) {
-        let keynum = minisign::crypto::KeyNum(keynum_data);
+        let keynum = KeyNum::from_bytes(keynum_data);
         let mut sig_array = [0u8; SIGNATURE_BYTES];
         sig_array.copy_from_slice(&sig_data);
         let signature = Signature::from_bytes(sig_array);
         let sig_struct = SigStruct::new(keynum, signature, false);
         let serialized = sig_struct.to_bytes();
         let deserialized = SigStruct::from_bytes(&serialized).unwrap();
-        prop_assert_eq!(sig_struct.keynum().0, deserialized.keynum().0);
+        prop_assert_eq!(sig_struct.keynum(), deserialized.keynum());
         prop_assert_eq!(sig_struct.signature().as_bytes(), deserialized.signature().as_bytes());
         prop_assert_eq!(sig_struct.is_prehashed(), deserialized.is_prehashed());
     }
@@ -152,14 +152,14 @@ proptest! {
         keynum_data in prop::array::uniform8(any::<u8>()),
         sig_data in prop::collection::vec(any::<u8>(), 64..=64)
     ) {
-        let keynum = minisign::crypto::KeyNum(keynum_data);
+        let keynum = KeyNum::from_bytes(keynum_data);
         let mut sig_array = [0u8; SIGNATURE_BYTES];
         sig_array.copy_from_slice(&sig_data);
         let signature = Signature::from_bytes(sig_array);
         let sig_struct = SigStruct::new(keynum, signature, true);
         let serialized = sig_struct.to_bytes();
         let deserialized = SigStruct::from_bytes(&serialized).unwrap();
-        prop_assert_eq!(sig_struct.keynum().0, deserialized.keynum().0);
+        prop_assert_eq!(sig_struct.keynum(), deserialized.keynum());
         prop_assert_eq!(sig_struct.signature().as_bytes(), deserialized.signature().as_bytes());
         prop_assert_eq!(sig_struct.is_prehashed(), deserialized.is_prehashed());
     }
@@ -170,7 +170,7 @@ fn test_untrusted_comment_with_control_characters() {
     let sig_box = SignatureBox {
         untrusted_comment: "test\x00null".to_string(), // Embedded null byte
         sig_struct: SigStruct::new(
-            KeyNum([0; 8]),
+            KeyNum::from_bytes([0; 8]),
             Signature::from_bytes([0; SIGNATURE_BYTES]),
             false,
         ),
@@ -189,7 +189,7 @@ fn test_untrusted_comment_with_carriage_return() {
     let sig_box = SignatureBox {
         untrusted_comment: "test\rcarriage".to_string(),
         sig_struct: SigStruct::new(
-            KeyNum([0; 8]),
+            KeyNum::from_bytes([0; 8]),
             Signature::from_bytes([0; SIGNATURE_BYTES]),
             false,
         ),

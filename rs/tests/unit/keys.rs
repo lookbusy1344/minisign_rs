@@ -551,21 +551,21 @@ proptest! {
         pubkey_array.copy_from_slice(&pubkey_data);
 
         let pubkey = PubkeyStruct {
-            keynum: KeyNum(keynum_data),
+            keynum: KeyNum::from_bytes(keynum_data),
             public_key: PublicKey::from_bytes(pubkey_array),
         };
 
         let serialized = pubkey.to_bytes();
         let deserialized = PubkeyStruct::from_bytes(&serialized).unwrap();
 
-        prop_assert_eq!(pubkey.keynum.0, deserialized.keynum.0);
+        prop_assert_eq!(pubkey.keynum.as_bytes(), deserialized.keynum.as_bytes());
         prop_assert_eq!(pubkey.public_key.as_bytes(), deserialized.public_key.as_bytes());
     }
 
     /// Property test: KeyNum hex encoding roundtrip
     #[test]
     fn prop_keynum_hex_roundtrip(data in prop::array::uniform8(any::<u8>())) {
-        let keynum = KeyNum(data);
+        let keynum = KeyNum::from_bytes(data);
         let hex = keynum.to_hex();
         // Verify hex is 16 chars (8 bytes = 16 hex digits)
         prop_assert_eq!(hex.len(), 16);

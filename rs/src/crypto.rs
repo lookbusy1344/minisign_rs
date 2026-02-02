@@ -44,7 +44,7 @@ const STREAM_BUFFER_SIZE: usize = 8192;
 
 /// Ed25519 secret key (64 bytes) with automatic zeroization
 #[derive(Zeroize, ZeroizeOnDrop)]
-pub struct SecretKey(pub [u8; SECRET_KEY_BYTES]);
+pub struct SecretKey([u8; SECRET_KEY_BYTES]);
 
 impl SecretKey {
     /// Create a new secret key from bytes
@@ -68,7 +68,7 @@ impl std::fmt::Debug for SecretKey {
 
 /// Ed25519 public key (32 bytes)
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PublicKey(pub [u8; PUBLIC_KEY_BYTES]);
+pub struct PublicKey([u8; PUBLIC_KEY_BYTES]);
 
 impl PublicKey {
     /// Create a new public key from bytes
@@ -92,7 +92,7 @@ impl std::fmt::Debug for PublicKey {
 
 /// Ed25519 signature (64 bytes)
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Signature(pub [u8; SIGNATURE_BYTES]);
+pub struct Signature([u8; SIGNATURE_BYTES]);
 
 impl Signature {
     /// Create a new signature from bytes
@@ -116,7 +116,7 @@ impl std::fmt::Debug for Signature {
 
 /// Key number / identifier (8 bytes)
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct KeyNum(pub [u8; KEYNUM_BYTES]);
+pub struct KeyNum([u8; KEYNUM_BYTES]);
 
 impl KeyNum {
     /// Create a new key number from bytes
