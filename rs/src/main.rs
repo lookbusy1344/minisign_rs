@@ -70,16 +70,15 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    let options = GenerateOptions {
+    let options = GenerateOptions::new(
         secret_key_file,
         public_key_file,
         comment,
-        force: cli.force,
-        no_password: cli.no_password,
-        allow_kdf_fallback: cli.allow_kdf_fallback,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: cli.force_weak_kdf,
-    };
+        cli.force,
+        cli.no_password,
+        cli.allow_kdf_fallback,
+        cli.force_weak_kdf,
+    );
 
     // Display working message for slow key generation
     if !cli.quiet {
@@ -102,16 +101,16 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     if !cli.quiet {
         println!(
             "The secret key was saved as {} - Keep it secret!",
-            result.secret_key_file.display()
+            result.secret_key_file().display()
         );
         println!(
             "The public key was saved as {} - That one can be public.",
-            result.public_key_file.display()
+            result.public_key_file().display()
         );
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
         println!();
-        println!("minisign_rs -Vm <file> -P {}", result.public_key_base64);
+        println!("minisign_rs -Vm <file> -P {}", result.public_key_base64());
     }
 
     Ok(())
@@ -153,18 +152,17 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         let default_signature = Cli::default_signature_path(message_file)?;
         let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-        let options = SignOptions {
+        let options = SignOptions::new(
             secret_key_file,
             message_file,
-            signature_file: Some(signature_file),
-            trusted_comment: cli.trusted_comment.clone(),
-            untrusted_comment: cli.untrusted_comment.clone(),
-            // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
+            Some(signature_file),
+            !cli.legacy, // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
             // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
-            prehashed: !cli.legacy,
-            force: cli.force,
-            quiet: cli.quiet,
-        };
+            cli.trusted_comment.clone(),
+            cli.untrusted_comment.clone(),
+            cli.force,
+            cli.quiet,
+        );
 
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
@@ -183,16 +181,16 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             ));
         }
 
-        let options = SignOptions {
+        let options = SignOptions::new(
             secret_key_file,
-            message_file: std::path::Path::new(""),
-            signature_file: None,
-            trusted_comment: cli.trusted_comment.clone(),
-            untrusted_comment: cli.untrusted_comment.clone(),
-            prehashed: !cli.legacy,
-            force: cli.force,
-            quiet: cli.quiet,
-        };
+            std::path::Path::new(""),
+            None,
+            !cli.legacy,
+            cli.trusted_comment.clone(),
+            cli.untrusted_comment.clone(),
+            cli.force,
+            cli.quiet,
+        );
 
         sign_multiple_files(
             message_files.into_owned(),
@@ -241,13 +239,13 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         let default_signature = Cli::default_signature_path(message_file)?;
         let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-        let options = VerifyOptions {
+        let options = VerifyOptions::new(
             public_key,
             signature_file,
             message_file,
-            output: cli.output,
-            quiet: cli.quiet,
-        };
+            cli.output,
+            cli.quiet,
+        );
 
         let result = verify(&options)?;
 
@@ -272,13 +270,13 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             ));
         }
 
-        let options = VerifyOptions {
+        let options = VerifyOptions::new(
             public_key,
-            signature_file: std::path::Path::new(""),
-            message_file: std::path::Path::new(""),
-            output: cli.output,
-            quiet: cli.quiet,
-        };
+            std::path::Path::new(""),
+            std::path::Path::new(""),
+            cli.output,
+            cli.quiet,
+        );
 
         verify_multiple_files(message_files.into_owned(), &options, cli.sequential)?;
     }
@@ -302,12 +300,12 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
         Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
-    let options = RecreateOptions {
+    let options = RecreateOptions::new(
         secret_key_file,
         public_key_file,
-        comment: cli.untrusted_comment.clone(),
-        force: cli.force,
-    };
+        cli.untrusted_comment.clone(),
+        cli.force,
+    );
 
     let result = recreate(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
@@ -346,13 +344,12 @@ fn handle_change(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    let options = ChangeOptions {
+    let options = ChangeOptions::new(
         secret_key_file,
-        remove_password: cli.no_password && new_password.is_none(),
-        allow_kdf_fallback: cli.allow_kdf_fallback,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: cli.force_weak_kdf,
-    };
+        cli.no_password && new_password.is_none(),
+        cli.allow_kdf_fallback,
+        cli.force_weak_kdf,
+    );
 
     let result = change(
         &options,
@@ -476,18 +473,14 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
-            let options = InspectOptions {
-                key_file: sk_file.as_path(),
-            };
+            let options = InspectOptions::new(sk_file.as_path());
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", sk_file.display()),
                 Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
-            let options = InspectOptions {
-                key_file: pk_file.as_path(),
-            };
+            let options = InspectOptions::new(pk_file.as_path());
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", pk_file.display()),
@@ -502,9 +495,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else {
             // Default to secret key path
-            let options = InspectOptions {
-                key_file: &default_secret_key,
-            };
+            let options = InspectOptions::new(&default_secret_key);
             (
                 inspect(&options)?,
                 format!("Inspecting: {} (default)", default_secret_key.display()),
@@ -521,7 +512,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     {
         // Prompt for password and decrypt
         let password = prompt_password("Password: ", cli.password_file.as_deref())?;
-        let options = InspectPrivateOptions { key_file: path };
+        let options = InspectPrivateOptions::new(path);
         result = inspect_private(&options, password.as_bytes())?;
         decrypted = true;
     }

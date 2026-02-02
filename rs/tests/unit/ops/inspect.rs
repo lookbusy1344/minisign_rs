@@ -44,9 +44,7 @@ fn test_inspect_production_strength_encrypted_key() {
     let file_contents = seckey.to_file_contents("test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectOptions::new(temp_file.path());
 
     let result = inspect(&options).unwrap();
 
@@ -90,9 +88,7 @@ fn test_inspect_medium_strength_fallback_key() {
     let file_contents = seckey.to_file_contents("test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectOptions::new(temp_file.path());
 
     let result = inspect(&options).unwrap();
 
@@ -132,9 +128,7 @@ fn test_inspect_low_strength_fallback_key() {
     let file_contents = seckey.to_file_contents("test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectOptions::new(temp_file.path());
 
     let result = inspect(&options).unwrap();
 
@@ -158,9 +152,7 @@ fn test_inspect_unencrypted_secret_key() {
     let file_contents = seckey.to_file_contents("unencrypted test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectOptions::new(temp_file.path());
 
     let result = inspect(&options).unwrap();
 
@@ -177,9 +169,7 @@ fn test_inspect_public_key() {
 
     let temp_file = create_temp_key_file(&contents);
 
-    let options = InspectOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectOptions::new(temp_file.path());
 
     let result = inspect(&options).unwrap();
 
@@ -196,9 +186,7 @@ fn test_inspect_public_key() {
 fn test_inspect_invalid_file() {
     let temp_file = create_temp_key_file("not a valid key file\n");
 
-    let options = InspectOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectOptions::new(temp_file.path());
 
     let result = inspect(&options);
     assert!(result.is_err());
@@ -206,9 +194,7 @@ fn test_inspect_invalid_file() {
 
 #[test]
 fn test_inspect_missing_file() {
-    let options = InspectOptions {
-        key_file: std::path::Path::new("/nonexistent/path/to/key.file"),
-    };
+    let options = InspectOptions::new(std::path::Path::new("/nonexistent/path/to/key.file"));
 
     let result = inspect(&options);
     assert!(result.is_err());
@@ -237,10 +223,7 @@ fn test_security_level_classification() {
 
     let high_contents = high_key.to_file_contents("high");
     let high_file = create_temp_key_file(&high_contents);
-    let result = inspect(&InspectOptions {
-        key_file: high_file.path(),
-    })
-    .unwrap();
+    let result = inspect(&InspectOptions::new(high_file.path())).unwrap();
     assert_eq!(result.security_level, Some(SecurityLevel::High));
 
     // Medium: After 1 fallback (N=2^19, 512 MB)
@@ -258,10 +241,7 @@ fn test_security_level_classification() {
 
     let medium_contents = medium_key.to_file_contents("medium");
     let medium_file = create_temp_key_file(&medium_contents);
-    let result = inspect(&InspectOptions {
-        key_file: medium_file.path(),
-    })
-    .unwrap();
+    let result = inspect(&InspectOptions::new(medium_file.path())).unwrap();
     assert_eq!(result.security_level, Some(SecurityLevel::Medium));
 
     // Low: After 3 fallbacks (N=2^17, 128 MB)
@@ -279,10 +259,7 @@ fn test_security_level_classification() {
 
     let low_contents = low_key.to_file_contents("low");
     let low_file = create_temp_key_file(&low_contents);
-    let result = inspect(&InspectOptions {
-        key_file: low_file.path(),
-    })
-    .unwrap();
+    let result = inspect(&InspectOptions::new(low_file.path())).unwrap();
     assert_eq!(result.security_level, Some(SecurityLevel::Low));
 }
 
@@ -325,10 +302,7 @@ fn test_weakness_multiplier_calculation() {
         let contents = key.to_file_contents("test");
         let file = create_temp_key_file(&contents);
 
-        let result = inspect(&InspectOptions {
-            key_file: file.path(),
-        })
-        .unwrap();
+        let result = inspect(&InspectOptions::new(file.path())).unwrap();
 
         let kdf_info = result.kdf_info.unwrap();
         assert_eq!(
@@ -346,10 +320,7 @@ fn test_inspect_c_generated_production_key() {
 
     let temp_file = create_temp_key_file(&contents);
 
-    let result = inspect(&InspectOptions {
-        key_file: temp_file.path(),
-    })
-    .unwrap();
+    let result = inspect(&InspectOptions::new(temp_file.path())).unwrap();
 
     // C-generated test key should be production strength
     assert_eq!(result.key_type, KeyType::SecretEncrypted);
@@ -369,10 +340,7 @@ fn test_inspect_c_generated_unencrypted_key() {
 
     let temp_file = create_temp_key_file(&contents);
 
-    let result = inspect(&InspectOptions {
-        key_file: temp_file.path(),
-    })
-    .unwrap();
+    let result = inspect(&InspectOptions::new(temp_file.path())).unwrap();
 
     assert_eq!(result.key_type, KeyType::SecretUnencrypted);
     assert_eq!(result.security_level, Some(SecurityLevel::None));
@@ -387,10 +355,7 @@ fn test_inspect_c_generated_public_key() {
 
     let temp_file = create_temp_key_file(&contents);
 
-    let result = inspect(&InspectOptions {
-        key_file: temp_file.path(),
-    })
-    .unwrap();
+    let result = inspect(&InspectOptions::new(temp_file.path())).unwrap();
 
     assert_eq!(result.key_type, KeyType::Public);
     assert_eq!(result.security_level, None);
@@ -460,9 +425,7 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
     let file_contents = seckey.to_file_contents("test encrypted key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectPrivateOptions::new(temp_file.path());
 
     // Decrypt and inspect
     let result = inspect_private(&options, password).unwrap();
@@ -500,9 +463,7 @@ fn test_inspect_private_fails_with_wrong_password() {
     let file_contents = seckey.to_file_contents("test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectPrivateOptions::new(temp_file.path());
 
     // Try with wrong password
     let result = inspect_private(&options, b"wrong_password");
@@ -519,9 +480,7 @@ fn test_inspect_private_works_with_unencrypted_key() {
     let file_contents = seckey.to_file_contents("unencrypted test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectPrivateOptions::new(temp_file.path());
 
     // Should work without password (password is ignored for unencrypted keys)
     let result = inspect_private(&options, b"").unwrap();
@@ -541,9 +500,7 @@ fn test_inspect_private_works_with_public_key() {
     let file_contents = pubkey.to_file_contents("test public key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions {
-        key_file: temp_file.path(),
-    };
+    let options = InspectPrivateOptions::new(temp_file.path());
 
     // Should work with public key (password is ignored)
     let result = inspect_private(&options, b"").unwrap();

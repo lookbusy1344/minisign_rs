@@ -20,13 +20,13 @@ use tempfile::TempDir;
 
 #[test]
 fn test_verify_c_generated_signature() {
-    let options = VerifyOptions {
-        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
-        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: Path::new("tests/fixtures/messages/hello.txt"),
-        output: false,
-        quiet: false,
-    };
+    let options = VerifyOptions::new(
+        PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
+        Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        Path::new("tests/fixtures/messages/hello.txt"),
+        false,
+        false,
+    );
 
     let result = verify(&options).expect("verification should succeed");
     assert!(result.valid);
@@ -41,13 +41,13 @@ fn test_verify_wrong_message_fails() {
     let wrong_message_path = temp_dir.path().join("wrong.txt");
     fs::write(&wrong_message_path, b"Wrong message").unwrap();
 
-    let options = VerifyOptions {
-        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
-        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: wrong_message_path.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let options = VerifyOptions::new(
+        PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
+        Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        wrong_message_path.as_path(),
+        false,
+        false,
+    );
 
     let result = verify(&options);
     assert!(result.is_err(), "should fail with wrong message");
@@ -55,13 +55,13 @@ fn test_verify_wrong_message_fails() {
 
 #[test]
 fn test_verify_wrong_key_fails() {
-    let options = VerifyOptions {
-        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/test.pub")),
-        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: Path::new("tests/fixtures/messages/hello.txt"),
-        output: false,
-        quiet: false,
-    };
+    let options = VerifyOptions::new(
+        PublicKeySource::File(Path::new("tests/fixtures/keys/test.pub")),
+        Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        Path::new("tests/fixtures/messages/hello.txt"),
+        false,
+        false,
+    );
 
     let result = verify(&options);
     assert!(result.is_err(), "should fail with wrong public key");
@@ -69,13 +69,13 @@ fn test_verify_wrong_key_fails() {
 
 #[test]
 fn test_verify_nonexistent_file() {
-    let options = VerifyOptions {
-        public_key: PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
-        signature_file: Path::new("tests/fixtures/signatures/hello.txt.minisig"),
-        message_file: Path::new("nonexistent.txt"),
-        output: false,
-        quiet: false,
-    };
+    let options = VerifyOptions::new(
+        PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
+        Path::new("tests/fixtures/signatures/hello.txt.minisig"),
+        Path::new("nonexistent.txt"),
+        false,
+        false,
+    );
 
     let result = verify(&options);
     assert!(result.is_err(), "should fail with nonexistent message file");
@@ -147,26 +147,26 @@ fn test_verify_with_wrong_keynum() {
         .expect("write failed");
 
     // Sign with key 1
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key_file.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key_file.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
     sign(&sign_opts, None).expect("sign should succeed");
 
     // Try to verify with key 2 (different keynum) - should fail
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(wrong_pubkey_file.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(wrong_pubkey_file.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        false,
+    );
 
     let result = verify(&verify_opts);
     assert!(result.is_err(), "Should fail when keynum doesn't match");
@@ -211,27 +211,27 @@ fn test_verify_file_too_large_fails() {
     std::fs::write(&message_path, b"small message").unwrap();
 
     let sig_path = temp_dir.path().join("message.txt.minisig");
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: message_path.as_path(),
-        signature_file: Some(sig_path.as_path()),
-        prehashed: false, // Non-prehashed signature
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        false,
+        None,
+        None,
+        false,
+        false,
+    );
 
     sign(&sign_opts, None).expect("signing should succeed");
 
     // Verify with small file should succeed
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: sig_path.as_path(),
-        message_file: message_path.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+        false,
+        false,
+    );
 
     verify(&verify_opts).expect("verification should succeed with small file");
 
@@ -259,27 +259,27 @@ fn test_verify_prehashed_mode_no_size_limit() {
     std::fs::write(&message_path, vec![42u8; 10 * 1024 * 1024]).unwrap();
 
     let sig_path = temp_dir.path().join("large.bin.minisig");
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: message_path.as_path(),
-        signature_file: Some(sig_path.as_path()),
-        prehashed: true, // Prehashed mode - no size limit
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     sign(&sign_opts, None).expect("signing large file in prehashed mode should succeed");
 
     // Verify should succeed with prehashed mode (streaming)
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: sig_path.as_path(),
-        message_file: message_path.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+        false,
+        false,
+    );
 
     verify(&verify_opts).expect("verification should succeed with prehashed large file");
 }
@@ -310,28 +310,28 @@ fn test_verify_multiple_files_sequential() {
     fs::write(&file3, b"Message 3").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: Some("Batch verification test".to_string()),
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        Path::new(""),
+        None,
+        true,
+        Some("Batch verification test".to_string()),
+        None,
+        false,
+        false,
+    );
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Now verify multiple files
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: Path::new(""), // Ignored for batch operations
-        message_file: Path::new(""),   // Ignored for batch operations
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+        false,
+        false,
+    );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_ok(), "verification should succeed for all files");
@@ -366,27 +366,27 @@ fn test_verify_multiple_files_parallel() {
         paths.push(file);
     }
 
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: Some("Parallel verification test".to_string()),
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        Path::new(""),
+        None,
+        true,
+        Some("Parallel verification test".to_string()),
+        None,
+        false,
+        false,
+    );
 
     sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
 
     // Now verify multiple files in parallel
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: Path::new(""), // Ignored for batch operations
-        message_file: Path::new(""),   // Ignored for batch operations
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+        false,
+        false,
+    );
 
     let result = verify_multiple_files(paths.clone(), &verify_opts, false);
     assert!(result.is_ok(), "verification should succeed for all files");
@@ -427,16 +427,16 @@ fn test_verify_multiple_files_partial_failure() {
     fs::write(&file3, b"Message 3").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        Path::new(""),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
@@ -445,13 +445,13 @@ fn test_verify_multiple_files_partial_failure() {
 
     // Try to verify all files - should get partial failure
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: Path::new(""),
-        message_file: Path::new(""),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+        false,
+        false,
+    );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
 
@@ -495,16 +495,16 @@ fn test_verify_multiple_files_all_attempted() {
 
     // Sign file1, file3, file4, file5 (skip file2 - it doesn't exist)
     let sign_paths = vec![file1.clone(), file3.clone(), file4.clone(), file5.clone()];
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        Path::new(""),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
@@ -522,13 +522,13 @@ fn test_verify_multiple_files_all_attempted() {
         file4.clone(),
         file5.clone(),
     ];
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: Path::new(""),
-        message_file: Path::new(""),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+        false,
+        false,
+    );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
 
@@ -565,28 +565,28 @@ fn test_verify_multiple_files_quiet_mode() {
     fs::write(&file2, b"M2").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone()];
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        Path::new(""),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Verify with quiet mode (should suppress output)
     let verify_paths = vec![file1.clone(), file2.clone()];
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: Path::new(""),
-        message_file: Path::new(""),
-        output: false,
-        quiet: true, // Quiet mode enabled
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+        false,
+        true,
+    );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_ok(), "verification should succeed");
@@ -639,28 +639,28 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
     fs::write(&file3, b"M3").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let sign_opts = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        Path::new(""),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Try to verify with wrong key - all should fail
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(pk_path.as_path()),
-        signature_file: Path::new(""),
-        message_file: Path::new(""),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+        false,
+        false,
+    );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_err());

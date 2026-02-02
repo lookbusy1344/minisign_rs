@@ -98,8 +98,8 @@ const SECKEY_CHECKSUM_SIZE: usize = CHECKSUM_BYTES;
 /// - 10-41: `public_key` (32 bytes)
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PubkeyStruct {
-    pub keynum: KeyNum,        // pub(crate) for unit tests
-    pub public_key: PublicKey, // pub(crate) for unit tests
+    keynum: KeyNum,
+    public_key: PublicKey,
 }
 
 impl PubkeyStruct {
@@ -265,10 +265,10 @@ pub struct SeckeyStruct {
     kdf_salt: [u8; KDF_SALT_BYTES],
     kdf_opslimit: u64,
     kdf_memlimit: u64,
-    pub keynum: KeyNum, // pub(crate) for unit tests
+    keynum: KeyNum,
     encrypted_keynum: [u8; KEYNUM_BYTES],
-    pub secret_key_encrypted: [u8; SECRET_KEY_BYTES], // pub(crate) for unit tests
-    pub checksum: [u8; CHECKSUM_BYTES],               // pub(crate) for unit tests
+    secret_key_encrypted: [u8; SECRET_KEY_BYTES],
+    checksum: [u8; CHECKSUM_BYTES],
 }
 
 impl SeckeyStruct {
@@ -628,6 +628,15 @@ impl SeckeyStruct {
     #[must_use]
     pub fn kdf_memlimit(&self) -> u64 {
         self.kdf_memlimit
+    }
+
+    /// Get the checksum bytes
+    ///
+    /// For encrypted keys, this returns the encrypted checksum.
+    /// For unencrypted keys, this returns all zeros (matching C minisign behavior).
+    #[must_use]
+    pub fn checksum(&self) -> &[u8; CHECKSUM_BYTES] {
+        &self.checksum
     }
 
     /// Serialize to bytes

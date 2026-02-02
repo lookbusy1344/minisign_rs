@@ -30,16 +30,16 @@ fn test_sign_unencrypted_key() {
     // Create a test message
     fs::write(&message_path, b"Hello, World!").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: message_path.as_path(),
-        signature_file: Some(sig_path.as_path()),
-        prehashed: true,
-        trusted_comment: Some("Test signature".to_string()),
-        untrusted_comment: Some("Test".to_string()),
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        true,
+        Some("Test signature".to_string()),
+        Some("Test".to_string()),
+        false,
+        false,
+    );
 
     let result = sign(&options, None).expect("signing should succeed");
     assert_eq!(result.signature_file, sig_path);
@@ -79,16 +79,16 @@ fn test_sign_encrypted_key() {
 
     fs::write(&message_path, b"Secret message").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/test.key"),
-        message_file: message_path.as_path(),
-        signature_file: Some(sig_path.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        Path::new("tests/fixtures/keys/test.key"),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     let password = b"test";
     let result = sign(&options, Some(password)).expect("signing should succeed");
@@ -134,16 +134,16 @@ fn test_sign_encrypted_key_fast() {
     let sig_path = temp_dir.path().join("message.txt.minisig");
     fs::write(&message_path, b"Fast test message").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: message_path.as_path(),
-        signature_file: Some(sig_path.as_path()),
-        prehashed: true,
-        trusted_comment: Some("Fast test".to_string()),
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        true,
+        Some("Fast test".to_string()),
+        None,
+        false,
+        false,
+    );
 
     let result = sign(&options, Some(password)).expect("signing should succeed");
     assert!(sig_path.exists());
@@ -157,16 +157,16 @@ fn test_sign_without_password_fails() {
 
     fs::write(&message_path, b"Message").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/test.key"),
-        message_file: message_path.as_path(),
-        signature_file: None,
-        prehashed: false,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        Path::new("tests/fixtures/keys/test.key"),
+        message_path.as_path(),
+        None,
+        false,
+        None,
+        None,
+        false,
+        false,
+    );
 
     let result = sign(&options, None);
     assert!(result.is_err());
@@ -182,16 +182,16 @@ fn test_sign_force_overwrite() {
     fs::write(&message_path, b"Message").unwrap();
     fs::write(&sig_path, b"Existing signature").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: message_path.as_path(),
-        signature_file: Some(sig_path.as_path()),
-        prehashed: false,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        false,
+        None,
+        None,
+        true,
+        false,
+    );
 
     sign(&options, None).expect("should overwrite with force=true");
 }
@@ -205,16 +205,16 @@ fn test_sign_without_force_fails() {
     fs::write(&message_path, b"Message").unwrap();
     fs::write(&sig_path, b"Existing signature").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: message_path.as_path(),
-        signature_file: Some(sig_path.as_path()),
-        prehashed: false,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        false,
+        None,
+        None,
+        false,
+        false,
+    );
 
     let result = sign(&options, None);
     assert!(result.is_err());
@@ -503,16 +503,16 @@ fn test_sign_file_too_large_fails() {
     let message_path = temp_dir.path().join("message.txt");
     std::fs::write(&message_path, b"small message").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: message_path.as_path(),
-        signature_file: None,
-        prehashed: false, // Non-prehashed mode has size limit
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        None,
+        false,
+        None,
+        None,
+        false,
+        false,
+    );
 
     // Small file should succeed
     let result = sign(&options, None);
@@ -534,16 +534,16 @@ fn test_prehashed_mode_no_size_limit() {
     let message_path = temp_dir.path().join("large.bin");
     std::fs::write(&message_path, vec![42u8; 10 * 1024 * 1024]).unwrap();
 
-    let options = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: message_path.as_path(),
-        signature_file: None,
-        prehashed: true, // Prehashed mode streams - no size limit
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     // Should succeed with prehashed mode (streaming)
     let result = sign(&options, None);
@@ -590,16 +590,16 @@ fn test_sign_with_weak_kdf_key() {
     let message_path = temp_dir.path().join("message.txt");
     std::fs::write(&message_path, b"Test message").unwrap();
 
-    let options = SignOptions {
-        secret_key_file: sk_path.as_path(),
-        message_file: message_path.as_path(),
-        signature_file: None,
-        prehashed: false,
-        trusted_comment: Some("Test with weak key".to_string()),
-        untrusted_comment: Some("weak key test".to_string()),
-        force: false,
-        quiet: false,
-    };
+    let options = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        None,
+        false,
+        Some("Test with weak key".to_string()),
+        Some("weak key test".to_string()),
+        false,
+        false,
+    );
 
     // Signing should succeed (warning should be displayed to stderr)
     let result = sign(&options, Some(password));
@@ -616,18 +616,18 @@ fn test_sign_single_file_success() {
     let message_path = temp_dir.path().join("message.txt");
     fs::write(&message_path, b"Test message").unwrap();
 
-    let opts = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: message_path.as_path(),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: Some("Test".to_string()),
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let opts = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        message_path.as_path(),
+        None,
+        true,
+        Some("Test".to_string()),
+        None,
+        false,
+        false,
+    );
 
-    let result = sign_single_file(opts.message_file, &opts, None);
+    let result = sign_single_file(opts.message_file(), &opts, None);
     assert!(result.is_ok());
 
     let sign_result = result.unwrap();
@@ -652,16 +652,16 @@ fn test_sign_multiple_files_sequential() {
 
     let paths = vec![file1.clone(), file2.clone(), file3.clone()];
 
-    let opts = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: Some("Batch signature".to_string()),
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let opts = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+        None,
+        true,
+        Some("Batch signature".to_string()),
+        None,
+        false,
+        false,
+    );
 
     let result = sign_multiple_files(paths, &opts, None, true);
     assert!(result.is_ok());
@@ -684,16 +684,16 @@ fn test_sign_multiple_files_parallel() {
         paths.push(file);
     }
 
-    let opts = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: Some("Parallel batch".to_string()),
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let opts = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+        None,
+        true,
+        Some("Parallel batch".to_string()),
+        None,
+        false,
+        false,
+    );
 
     let result = sign_multiple_files(paths.clone(), &opts, None, false);
     assert!(result.is_ok());
@@ -721,16 +721,16 @@ fn test_sign_multiple_files_partial_failure() {
 
     let paths = vec![file1.clone(), file2.clone(), file3.clone()];
 
-    let opts = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let opts = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     let result = sign_multiple_files(paths, &opts, None, true);
 
@@ -767,16 +767,16 @@ fn test_sign_multiple_files_all_attempted() {
         file5.clone(),
     ];
 
-    let opts = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let opts = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     let result = sign_multiple_files(paths, &opts, None, true);
     assert!(matches!(result, Err(Error::PartialFailure)));
@@ -824,16 +824,16 @@ fn test_sign_summary_shows_only_filenames_not_error_details() {
 
     let paths = vec![file1.clone(), file2.clone(), file3.clone()];
 
-    let opts = SignOptions {
-        secret_key_file: Path::new("tests/fixtures/keys/unencrypted.key"),
-        message_file: Path::new(""),
-        signature_file: None,
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false,
-        quiet: false,
-    };
+    let opts = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     let result = sign_multiple_files(paths, &opts, None, true);
 

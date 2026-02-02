@@ -337,8 +337,8 @@ fn test_get_c_generated_unencrypted_key() {
     assert!(!seckey.is_encrypted());
 
     // Debug: check checksum
-    let computed = SeckeyStruct::compute_checksum(seckey.keynum, &seckey.secret_key_encrypted);
-    eprintln!("Stored checksum:   {:02x?}", &seckey.checksum[..8]);
+    let computed = SeckeyStruct::compute_checksum(*seckey.keynum(), seckey.encrypted_secret_key());
+    eprintln!("Stored checksum:   {:02x?}", &seckey.checksum()[..8]);
     eprintln!("Computed checksum: {:02x?}", &computed[..8]);
 
     // Get the unencrypted key
@@ -550,22 +550,22 @@ proptest! {
         let mut pubkey_array = [0u8; 32];
         pubkey_array.copy_from_slice(&pubkey_data);
 
-        let pubkey = PubkeyStruct {
-            keynum: KeyNum(keynum_data),
-            public_key: PublicKey::from_bytes(pubkey_array),
-        };
+        let pubkey = PubkeyStruct::new(
+            KeyNum::from_bytes(keynum_data),
+            PublicKey::from_bytes(pubkey_array),
+        );
 
         let serialized = pubkey.to_bytes();
         let deserialized = PubkeyStruct::from_bytes(&serialized).unwrap();
 
-        prop_assert_eq!(pubkey.keynum.0, deserialized.keynum.0);
-        prop_assert_eq!(pubkey.public_key.as_bytes(), deserialized.public_key.as_bytes());
+        prop_assert_eq!(pubkey.keynum().as_bytes(), deserialized.keynum().as_bytes());
+        prop_assert_eq!(pubkey.public_key().as_bytes(), deserialized.public_key().as_bytes());
     }
 
     /// Property test: KeyNum hex encoding roundtrip
     #[test]
     fn prop_keynum_hex_roundtrip(data in prop::array::uniform8(any::<u8>())) {
-        let keynum = KeyNum(data);
+        let keynum = KeyNum::from_bytes(data);
         let hex = keynum.to_hex();
         // Verify hex is 16 chars (8 bytes = 16 hex digits)
         prop_assert_eq!(hex.len(), 16);

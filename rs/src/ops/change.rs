@@ -18,14 +18,43 @@ use std::path::{Path, PathBuf};
 #[allow(clippy::struct_excessive_bools)]
 pub struct ChangeOptions<'a> {
     /// Path to the secret key file
-    pub secret_key_file: &'a Path,
+    secret_key_file: &'a Path,
     /// Remove password (make unencrypted)
-    pub remove_password: bool,
+    remove_password: bool,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
-    pub allow_kdf_fallback: bool,
+    allow_kdf_fallback: bool,
     /// Force weak KDF parameters for testing (DEBUG ONLY)
     #[cfg(debug_assertions)]
-    pub force_weak_kdf: bool,
+    force_weak_kdf: bool,
+}
+
+impl<'a> ChangeOptions<'a> {
+    /// Create new change options
+    ///
+    /// # Arguments
+    ///
+    /// * `secret_key_file` - Path to the secret key file
+    /// * `remove_password` - Remove password (make unencrypted)
+    /// * `allow_kdf_fallback` - Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
+    #[allow(clippy::fn_params_excessive_bools)]
+    #[must_use]
+    pub fn new(
+        secret_key_file: &'a Path,
+        remove_password: bool,
+        allow_kdf_fallback: bool,
+        force_weak_kdf: bool,
+    ) -> Self {
+        Self {
+            secret_key_file,
+            remove_password,
+            allow_kdf_fallback,
+            #[cfg(debug_assertions)]
+            force_weak_kdf,
+            #[cfg(not(debug_assertions))]
+            force_weak_kdf: false,
+        }
+    }
 }
 
 /// Result of password change operation

@@ -21,42 +21,41 @@ fn test_empty_file_signing() {
     let sig_file = temp_dir.path().join("empty.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create empty file
     fs::write(&message_file, b"").expect("Failed to create empty file");
 
     // Sign empty file (prehashed mode)
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
     sign(&sign_opts, None).expect("Should sign empty file");
 
     // Verify signature on empty file
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify empty file signature");
 }
 
@@ -70,42 +69,41 @@ fn test_empty_file_legacy_mode() {
     let sig_file = temp_dir.path().join("empty_legacy.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create empty file
     fs::write(&message_file, b"").expect("Failed to create empty file");
 
     // Sign empty file (legacy mode - non-prehashed)
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: false, // Legacy mode
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        false,
+        None,
+        None,
+        true,
+        false,
+    );
     sign(&sign_opts, None).expect("Should sign empty file in legacy mode");
 
     // Verify signature on empty file
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify empty file legacy signature");
 }
 
@@ -119,44 +117,43 @@ fn test_unicode_in_trusted_comment() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
     // Sign with Unicode trusted comment (emoji, Chinese, Arabic)
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some("Signed 🔐 签名 توقيع".to_string()),
-        untrusted_comment: Some("Test signature 测试 اختبار 🚀".to_string()),
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some("Signed 🔐 签名 توقيع".to_string()),
+        Some("Test signature 测试 اختبار 🚀".to_string()),
+        true,
+        false,
+    );
     let result = sign(&sign_opts, None).expect("Should sign with Unicode comments");
     assert!(result.trusted_comment.contains("🔐"));
     assert!(result.trusted_comment.contains("签名"));
 
     // Verify signature with Unicode comments
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        false,
+    );
     let result = verify(&verify_opts).expect("Should verify signature with Unicode");
     assert!(result.trusted_comment.contains("🔐"));
 }
@@ -171,42 +168,41 @@ fn test_unicode_in_untrusted_comment() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
     // Sign with Unicode untrusted comment only
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: Some("Файл подписан ✓".to_string()),
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        Some("Файл подписан ✓".to_string()),
+        true,
+        false,
+    );
     sign(&sign_opts, None).expect("Should sign with Unicode untrusted comment");
 
     // Verify and check untrusted comment
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        false,
+    );
     let result = verify(&verify_opts).expect("Should verify");
     assert!(result.untrusted_comment.contains("Файл"));
 }
@@ -221,16 +217,15 @@ fn test_large_file_prehashed() {
     let sig_file = temp_dir.path().join("large.bin.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create a 100MB file (not 4GB to keep tests fast)
@@ -239,26 +234,26 @@ fn test_large_file_prehashed() {
     fs::write(&message_file, large_data).expect("Failed to write large file");
 
     // Sign large file - should use prehashed mode
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some("Large file signature".to_string()),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some("Large file signature".to_string()),
+        None,
+        true,
+        false,
+    );
     sign(&sign_opts, None).expect("Should sign large file");
 
     // Verify signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify large file signature");
 }
 
@@ -276,16 +271,15 @@ fn test_symlink_handling() {
     let sig_file = temp_dir.path().join("message_link.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message file and symlink to it
@@ -293,36 +287,36 @@ fn test_symlink_handling() {
     symlink(&message_file, &message_link).expect("Failed to create symlink");
 
     // Sign the symlink - should follow it and sign the real file
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_link.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_link.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
     sign(&sign_opts, None).expect("Should sign through symlink");
 
     // Verify using the symlink
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_link.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_link.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify through symlink");
 
     // Verify using the real file - should also work
-    let verify_opts2 = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts2 = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts2).expect("Should verify real file with symlink signature");
 }
 
@@ -334,16 +328,15 @@ fn test_generate_key_with_empty_password() {
     let public_key = temp_dir.path().join("test.pub");
 
     // Generate key with empty password
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: false, // Password is required
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true, // Use weak KDF for faster test
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        false, // Password is required
+        false,
+        true, // Use weak KDF for faster test
+    );
 
     // Empty password should work
     generate(&gen_opts, Some(b"")).expect("Should generate key with empty password");
@@ -357,28 +350,28 @@ fn test_generate_key_with_empty_password() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
 
     // Should be able to sign with empty password
     sign(&sign_opts, Some(b"")).expect("Should sign with empty password");
 
     // Verify the signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature created with empty password");
 }
 
@@ -390,26 +383,24 @@ fn test_change_password_to_empty() {
     let public_key = temp_dir.path().join("test.pub");
 
     // Generate key with non-empty password
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: false,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        false,
+        false,
+        false,
+    );
     generate(&gen_opts, Some(b"original_password")).expect("Failed to generate key");
 
     // Change password to empty
-    let change_opts = ChangeOptions {
-        secret_key_file: secret_key.as_path(),
-        remove_password: false, // Not removing, just changing
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    let change_opts = ChangeOptions::new(
+        secret_key.as_path(),
+        false, // Not removing, just changing
+        false,
+        true,
+    );
 
     change(&change_opts, Some(b"original_password"), Some(b""))
         .expect("Should change password to empty");
@@ -419,16 +410,16 @@ fn test_change_password_to_empty() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
 
     sign(&sign_opts, Some(b"")).expect("Should sign with new empty password");
 }
@@ -441,26 +432,19 @@ fn test_change_password_from_empty() {
     let public_key = temp_dir.path().join("test.pub");
 
     // Generate key with empty password
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: false,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        false,
+        false,
+        false,
+    );
     generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
-    let change_opts = ChangeOptions {
-        secret_key_file: secret_key.as_path(),
-        remove_password: false,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    let change_opts = ChangeOptions::new(secret_key.as_path(), false, false, true);
 
     change(&change_opts, Some(b""), Some(b"new_password"))
         .expect("Should change from empty to non-empty password");
@@ -470,16 +454,16 @@ fn test_change_password_from_empty() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
 
     sign(&sign_opts, Some(b"new_password")).expect("Should sign with new non-empty password");
 }
@@ -496,16 +480,15 @@ fn test_untrusted_comment_max_valid_length() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -515,27 +498,27 @@ fn test_untrusted_comment_max_valid_length() {
     assert_eq!(max_valid_comment.len(), 1003);
 
     // Should succeed without warning
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: Some(max_valid_comment),
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        Some(max_valid_comment),
+        true,
+        false,
+    );
 
     sign(&sign_opts, None).expect("Should sign with max valid untrusted comment");
 
     // Verify signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature with max valid comment");
 }
 
@@ -551,16 +534,15 @@ fn test_untrusted_comment_warning_threshold() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -570,27 +552,27 @@ fn test_untrusted_comment_warning_threshold() {
     assert_eq!(warning_comment.len(), 1004);
 
     // Should succeed but emit warning to stderr (we can't easily capture stderr in test)
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: Some(warning_comment),
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        Some(warning_comment),
+        true,
+        false,
+    );
 
     sign(&sign_opts, None).expect("Should sign but warn about untrusted comment length");
 
     // Verify signature still works
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature despite warning");
 }
 
@@ -606,16 +588,15 @@ fn test_trusted_comment_max_valid_length() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -625,28 +606,28 @@ fn test_trusted_comment_max_valid_length() {
     assert_eq!(max_valid_trusted.len(), 8173);
 
     // Should succeed
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some(max_valid_trusted.clone()),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some(max_valid_trusted.clone()),
+        None,
+        true,
+        false,
+    );
 
     let result = sign(&sign_opts, None).expect("Should sign with max valid trusted comment");
     assert_eq!(result.trusted_comment, max_valid_trusted);
 
     // Verify signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature with max valid trusted comment");
 }
 
@@ -662,16 +643,15 @@ fn test_trusted_comment_error_threshold() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -681,16 +661,16 @@ fn test_trusted_comment_error_threshold() {
     assert_eq!(too_long_trusted.len(), 8174);
 
     // Should error
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some(too_long_trusted),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some(too_long_trusted),
+        None,
+        true,
+        false,
+    );
 
     let result = sign(&sign_opts, None);
     assert!(
@@ -731,31 +711,30 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
     symlink(&sensitive_file, &sig_file).expect("Failed to create symlink");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
     // Attempt to sign without force - should fail because sig_file exists (via symlink)
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: false, // Important: no force
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        false,
+        false,
+    );
 
     let result = sign(&sign_opts, None);
     assert!(
@@ -796,42 +775,41 @@ fn test_symlink_outside_working_directory() {
     // Generate key in work directory
     let secret_key = work_dir.join("test.key");
     let public_key = work_dir.join("test.pub");
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Sign using the symlink - should follow it and sign the real file
     let sig_file = work_dir.join("message_link.txt.minisig");
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: inside_link.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        inside_link.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
 
     // Should succeed - symlink following is expected behavior
     sign(&sign_opts, None).expect("Should sign file via symlink");
 
     // Verify using the real file path works
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: outside_message.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        outside_message.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify using real file path");
 }
 
@@ -859,16 +837,15 @@ fn test_parent_directory_symlink_no_escape() {
     // Generate key using path through symlinked directory
     let secret_key = link_dir.join("test.key");
     let public_key = link_dir.join("test.pub");
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Verify files were created in the real directory
@@ -895,16 +872,16 @@ fn test_parent_directory_symlink_no_escape() {
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
     let sig_file = link_dir.join("message.txt.minisig");
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
 
     sign(&sign_opts, None).expect("Should sign using symlinked directory path");
 
@@ -935,30 +912,29 @@ fn test_circular_symlink_handling() {
     // Generate key
     let secret_key = temp_dir.path().join("test.key");
     let public_key = temp_dir.path().join("test.pub");
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Attempt to sign the circular symlink
     let sig_file = temp_dir.path().join("link1.txt.minisig");
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: link1.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: None,
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        link1.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        None,
+        true,
+        false,
+    );
 
     // Should fail gracefully (not infinite loop or panic)
     let result = sign(&sign_opts, None);
@@ -981,16 +957,15 @@ fn test_unicode_zero_width_joiners() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -999,16 +974,16 @@ fn test_unicode_zero_width_joiners() {
     let zwj_comment = "Test\u{200D}Comment";
     assert!(zwj_comment.len() > zwj_comment.chars().count()); // Multi-byte
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some(zwj_comment.to_string()),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some(zwj_comment.to_string()),
+        None,
+        true,
+        false,
+    );
 
     let result = sign(&sign_opts, None).expect("Should sign with ZWJ in comment");
     assert!(result.trusted_comment.contains('\u{200D}'));
@@ -1027,16 +1002,15 @@ fn test_unicode_rtl_override() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1044,28 +1018,28 @@ fn test_unicode_rtl_override() {
     // Right-to-left override (U+202E)
     let rtl_comment = "Test\u{202E}Override";
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some(rtl_comment.to_string()),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some(rtl_comment.to_string()),
+        None,
+        true,
+        false,
+    );
 
     let result = sign(&sign_opts, None).expect("Should sign with RTL override");
     assert!(result.trusted_comment.contains('\u{202E}'));
 
     // Verify signature works despite RTL
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature with RTL comment");
 }
 
@@ -1082,16 +1056,15 @@ fn test_unicode_homoglyphs() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1100,16 +1073,16 @@ fn test_unicode_homoglyphs() {
     // Greek 'ο' (U+03BF) looks like Latin 'o' (U+006F)
     let homoglyph_comment = "Test with Cyrillic а and Greek ο";
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some(homoglyph_comment.to_string()),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some(homoglyph_comment.to_string()),
+        None,
+        true,
+        false,
+    );
 
     let result = sign(&sign_opts, None).expect("Should sign with homoglyphs");
 
@@ -1134,16 +1107,15 @@ fn test_unicode_multibyte_at_byte_limit() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1161,16 +1133,16 @@ fn test_unicode_multibyte_at_byte_limit() {
     assert_eq!(comment_with_multibyte.len(), max_bytes);
     assert!(comment_with_multibyte.chars().count() < comment_with_multibyte.len());
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some(comment_with_multibyte.clone()),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some(comment_with_multibyte.clone()),
+        None,
+        true,
+        false,
+    );
 
     let result = sign(&sign_opts, None).expect("Should sign with multi-byte char at byte limit");
     assert_eq!(result.trusted_comment, comment_with_multibyte);
@@ -1191,16 +1163,15 @@ fn test_unicode_multibyte_exceeds_limit() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1215,16 +1186,16 @@ fn test_unicode_multibyte_exceeds_limit() {
     // Should exceed byte limit
     assert!(too_long_comment.len() > max_bytes);
 
-    let sign_opts = SignOptions {
-        secret_key_file: secret_key.as_path(),
-        message_file: message_file.as_path(),
-        signature_file: Some(sig_file.as_path()),
-        prehashed: true,
-        trusted_comment: Some(too_long_comment),
-        untrusted_comment: None,
-        force: true,
-        quiet: false,
-    };
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        Some(too_long_comment),
+        None,
+        true,
+        false,
+    );
 
     let result = sign(&sign_opts, None);
     assert!(

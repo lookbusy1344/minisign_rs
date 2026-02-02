@@ -75,9 +75,9 @@ fn test_bytes_to_words_max_byte_value() {
     let bytes = [0xFF, 0xFF];
     let result = bytes_to_words(&bytes);
 
-    // 0xFF at even position should be "Zulu"
-    // 0xFF at odd position should be "Yucatan"
-    assert_eq!(result, "Zulu Yucatan");
+    // 0xFF at even position should be "zulu"
+    // 0xFF at odd position should be "yucatan"
+    assert_eq!(result, "zulu yucatan");
 }
 
 #[test]
