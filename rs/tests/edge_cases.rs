@@ -49,13 +49,13 @@ fn test_empty_file_signing() {
     sign(&sign_opts, None).expect("Should sign empty file");
 
     // Verify signature on empty file
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify empty file signature");
 }
 
@@ -97,13 +97,13 @@ fn test_empty_file_legacy_mode() {
     sign(&sign_opts, None).expect("Should sign empty file in legacy mode");
 
     // Verify signature on empty file
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify empty file legacy signature");
 }
 
@@ -147,13 +147,13 @@ fn test_unicode_in_trusted_comment() {
     assert!(result.trusted_comment.contains("签名"));
 
     // Verify signature with Unicode comments
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        false,
+    );
     let result = verify(&verify_opts).expect("Should verify signature with Unicode");
     assert!(result.trusted_comment.contains("🔐"));
 }
@@ -196,13 +196,13 @@ fn test_unicode_in_untrusted_comment() {
     sign(&sign_opts, None).expect("Should sign with Unicode untrusted comment");
 
     // Verify and check untrusted comment
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: false,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        false,
+    );
     let result = verify(&verify_opts).expect("Should verify");
     assert!(result.untrusted_comment.contains("Файл"));
 }
@@ -247,13 +247,13 @@ fn test_large_file_prehashed() {
     sign(&sign_opts, None).expect("Should sign large file");
 
     // Verify signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify large file signature");
 }
 
@@ -300,23 +300,23 @@ fn test_symlink_handling() {
     sign(&sign_opts, None).expect("Should sign through symlink");
 
     // Verify using the symlink
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_link.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_link.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify through symlink");
 
     // Verify using the real file - should also work
-    let verify_opts2 = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts2 = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts2).expect("Should verify real file with symlink signature");
 }
 
@@ -365,13 +365,13 @@ fn test_generate_key_with_empty_password() {
     sign(&sign_opts, Some(b"")).expect("Should sign with empty password");
 
     // Verify the signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature created with empty password");
 }
 
@@ -512,13 +512,13 @@ fn test_untrusted_comment_max_valid_length() {
     sign(&sign_opts, None).expect("Should sign with max valid untrusted comment");
 
     // Verify signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature with max valid comment");
 }
 
@@ -566,13 +566,13 @@ fn test_untrusted_comment_warning_threshold() {
     sign(&sign_opts, None).expect("Should sign but warn about untrusted comment length");
 
     // Verify signature still works
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature despite warning");
 }
 
@@ -621,13 +621,13 @@ fn test_trusted_comment_max_valid_length() {
     assert_eq!(result.trusted_comment, max_valid_trusted);
 
     // Verify signature
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature with max valid trusted comment");
 }
 
@@ -803,13 +803,13 @@ fn test_symlink_outside_working_directory() {
     sign(&sign_opts, None).expect("Should sign file via symlink");
 
     // Verify using the real file path works
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: outside_message.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        outside_message.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify using real file path");
 }
 
@@ -1033,13 +1033,13 @@ fn test_unicode_rtl_override() {
     assert!(result.trusted_comment.contains('\u{202E}'));
 
     // Verify signature works despite RTL
-    let verify_opts = VerifyOptions {
-        public_key: PublicKeySource::File(public_key.as_path()),
-        signature_file: sig_file.as_path(),
-        message_file: message_file.as_path(),
-        output: false,
-        quiet: true,
-    };
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(public_key.as_path()),
+        sig_file.as_path(),
+        message_file.as_path(),
+        false,
+        true,
+    );
     verify(&verify_opts).expect("Should verify signature with RTL comment");
 }
 

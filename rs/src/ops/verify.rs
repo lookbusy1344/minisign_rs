@@ -17,15 +17,73 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone)]
 pub struct VerifyOptions<'a> {
     /// Public key (either from file or provided directly)
-    pub public_key: PublicKeySource<'a>,
+    public_key: PublicKeySource<'a>,
     /// Path to the signature file
-    pub signature_file: &'a Path,
+    signature_file: &'a Path,
     /// Path to the message file
-    pub message_file: &'a Path,
+    message_file: &'a Path,
     /// Output verification result to stdout
-    pub output: bool,
+    output: bool,
     /// Quiet mode (no output)
-    pub quiet: bool,
+    quiet: bool,
+}
+
+impl<'a> VerifyOptions<'a> {
+    /// Create new verify options
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - Public key (either from file or provided directly)
+    /// * `signature_file` - Path to the signature file
+    /// * `message_file` - Path to the message file
+    /// * `output` - Output verification result to stdout
+    /// * `quiet` - Quiet mode (no output)
+    #[must_use]
+    pub fn new(
+        public_key: PublicKeySource<'a>,
+        signature_file: &'a Path,
+        message_file: &'a Path,
+        output: bool,
+        quiet: bool,
+    ) -> Self {
+        Self {
+            public_key,
+            signature_file,
+            message_file,
+            output,
+            quiet,
+        }
+    }
+
+    /// Get the public key source
+    #[must_use]
+    pub fn public_key(&self) -> &PublicKeySource<'a> {
+        &self.public_key
+    }
+
+    /// Get the signature file path
+    #[must_use]
+    pub fn signature_file(&self) -> &Path {
+        self.signature_file
+    }
+
+    /// Get the message file path
+    #[must_use]
+    pub fn message_file(&self) -> &Path {
+        self.message_file
+    }
+
+    /// Get the output flag
+    #[must_use]
+    pub fn output(&self) -> bool {
+        self.output
+    }
+
+    /// Get the quiet flag
+    #[must_use]
+    pub fn quiet(&self) -> bool {
+        self.quiet
+    }
 }
 
 /// Source of the public key
@@ -81,13 +139,13 @@ pub struct FileVerifyResult {
 /// - The global signature is invalid
 pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     // Load the public key
-    let pubkey = load_public_key(&options.public_key)?;
+    let pubkey = load_public_key(options.public_key())?;
 
     // Load the signature
-    let sig_box = load_signature(options.signature_file)?;
+    let sig_box = load_signature(options.signature_file())?;
 
     // Verify the signature on the message
-    verify_message_signature(&pubkey, &sig_box, options.message_file)?;
+    verify_message_signature(&pubkey, &sig_box, options.message_file())?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
@@ -246,8 +304,8 @@ pub fn verify_multiple_files(
     // Fast path for single file
     if files.len() == 1 {
         let result =
-            verify_file_with_key(&files[0], &load_public_key(&options.public_key)?, options)?;
-        if !options.quiet {
+            verify_file_with_key(&files[0], &load_public_key(options.public_key())?, options)?;
+        if !options.quiet() {
             println!(
                 "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
                 files[0].display(),
@@ -260,10 +318,10 @@ pub fn verify_multiple_files(
     }
 
     // Load public key once — avoids N-1 redundant I/O operations
-    let pubkey = load_public_key(&options.public_key)?;
+    let pubkey = load_public_key(options.public_key())?;
 
     // Show key ID once at the top (like signing does)
-    if !options.quiet {
+    if !options.quiet() {
         let key_id = pubkey.keynum().to_key_id();
         let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
         println!("Verifying with key: {key_id} ({key_id_words})");
@@ -300,7 +358,7 @@ pub fn verify_multiple_files(
 fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &VerifyOptions<'_>) {
     match result {
         Ok(verify_result) => {
-            if !options.quiet {
+            if !options.quiet() {
                 println!(
                     "Verified: {}\n  Trusted comment: {}",
                     file.display(),
@@ -309,7 +367,7 @@ fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &Veri
             }
         }
         Err(e) => {
-            if !options.quiet {
+            if !options.quiet() {
                 eprintln!("Failed: {} ({})", file.display(), e);
             }
         }
@@ -326,7 +384,7 @@ fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> R
     let success_count = results.len() - failures.len();
 
     if !failures.is_empty() {
-        if !options.quiet {
+        if !options.quiet() {
             eprintln!(
                 "\nSummary: {} verified, {} failed",
                 success_count,
