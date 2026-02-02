@@ -20,33 +20,108 @@ use std::path::{Path, PathBuf};
 #[allow(clippy::struct_excessive_bools)]
 pub struct GenerateOptions<'a> {
     /// Path to write the secret key file
-    pub secret_key_file: &'a Path,
+    secret_key_file: &'a Path,
     /// Path to write the public key file
-    pub public_key_file: &'a Path,
+    public_key_file: &'a Path,
     /// Comment for the key files
-    pub comment: Option<String>,
+    comment: Option<String>,
     /// Force overwrite existing files
-    pub force: bool,
+    force: bool,
     /// Create unencrypted key (no password)
-    pub no_password: bool,
+    no_password: bool,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
-    pub allow_kdf_fallback: bool,
+    allow_kdf_fallback: bool,
     /// Force weak KDF parameters for testing (DEBUG ONLY)
     #[cfg(debug_assertions)]
-    pub force_weak_kdf: bool,
+    force_weak_kdf: bool,
+}
+
+impl<'a> GenerateOptions<'a> {
+    /// Create new generate options
+    #[allow(clippy::fn_params_excessive_bools)]
+    #[must_use]
+    pub fn new(
+        secret_key_file: &'a Path,
+        public_key_file: &'a Path,
+        comment: Option<String>,
+        force: bool,
+        no_password: bool,
+        allow_kdf_fallback: bool,
+    ) -> Self {
+        Self {
+            secret_key_file,
+            public_key_file,
+            comment,
+            force,
+            no_password,
+            allow_kdf_fallback,
+            #[cfg(debug_assertions)]
+            force_weak_kdf: false,
+        }
+    }
+
+    /// Create new generate options with weak KDF (DEBUG ONLY)
+    #[cfg(debug_assertions)]
+    #[allow(clippy::fn_params_excessive_bools)]
+    #[must_use]
+    pub fn new_with_weak_kdf(
+        secret_key_file: &'a Path,
+        public_key_file: &'a Path,
+        comment: Option<String>,
+        force: bool,
+        no_password: bool,
+        allow_kdf_fallback: bool,
+        force_weak_kdf: bool,
+    ) -> Self {
+        Self {
+            secret_key_file,
+            public_key_file,
+            comment,
+            force,
+            no_password,
+            allow_kdf_fallback,
+            force_weak_kdf,
+        }
+    }
 }
 
 /// Result of key generation
 #[derive(Debug, Clone)]
 pub struct GenerateResult {
     /// Path where the secret key was written
-    pub secret_key_file: PathBuf,
+    secret_key_file: PathBuf,
     /// Path where the public key was written
-    pub public_key_file: PathBuf,
+    public_key_file: PathBuf,
     /// The keynum in hexadecimal format
-    pub keynum_hex: String,
+    keynum_hex: String,
     /// The full public key in base64 format (for -P flag)
-    pub public_key_base64: String,
+    public_key_base64: String,
+}
+
+impl GenerateResult {
+    /// Get the path where the secret key was written
+    #[must_use]
+    pub fn secret_key_file(&self) -> &PathBuf {
+        &self.secret_key_file
+    }
+
+    /// Get the path where the public key was written
+    #[must_use]
+    pub fn public_key_file(&self) -> &PathBuf {
+        &self.public_key_file
+    }
+
+    /// Get the keynum in hexadecimal format
+    #[must_use]
+    pub fn keynum_hex(&self) -> &str {
+        &self.keynum_hex
+    }
+
+    /// Get the full public key in base64 format (for -P flag)
+    #[must_use]
+    pub fn public_key_base64(&self) -> &str {
+        &self.public_key_base64
+    }
 }
 
 /// Generate a new keypair

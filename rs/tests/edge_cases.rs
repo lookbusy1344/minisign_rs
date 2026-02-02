@@ -21,16 +21,14 @@ fn test_empty_file_signing() {
     let sig_file = temp_dir.path().join("empty.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create empty file
@@ -70,16 +68,14 @@ fn test_empty_file_legacy_mode() {
     let sig_file = temp_dir.path().join("empty_legacy.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create empty file
@@ -119,16 +115,14 @@ fn test_unicode_in_trusted_comment() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message
@@ -171,16 +165,14 @@ fn test_unicode_in_untrusted_comment() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message
@@ -221,16 +213,14 @@ fn test_large_file_prehashed() {
     let sig_file = temp_dir.path().join("large.bin.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create a 100MB file (not 4GB to keep tests fast)
@@ -276,16 +266,14 @@ fn test_symlink_handling() {
     let sig_file = temp_dir.path().join("message_link.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message file and symlink to it
@@ -334,16 +322,25 @@ fn test_generate_key_with_empty_password() {
     let public_key = temp_dir.path().join("test.pub");
 
     // Generate key with empty password
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: false, // Password is required
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true, // Use weak KDF for faster test
-    };
+    #[cfg(debug_assertions)]
+    let gen_opts = GenerateOptions::new_with_weak_kdf(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        false, // Password is required
+        false,
+        true, // Use weak KDF for faster test
+    );
+    #[cfg(not(debug_assertions))]
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        false, // Password is required
+        false,
+    );
 
     // Empty password should work
     generate(&gen_opts, Some(b"")).expect("Should generate key with empty password");
@@ -390,16 +387,14 @@ fn test_change_password_to_empty() {
     let public_key = temp_dir.path().join("test.pub");
 
     // Generate key with non-empty password
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: false,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, Some(b"original_password")).expect("Failed to generate key");
 
     // Change password to empty
@@ -447,16 +442,14 @@ fn test_change_password_from_empty() {
     let public_key = temp_dir.path().join("test.pub");
 
     // Generate key with empty password
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: false,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: true,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        false,
+        false,
+    );
     generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
@@ -499,16 +492,14 @@ fn test_untrusted_comment_max_valid_length() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -554,16 +545,14 @@ fn test_untrusted_comment_warning_threshold() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -609,16 +598,14 @@ fn test_trusted_comment_max_valid_length() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -665,16 +652,14 @@ fn test_trusted_comment_error_threshold() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -734,16 +719,14 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
     symlink(&sensitive_file, &sig_file).expect("Failed to create symlink");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -799,16 +782,14 @@ fn test_symlink_outside_working_directory() {
     // Generate key in work directory
     let secret_key = work_dir.join("test.key");
     let public_key = work_dir.join("test.pub");
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Sign using the symlink - should follow it and sign the real file
@@ -862,16 +843,14 @@ fn test_parent_directory_symlink_no_escape() {
     // Generate key using path through symlinked directory
     let secret_key = link_dir.join("test.key");
     let public_key = link_dir.join("test.pub");
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Verify files were created in the real directory
@@ -938,16 +917,14 @@ fn test_circular_symlink_handling() {
     // Generate key
     let secret_key = temp_dir.path().join("test.key");
     let public_key = temp_dir.path().join("test.pub");
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Attempt to sign the circular symlink
@@ -984,16 +961,14 @@ fn test_unicode_zero_width_joiners() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1030,16 +1005,14 @@ fn test_unicode_rtl_override() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1085,16 +1058,14 @@ fn test_unicode_homoglyphs() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1137,16 +1108,14 @@ fn test_unicode_multibyte_at_byte_limit() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -1194,16 +1163,14 @@ fn test_unicode_multibyte_exceeds_limit() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
 
     // Generate key
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");

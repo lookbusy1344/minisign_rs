@@ -41,16 +41,14 @@ fn test_concurrent_key_generation_same_path() {
             barrier.wait();
 
             // All threads attempt to create keys at the same time
-            let opts = GenerateOptions {
-                secret_key_file: secret_key.as_ref(),
-                public_key_file: public_key.as_ref(),
-                comment: None,
-                force: false, // Important: no force, should fail if exists
-                no_password: true,
-                allow_kdf_fallback: false,
-                #[cfg(debug_assertions)]
-                force_weak_kdf: false,
-            };
+            let opts = GenerateOptions::new(
+                secret_key.as_ref(),
+                public_key.as_ref(),
+                None,
+                false, // Important: no force, should fail if exists
+                true,
+                false,
+            );
 
             match generate(&opts, None) {
                 Ok(_) => {
@@ -99,16 +97,14 @@ fn test_concurrent_signature_creation() {
     let secret_key = temp_dir.path().join("sign.key");
     let public_key = temp_dir.path().join("sign.pub");
 
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create a test message
@@ -209,16 +205,14 @@ fn test_concurrent_key_generation_with_force() {
         let handle = thread::spawn(move || {
             barrier.wait();
 
-            let opts = GenerateOptions {
-                secret_key_file: secret_key.as_ref(),
-                public_key_file: public_key.as_ref(),
-                comment: None,
-                force: true, // Force mode should allow overwrites
-                no_password: true,
-                allow_kdf_fallback: false,
-                #[cfg(debug_assertions)]
-                force_weak_kdf: false,
-            };
+            let opts = GenerateOptions::new(
+                secret_key.as_ref(),
+                public_key.as_ref(),
+                None,
+                true, // Force mode should allow overwrites
+                true,
+                false,
+            );
 
             // All operations should succeed (or fail for other reasons, not file exists)
             generate(&opts, None).expect("Generate should succeed with force=true");
@@ -249,16 +243,14 @@ fn test_sequential_key_generation() {
     let secret_key = temp_dir.path().join("seq1.key");
     let public_key = temp_dir.path().join("seq1.pub");
 
-    let opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: false,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        false,
+        true,
+        false,
+    );
 
     generate(&opts, None).expect("First generation should succeed");
     assert!(secret_key.exists());
@@ -272,16 +264,14 @@ fn test_sequential_key_generation() {
     );
 
     // With force, should succeed
-    let opts_force = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let opts_force = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
 
     generate(&opts_force, None).expect("Generation with force should succeed");
 }
@@ -318,16 +308,14 @@ fn test_toctou_prevention_with_existence_check() {
                 let _secret_key = PathBuf::from(format!("{}.{}", test_file.display(), i));
                 let public_key = PathBuf::from(format!("{}.{}.pub", test_file.display(), i));
 
-                let opts = GenerateOptions {
-                    secret_key_file: test_file.as_ref(),
-                    public_key_file: public_key.as_path(),
-                    comment: None,
-                    force: false,
-                    no_password: true,
-                    allow_kdf_fallback: false,
-                    #[cfg(debug_assertions)]
-                    force_weak_kdf: false,
-                };
+                let opts = GenerateOptions::new(
+                    test_file.as_ref(),
+                    public_key.as_path(),
+                    None,
+                    false,
+                    true,
+                    false,
+                );
 
                 if generate(&opts, None).is_ok() {
                     *success.lock().unwrap() += 1;
@@ -367,16 +355,14 @@ fn test_concurrent_different_files() {
             let secret_key = temp_dir.join(format!("key_{i}.key"));
             let public_key = temp_dir.join(format!("key_{i}.pub"));
 
-            let opts = GenerateOptions {
-                secret_key_file: secret_key.as_path(),
-                public_key_file: public_key.as_path(),
-                comment: None,
-                force: false,
-                no_password: true,
-                allow_kdf_fallback: false,
-                #[cfg(debug_assertions)]
-                force_weak_kdf: false,
-            };
+            let opts = GenerateOptions::new(
+                secret_key.as_path(),
+                public_key.as_path(),
+                None,
+                false,
+                true,
+                false,
+            );
 
             generate(&opts, None).expect("Should succeed for different files");
 
@@ -413,16 +399,14 @@ fn test_multiprocess_signing_same_key() {
     let secret_key = temp_dir.path().join("multi.key");
     let public_key = temp_dir.path().join("multi.pub");
 
-    let gen_opts = GenerateOptions {
-        secret_key_file: secret_key.as_path(),
-        public_key_file: public_key.as_path(),
-        comment: None,
-        force: true,
-        no_password: true,
-        allow_kdf_fallback: false,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: false,
-    };
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+    );
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create multiple message files
@@ -500,16 +484,14 @@ fn test_read_during_write() {
     let secret_key_writer = Arc::clone(&secret_key);
     let public_key_writer = Arc::clone(&public_key);
     let writer = thread::spawn(move || {
-        let opts = GenerateOptions {
-            secret_key_file: secret_key_writer.as_ref(),
-            public_key_file: public_key_writer.as_ref(),
-            comment: None,
-            force: true,
-            no_password: true,
-            allow_kdf_fallback: false,
-            #[cfg(debug_assertions)]
-            force_weak_kdf: false,
-        };
+        let opts = GenerateOptions::new(
+            secret_key_writer.as_ref(),
+            public_key_writer.as_ref(),
+            None,
+            true,
+            true,
+            false,
+        );
 
         // Add small delay to let reader start first
         thread::sleep(Duration::from_millis(5));
@@ -579,16 +561,8 @@ fn test_atomic_file_creation_stress() {
             // Minimal delay to maximize contention
             thread::sleep(std::time::Duration::from_nanos(100));
 
-            let opts = GenerateOptions {
-                secret_key_file: target_file.as_ref(),
-                public_key_file: &public_key,
-                comment: None,
-                force: false,
-                no_password: true,
-                allow_kdf_fallback: false,
-                #[cfg(debug_assertions)]
-                force_weak_kdf: false,
-            };
+            let opts =
+                GenerateOptions::new(target_file.as_ref(), &public_key, None, false, true, false);
 
             if generate(&opts, None).is_ok() {
                 *success.lock().unwrap() += 1;

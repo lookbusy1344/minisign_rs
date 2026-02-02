@@ -70,16 +70,26 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    let options = GenerateOptions {
+    #[cfg(debug_assertions)]
+    let options = GenerateOptions::new_with_weak_kdf(
         secret_key_file,
         public_key_file,
         comment,
-        force: cli.force,
-        no_password: cli.no_password,
-        allow_kdf_fallback: cli.allow_kdf_fallback,
-        #[cfg(debug_assertions)]
-        force_weak_kdf: cli.force_weak_kdf,
-    };
+        cli.force,
+        cli.no_password,
+        cli.allow_kdf_fallback,
+        cli.force_weak_kdf,
+    );
+
+    #[cfg(not(debug_assertions))]
+    let options = GenerateOptions::new(
+        secret_key_file,
+        public_key_file,
+        comment,
+        cli.force,
+        cli.no_password,
+        cli.allow_kdf_fallback,
+    );
 
     // Display working message for slow key generation
     if !cli.quiet {
@@ -102,16 +112,16 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     if !cli.quiet {
         println!(
             "The secret key was saved as {} - Keep it secret!",
-            result.secret_key_file.display()
+            result.secret_key_file().display()
         );
         println!(
             "The public key was saved as {} - That one can be public.",
-            result.public_key_file.display()
+            result.public_key_file().display()
         );
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
         println!();
-        println!("minisign_rs -Vm <file> -P {}", result.public_key_base64);
+        println!("minisign_rs -Vm <file> -P {}", result.public_key_base64());
     }
 
     Ok(())
