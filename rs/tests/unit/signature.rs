@@ -167,16 +167,16 @@ proptest! {
 #[test]
 fn test_untrusted_comment_with_control_characters() {
     // Create a signature box with control characters in untrusted comment
-    let sig_box = SignatureBox {
-        untrusted_comment: "test\x00null".to_string(), // Embedded null byte
-        sig_struct: SigStruct::new(
+    let sig_box = SignatureBox::new(
+        "test\x00null".to_string(), // Embedded null byte
+        SigStruct::new(
             KeyNum::from_bytes([0; 8]),
             Signature::from_bytes([0; SIGNATURE_BYTES]),
             false,
         ),
-        trusted_comment: "valid comment".to_string(),
-        global_signature: Signature::from_bytes([0; SIGNATURE_BYTES]),
-    };
+        "valid comment".to_string(),
+        Signature::from_bytes([0; SIGNATURE_BYTES]),
+    );
     let serialized = sig_box.to_file_contents();
     let result = SignatureBox::from_file_contents(&serialized);
     // Should fail validation due to control character
@@ -186,16 +186,16 @@ fn test_untrusted_comment_with_control_characters() {
 #[test]
 fn test_untrusted_comment_with_carriage_return() {
     // Create a signature box with carriage return in untrusted comment
-    let sig_box = SignatureBox {
-        untrusted_comment: "test\rcarriage".to_string(),
-        sig_struct: SigStruct::new(
+    let sig_box = SignatureBox::new(
+        "test\rcarriage".to_string(),
+        SigStruct::new(
             KeyNum::from_bytes([0; 8]),
             Signature::from_bytes([0; SIGNATURE_BYTES]),
             false,
         ),
-        trusted_comment: "valid comment".to_string(),
-        global_signature: Signature::from_bytes([0; SIGNATURE_BYTES]),
-    };
+        "valid comment".to_string(),
+        Signature::from_bytes([0; SIGNATURE_BYTES]),
+    );
     let serialized = sig_box.to_file_contents();
     let result = SignatureBox::from_file_contents(&serialized);
     // Should fail validation due to carriage return

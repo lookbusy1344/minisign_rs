@@ -222,10 +222,10 @@ impl std::fmt::Debug for SigStruct {
 /// The global signature signs: `SigStruct.signature || trusted_comment_text`
 #[derive(Clone, PartialEq, Eq)]
 pub struct SignatureBox {
-    pub untrusted_comment: String,   // pub for unit tests
-    pub sig_struct: SigStruct,       // pub for unit tests
-    pub trusted_comment: String,     // pub for unit tests
-    pub global_signature: Signature, // pub for unit tests
+    untrusted_comment: String,   // pub for unit tests
+    sig_struct: SigStruct,       // pub for unit tests
+    trusted_comment: String,     // pub for unit tests
+    global_signature: Signature, // pub for unit tests
 }
 
 impl SignatureBox {
