@@ -471,6 +471,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
 
     // Determine the source and get the inspection result
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
+    let default_secret_key = Cli::default_secret_key_path();
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
             let options = InspectOptions {
@@ -479,7 +480,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", sk_file.display()),
-                Some(sk_file.clone()),
+                Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
             let options = InspectOptions {
@@ -488,7 +489,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", pk_file.display()),
-                Some(pk_file.clone()),
+                Some(pk_file.as_path()),
             )
         } else if let Some(ref pk_base64) = cli.public_key_base64 {
             // Inspect public key from base64 string
@@ -499,12 +500,13 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else {
             // Default to secret key path
-            let path = Cli::default_secret_key_path();
-            let options = InspectOptions { key_file: &path };
+            let options = InspectOptions {
+                key_file: &default_secret_key,
+            };
             (
                 inspect(&options)?,
-                format!("Inspecting: {} (default)", path.display()),
-                Some(path),
+                format!("Inspecting: {} (default)", default_secret_key.display()),
+                Some(default_secret_key.as_path()),
             )
         };
 
@@ -513,13 +515,11 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     if result.key_type == KeyType::SecretEncrypted
         && result.key_id == "0000000000000000"
         && !cli.no_decrypt
-        && let Some(ref path) = key_file_path
+        && let Some(path) = key_file_path
     {
         // Prompt for password and decrypt
         let password = prompt_password("Password: ", cli.password_file.as_deref())?;
-        let options = InspectPrivateOptions {
-            key_file: path.as_path(),
-        };
+        let options = InspectPrivateOptions { key_file: path };
         result = inspect_private(&options, password.as_bytes())?;
         decrypted = true;
     }
