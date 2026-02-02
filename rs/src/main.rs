@@ -292,16 +292,12 @@ fn handle_verify(cli: &Cli) -> Result<()> {
 
 fn handle_recreate(cli: &Cli) -> Result<()> {
     // Get secret key path
-    let secret_key_file = cli
-        .secret_key_file
-        .clone()
-        .unwrap_or_else(Cli::default_secret_key_path);
+    let default_secret_key = Cli::default_secret_key_path();
+    let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Get public key path
-    let public_key_file = cli
-        .public_key_file
-        .clone()
-        .unwrap_or_else(Cli::default_public_key_path);
+    let default_public_key = Cli::default_public_key_path();
+    let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
     // Prompt for password
     let password = if cli.no_password {
@@ -311,8 +307,8 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     };
 
     let options = RecreateOptions {
-        secret_key_file: &secret_key_file,
-        public_key_file: &public_key_file,
+        secret_key_file,
+        public_key_file,
         comment: cli.untrusted_comment.clone(),
         force: cli.force,
     };
@@ -331,10 +327,8 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
 
 fn handle_change(cli: &Cli) -> Result<()> {
     // Get secret key path
-    let secret_key_file = cli
-        .secret_key_file
-        .clone()
-        .unwrap_or_else(Cli::default_secret_key_path);
+    let default_secret_key = Cli::default_secret_key_path();
+    let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Prompt for current password (if the key is encrypted)
     let current_password = if cli.no_password {
@@ -357,7 +351,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
     };
 
     let options = ChangeOptions {
-        secret_key_file: &secret_key_file,
+        secret_key_file,
         remove_password: cli.no_password && new_password.is_none(),
         allow_kdf_fallback: cli.allow_kdf_fallback,
         #[cfg(debug_assertions)]
