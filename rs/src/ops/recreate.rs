@@ -67,13 +67,11 @@ pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Resul
 
     // Generate comment
     let keynum_hex = keynum.to_key_id();
-    let comment = options
-        .comment
-        .clone()
-        .unwrap_or_else(|| format!("minisign public key {keynum_hex}"));
+    let default_comment = format!("minisign public key {keynum_hex}");
+    let comment = options.comment.as_deref().unwrap_or(&default_comment);
 
     // Write the public key file with atomic creation
-    let pubkey_contents = pubkey.to_file_contents(&comment);
+    let pubkey_contents = pubkey.to_file_contents(comment);
     write_public_key_file(options.public_key_file, &pubkey_contents, options.force)?;
 
     Ok(RecreateResult {
