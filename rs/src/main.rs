@@ -301,12 +301,12 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
         Some(prompt_password("Password: ", cli.password_file.as_deref())?)
     };
 
-    let options = RecreateOptions {
+    let options = RecreateOptions::new(
         secret_key_file,
         public_key_file,
-        comment: cli.untrusted_comment.clone(),
-        force: cli.force,
-    };
+        cli.untrusted_comment.clone(),
+        cli.force,
+    );
 
     let result = recreate(&options, password.as_ref().map(|p| p.as_bytes()))?;
 

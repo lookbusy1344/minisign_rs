@@ -20,12 +20,12 @@ fn test_recreate_from_unencrypted_key() {
 
     // Recreate public key
     let pk_path = temp_dir.path().join("test.pub");
-    let options = RecreateOptions {
-        secret_key_file: sk_path.as_path(),
-        public_key_file: pk_path.as_path(),
-        comment: Some("Recreated key".to_string()),
-        force: false,
-    };
+    let options = RecreateOptions::new(
+        sk_path.as_path(),
+        pk_path.as_path(),
+        Some("Recreated key".to_string()),
+        false,
+    );
 
     let result = recreate(&options, None).expect("recreation should succeed");
 
@@ -76,12 +76,7 @@ fn test_recreate_from_encrypted_key_fast() {
 
     // Recreate public key
     let pk_path = temp_dir.path().join("recreated.pub");
-    let options = RecreateOptions {
-        secret_key_file: sk_path.as_path(),
-        public_key_file: pk_path.as_path(),
-        comment: None,
-        force: false,
-    };
+    let options = RecreateOptions::new(sk_path.as_path(), pk_path.as_path(), None, false);
 
     let result = recreate(&options, Some(password)).expect("recreation should succeed");
 
@@ -121,12 +116,7 @@ fn test_recreate_without_password_fails() {
 
     // Try to recreate without password
     let pk_path = temp_dir.path().join("test.pub");
-    let options = RecreateOptions {
-        secret_key_file: &sk_path,
-        public_key_file: &pk_path,
-        comment: None,
-        force: false,
-    };
+    let options = RecreateOptions::new(&sk_path, &pk_path, None, false);
 
     let result = recreate(&options, None);
     assert!(result.is_err());
@@ -163,12 +153,7 @@ fn test_recreate_wrong_password_fails() {
 
     // Try with wrong password
     let pk_path = temp_dir.path().join("test.pub");
-    let options = RecreateOptions {
-        secret_key_file: &sk_path,
-        public_key_file: &pk_path,
-        comment: None,
-        force: false,
-    };
+    let options = RecreateOptions::new(&sk_path, &pk_path, None, false);
 
     let result = recreate(&options, Some(b"wrongpassword"));
     assert!(result.is_err());
@@ -192,12 +177,7 @@ fn test_recreate_file_exists_without_force() {
     let pk_path = temp_dir.path().join("test.pub");
     fs::write(&pk_path, "existing content").unwrap();
 
-    let options = RecreateOptions {
-        secret_key_file: &sk_path,
-        public_key_file: &pk_path,
-        comment: None,
-        force: false,
-    };
+    let options = RecreateOptions::new(&sk_path, &pk_path, None, false);
 
     let result = recreate(&options, None);
     assert!(result.is_err());
@@ -217,12 +197,12 @@ fn test_recreate_force_overwrite() {
     let pk_path = temp_dir.path().join("test.pub");
     fs::write(&pk_path, "existing content").unwrap();
 
-    let options = RecreateOptions {
-        secret_key_file: &sk_path,
-        public_key_file: pk_path.as_path(),
-        comment: Some("Forced recreation".to_string()),
-        force: true,
-    };
+    let options = RecreateOptions::new(
+        &sk_path,
+        pk_path.as_path(),
+        Some("Forced recreation".to_string()),
+        true,
+    );
 
     recreate(&options, None).expect("should overwrite with force=true");
 
@@ -253,12 +233,8 @@ fn test_recreate_matches_original_public_key() {
 
     // Recreate public key
     let pk_path = temp_dir.path().join("recreated.pub");
-    let options = RecreateOptions {
-        secret_key_file: &sk_path,
-        public_key_file: pk_path.as_path(),
-        comment: Some("test".to_string()),
-        force: false,
-    };
+    let options =
+        RecreateOptions::new(&sk_path, pk_path.as_path(), Some("test".to_string()), false);
 
     recreate(&options, None).expect("recreation should succeed");
 
@@ -288,12 +264,7 @@ fn test_recreate_atomic_file_creation() {
     let pk_path = temp_dir.path().join("existing.pub");
     fs::write(&pk_path, "existing public key").unwrap();
 
-    let options = RecreateOptions {
-        secret_key_file: &sk_path,
-        public_key_file: pk_path.as_path(),
-        comment: None,
-        force: false,
-    };
+    let options = RecreateOptions::new(&sk_path, pk_path.as_path(), None, false);
 
     // Should fail due to existing file (atomic check)
     let result = recreate(&options, None);

@@ -10,13 +10,62 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone)]
 pub struct RecreateOptions<'a> {
     /// Path to the secret key file
-    pub secret_key_file: &'a Path,
+    secret_key_file: &'a Path,
     /// Path to write the public key file
-    pub public_key_file: &'a Path,
+    public_key_file: &'a Path,
     /// Comment for the public key file
-    pub comment: Option<String>,
+    comment: Option<String>,
     /// Force overwrite existing public key file
-    pub force: bool,
+    force: bool,
+}
+
+impl<'a> RecreateOptions<'a> {
+    /// Create new recreate options
+    ///
+    /// # Arguments
+    ///
+    /// * `secret_key_file` - Path to the secret key file
+    /// * `public_key_file` - Path to write the public key file
+    /// * `comment` - Optional comment for the public key file
+    /// * `force` - Force overwrite existing public key file
+    #[must_use]
+    pub fn new(
+        secret_key_file: &'a Path,
+        public_key_file: &'a Path,
+        comment: Option<String>,
+        force: bool,
+    ) -> Self {
+        Self {
+            secret_key_file,
+            public_key_file,
+            comment,
+            force,
+        }
+    }
+
+    /// Get the secret key file path
+    #[must_use]
+    pub fn secret_key_file(&self) -> &Path {
+        self.secret_key_file
+    }
+
+    /// Get the public key file path
+    #[must_use]
+    pub fn public_key_file(&self) -> &Path {
+        self.public_key_file
+    }
+
+    /// Get the comment
+    #[must_use]
+    pub fn comment(&self) -> Option<&str> {
+        self.comment.as_deref()
+    }
+
+    /// Get the force flag
+    #[must_use]
+    pub fn force(&self) -> bool {
+        self.force
+    }
 }
 
 /// Result of public key recreation
@@ -48,7 +97,7 @@ pub struct RecreateResult {
 /// - File I/O operations fail
 pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Result<RecreateResult> {
     // Load the secret key
-    let seckey = load_secret_key(options.secret_key_file)?;
+    let seckey = load_secret_key(options.secret_key_file())?;
 
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = if seckey.is_encrypted() {
@@ -68,14 +117,14 @@ pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Resul
     // Generate comment
     let keynum_hex = keynum.to_key_id();
     let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = options.comment.as_deref().unwrap_or(&default_comment);
+    let comment = options.comment().unwrap_or(&default_comment);
 
     // Write the public key file with atomic creation
     let pubkey_contents = pubkey.to_file_contents(comment);
-    write_public_key_file(options.public_key_file, &pubkey_contents, options.force)?;
+    write_public_key_file(options.public_key_file(), &pubkey_contents, options.force())?;
 
     Ok(RecreateResult {
-        public_key_file: options.public_key_file.to_path_buf(),
+        public_key_file: options.public_key_file().to_path_buf(),
         keynum_hex,
     })
 }
