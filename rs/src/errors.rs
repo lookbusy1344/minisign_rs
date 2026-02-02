@@ -113,8 +113,9 @@ pub enum Error {
     #[error("I/O error: {0}")]
     Io(String),
 
-    // Multi-file signing errors
-    #[error("Partial failure: some files could not be signed")]
+    // Multi-file batch operation errors
+    // Error message is empty because detailed context is printed by the caller
+    #[error("")]
     PartialFailure,
 
     // Generic errors
