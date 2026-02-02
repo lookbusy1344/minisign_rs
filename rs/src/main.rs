@@ -51,16 +51,12 @@ fn run() -> Result<()> {
 
 fn handle_generate(cli: &Cli) -> Result<()> {
     // Get secret key path (use default if not specified)
-    let secret_key_file = cli
-        .secret_key_file
-        .clone()
-        .unwrap_or_else(Cli::default_secret_key_path);
+    let default_secret_key = Cli::default_secret_key_path();
+    let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Get public key path (use default if not specified)
-    let public_key_file = cli
-        .public_key_file
-        .clone()
-        .unwrap_or_else(Cli::default_public_key_path);
+    let default_public_key = Cli::default_public_key_path();
+    let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
     // Get comment
     let comment = cli.untrusted_comment.clone();
@@ -75,8 +71,8 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     };
 
     let options = GenerateOptions {
-        secret_key_file: &secret_key_file,
-        public_key_file: &public_key_file,
+        secret_key_file,
+        public_key_file,
         comment,
         force: cli.force,
         no_password: cli.no_password,
