@@ -37,6 +37,8 @@ pub struct SignOptions<'a> {
     pub untrusted_comment: Option<String>,
     /// Force overwrite existing signature file
     pub force: bool,
+    /// Suppress informational output
+    pub quiet: bool,
 }
 
 /// Result of signing operation
@@ -200,6 +202,13 @@ pub fn sign_multiple_files(
 
     // Load and decrypt key once — avoids N-1 redundant scrypt derivations
     let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file, password)?;
+
+    // Show key ID once at the top (like verification does)
+    if !options.quiet {
+        let key_id = keynum.to_key_id();
+        let key_id_words = crate::wordlist::keynum_to_words(&keynum);
+        println!("Signing with key: {key_id} ({key_id_words})");
+    }
 
     // Multi-file path: sign all files with the already-loaded key
     let results: Vec<FileSignResult> = if sequential {

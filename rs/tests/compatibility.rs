@@ -259,6 +259,7 @@ fn test_c_verify_rust_legacy_signature() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
     sign(&sign_opts, None).expect("Failed to sign");
 

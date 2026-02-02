@@ -45,6 +45,7 @@ fn test_empty_file_signing() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
     sign(&sign_opts, None).expect("Should sign empty file");
 
@@ -93,6 +94,7 @@ fn test_empty_file_legacy_mode() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
     sign(&sign_opts, None).expect("Should sign empty file in legacy mode");
 
@@ -141,6 +143,7 @@ fn test_unicode_in_trusted_comment() {
         trusted_comment: Some("Signed 🔐 签名 توقيع".to_string()),
         untrusted_comment: Some("Test signature 测试 اختبار 🚀".to_string()),
         force: true,
+        quiet: false,
     };
     let result = sign(&sign_opts, None).expect("Should sign with Unicode comments");
     assert!(result.trusted_comment.contains("🔐"));
@@ -192,6 +195,7 @@ fn test_unicode_in_untrusted_comment() {
         trusted_comment: None,
         untrusted_comment: Some("Файл подписан ✓".to_string()),
         force: true,
+        quiet: false,
     };
     sign(&sign_opts, None).expect("Should sign with Unicode untrusted comment");
 
@@ -243,6 +247,7 @@ fn test_large_file_prehashed() {
         trusted_comment: Some("Large file signature".to_string()),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
     sign(&sign_opts, None).expect("Should sign large file");
 
@@ -296,6 +301,7 @@ fn test_symlink_handling() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
     sign(&sign_opts, None).expect("Should sign through symlink");
 
@@ -359,6 +365,7 @@ fn test_generate_key_with_empty_password() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     // Should be able to sign with empty password
@@ -420,6 +427,7 @@ fn test_change_password_to_empty() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     sign(&sign_opts, Some(b"")).expect("Should sign with new empty password");
@@ -470,6 +478,7 @@ fn test_change_password_from_empty() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     sign(&sign_opts, Some(b"new_password")).expect("Should sign with new non-empty password");
@@ -514,6 +523,7 @@ fn test_untrusted_comment_max_valid_length() {
         trusted_comment: None,
         untrusted_comment: Some(max_valid_comment),
         force: true,
+        quiet: false,
     };
 
     sign(&sign_opts, None).expect("Should sign with max valid untrusted comment");
@@ -568,6 +578,7 @@ fn test_untrusted_comment_warning_threshold() {
         trusted_comment: None,
         untrusted_comment: Some(warning_comment),
         force: true,
+        quiet: false,
     };
 
     sign(&sign_opts, None).expect("Should sign but warn about untrusted comment length");
@@ -622,6 +633,7 @@ fn test_trusted_comment_max_valid_length() {
         trusted_comment: Some(max_valid_trusted.clone()),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None).expect("Should sign with max valid trusted comment");
@@ -677,6 +689,7 @@ fn test_trusted_comment_error_threshold() {
         trusted_comment: Some(too_long_trusted),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None);
@@ -741,6 +754,7 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false, // Important: no force
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None);
@@ -804,6 +818,7 @@ fn test_symlink_outside_working_directory() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     // Should succeed - symlink following is expected behavior
@@ -888,6 +903,7 @@ fn test_parent_directory_symlink_no_escape() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     sign(&sign_opts, None).expect("Should sign using symlinked directory path");
@@ -941,6 +957,7 @@ fn test_circular_symlink_handling() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     // Should fail gracefully (not infinite loop or panic)
@@ -990,6 +1007,7 @@ fn test_unicode_zero_width_joiners() {
         trusted_comment: Some(zwj_comment.to_string()),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None).expect("Should sign with ZWJ in comment");
@@ -1034,6 +1052,7 @@ fn test_unicode_rtl_override() {
         trusted_comment: Some(rtl_comment.to_string()),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None).expect("Should sign with RTL override");
@@ -1089,6 +1108,7 @@ fn test_unicode_homoglyphs() {
         trusted_comment: Some(homoglyph_comment.to_string()),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None).expect("Should sign with homoglyphs");
@@ -1149,6 +1169,7 @@ fn test_unicode_multibyte_at_byte_limit() {
         trusted_comment: Some(comment_with_multibyte.clone()),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None).expect("Should sign with multi-byte char at byte limit");
@@ -1202,6 +1223,7 @@ fn test_unicode_multibyte_exceeds_limit() {
         trusted_comment: Some(too_long_comment),
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     let result = sign(&sign_opts, None);

@@ -163,6 +163,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
             prehashed: !cli.legacy,
             force: cli.force,
+            quiet: cli.quiet,
         };
 
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
@@ -190,6 +191,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             untrusted_comment: cli.untrusted_comment.clone(),
             prehashed: !cli.legacy,
             force: cli.force,
+            quiet: cli.quiet,
         };
 
         sign_multiple_files(

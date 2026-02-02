@@ -155,6 +155,7 @@ fn test_verify_with_wrong_keynum() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
     sign(&sign_opts, None).expect("sign should succeed");
 
@@ -218,6 +219,7 @@ fn test_verify_file_too_large_fails() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign(&sign_opts, None).expect("signing should succeed");
@@ -265,6 +267,7 @@ fn test_verify_prehashed_mode_no_size_limit() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign(&sign_opts, None).expect("signing large file in prehashed mode should succeed");
@@ -315,6 +318,7 @@ fn test_verify_multiple_files_sequential() {
         trusted_comment: Some("Batch verification test".to_string()),
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
@@ -370,6 +374,7 @@ fn test_verify_multiple_files_parallel() {
         trusted_comment: Some("Parallel verification test".to_string()),
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
@@ -430,6 +435,7 @@ fn test_verify_multiple_files_partial_failure() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
@@ -497,6 +503,7 @@ fn test_verify_multiple_files_all_attempted() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
@@ -566,6 +573,7 @@ fn test_verify_multiple_files_quiet_mode() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
@@ -639,6 +647,7 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");

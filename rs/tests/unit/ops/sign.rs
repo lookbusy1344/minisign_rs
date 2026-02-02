@@ -38,6 +38,7 @@ fn test_sign_unencrypted_key() {
         trusted_comment: Some("Test signature".to_string()),
         untrusted_comment: Some("Test".to_string()),
         force: false,
+        quiet: false,
     };
 
     let result = sign(&options, None).expect("signing should succeed");
@@ -86,6 +87,7 @@ fn test_sign_encrypted_key() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let password = b"test";
@@ -140,6 +142,7 @@ fn test_sign_encrypted_key_fast() {
         trusted_comment: Some("Fast test".to_string()),
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign(&options, Some(password)).expect("signing should succeed");
@@ -162,6 +165,7 @@ fn test_sign_without_password_fails() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign(&options, None);
@@ -186,6 +190,7 @@ fn test_sign_force_overwrite() {
         trusted_comment: None,
         untrusted_comment: None,
         force: true,
+        quiet: false,
     };
 
     sign(&options, None).expect("should overwrite with force=true");
@@ -208,6 +213,7 @@ fn test_sign_without_force_fails() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign(&options, None);
@@ -505,6 +511,7 @@ fn test_sign_file_too_large_fails() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     // Small file should succeed
@@ -535,6 +542,7 @@ fn test_prehashed_mode_no_size_limit() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     // Should succeed with prehashed mode (streaming)
@@ -590,6 +598,7 @@ fn test_sign_with_weak_kdf_key() {
         trusted_comment: Some("Test with weak key".to_string()),
         untrusted_comment: Some("weak key test".to_string()),
         force: false,
+        quiet: false,
     };
 
     // Signing should succeed (warning should be displayed to stderr)
@@ -615,6 +624,7 @@ fn test_sign_single_file_success() {
         trusted_comment: Some("Test".to_string()),
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign_single_file(opts.message_file, &opts, None);
@@ -650,6 +660,7 @@ fn test_sign_multiple_files_sequential() {
         trusted_comment: Some("Batch signature".to_string()),
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign_multiple_files(paths, &opts, None, true);
@@ -681,6 +692,7 @@ fn test_sign_multiple_files_parallel() {
         trusted_comment: Some("Parallel batch".to_string()),
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign_multiple_files(paths.clone(), &opts, None, false);
@@ -717,6 +729,7 @@ fn test_sign_multiple_files_partial_failure() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign_multiple_files(paths, &opts, None, true);
@@ -762,6 +775,7 @@ fn test_sign_multiple_files_all_attempted() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign_multiple_files(paths, &opts, None, true);
@@ -818,6 +832,7 @@ fn test_sign_summary_shows_only_filenames_not_error_details() {
         trusted_comment: None,
         untrusted_comment: None,
         force: false,
+        quiet: false,
     };
 
     let result = sign_multiple_files(paths, &opts, None, true);

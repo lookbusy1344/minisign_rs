@@ -147,6 +147,7 @@ fn test_concurrent_signature_creation() {
                 trusted_comment: None,
                 untrusted_comment: None,
                 force: false, // No force - should fail if exists
+                quiet: false,
             };
 
             match sign(&opts, None) {
@@ -451,6 +452,7 @@ fn test_multiprocess_signing_same_key() {
                 trusted_comment: None,
                 untrusted_comment: None,
                 force: false,
+                quiet: false,
             };
 
             sign(&opts, None)
