@@ -58,9 +58,7 @@ pub enum Error {
     #[error("invalid signature")]
     InvalidSignature,
 
-    #[error(
-        "key mismatch: signature keynum {sig_keynum} doesn't match public key keynum {pub_keynum}"
-    )]
+    #[error("key mismatch: signature keyid {sig_keynum} doesn't match")]
     KeyMismatch {
         sig_keynum: String,
         pub_keynum: String,

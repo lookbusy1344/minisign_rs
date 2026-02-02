@@ -336,6 +336,11 @@ fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> R
             for file in &failures {
                 eprintln!("  - {}", file.display());
             }
+            if success_count == 0 {
+                eprintln!("Total failure: all files failed");
+            } else {
+                eprintln!("Partial failure: some files could not be verified");
+            }
         }
         return Err(Error::PartialFailure);
     }

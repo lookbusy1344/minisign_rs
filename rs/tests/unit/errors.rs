@@ -15,8 +15,10 @@ fn test_error_display() {
         sig_keynum: "ABCD1234".into(),
         pub_keynum: "EFGH5678".into(),
     };
+    // Only signature keyid is shown in error message (public keyid is in header)
     assert!(err.to_string().contains("ABCD1234"));
-    assert!(err.to_string().contains("EFGH5678"));
+    assert!(err.to_string().contains("key mismatch"));
+    assert!(err.to_string().contains("keyid"));
 }
 
 #[test]
