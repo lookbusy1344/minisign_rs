@@ -320,7 +320,7 @@ fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &Veri
 fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> Result<()> {
     let failures: Vec<_> = results
         .iter()
-        .filter_map(|r| r.result.as_ref().err().map(|e| (&r.file, e)))
+        .filter_map(|r| r.result.as_ref().err().map(|_| &r.file))
         .collect();
 
     let success_count = results.len() - failures.len();
@@ -333,8 +333,8 @@ fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> R
                 failures.len()
             );
             eprintln!("Failed files:");
-            for (file, err) in &failures {
-                eprintln!("  - {}: {}", file.display(), err);
+            for file in &failures {
+                eprintln!("  - {}", file.display());
             }
         }
         return Err(Error::PartialFailure);
