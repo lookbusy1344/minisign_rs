@@ -202,6 +202,10 @@ pub fn generate_with_log_n(
 
         #[cfg(not(debug_assertions))]
         let (kdf_opslimit, kdf_memlimit) = {
+            assert!(
+                !options.force_weak_kdf,
+                "force_weak_kdf must be false in release builds"
+            );
             let n = 1u64 << log_n;
             let r = u64::from(SCRYPT_R);
             (
