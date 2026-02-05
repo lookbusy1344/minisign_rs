@@ -67,7 +67,7 @@ tests/
 ```
 
 ## Testing
-- **Fast tests** (148 tests): Default, use N=2^14 for scrypt
+- **Fast tests** (414 tests): Default, use N=2^14 for scrypt
 - **Slow tests** (11 tests): `--ignored`, use production N=2^20
 - Must test compatibility with C minisign after crypto changes
 - C minisign must be installed for compatibility tests
