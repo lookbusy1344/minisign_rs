@@ -306,6 +306,56 @@ pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
     Ok(hasher.finalize().into())
 }
 
+/// Calculate scrypt KDF parameters from `log_n` value
+///
+/// Converts a scrypt N parameter (expressed as log2(N)) into libsodium-compatible
+/// opslimit and memlimit values using the standard formulas:
+/// - opslimit = `LIBSODIUM_OPSLIMIT_MULTIPLIER` * N * r
+/// - memlimit = `LIBSODIUM_MEMLIMIT_MULTIPLIER` * N * r
+///
+/// # Arguments
+///
+/// * `log_n` - The log2 of the scrypt N parameter
+/// * `force_weak_kdf` - If true, use weaker parameters for testing (debug builds only)
+///
+/// # Returns
+///
+/// A tuple of (opslimit, memlimit) for use with scrypt
+///
+/// # Debug Mode
+///
+/// When compiled with debug assertions and `force_weak_kdf` is true, returns
+/// deliberately weakened parameters (N=2^17) for faster testing. This prints
+/// a warning to stderr.
+///
+/// # Panics
+///
+/// Panics if `force_weak_kdf` is true in release builds (enforced by assertion).
+#[must_use]
+pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> (u64, u64) {
+    #[cfg(debug_assertions)]
+    if force_weak_kdf {
+        // DEBUG ONLY: Force weak parameters (N=2^17, 8x weaker than production)
+        eprintln!("\n*** DEBUG WARNING: INTENTIONALLY INSECURE KEY ***");
+        eprintln!("--force-weak-kdf creates keys that are 8x easier to brute-force.");
+        eprintln!("NEVER use in production. For testing purposes only.\n");
+        return (4_194_304_u64, 134_217_728_u64); // N=2^17, r=8
+    }
+
+    #[cfg(not(debug_assertions))]
+    assert!(
+        !force_weak_kdf,
+        "force_weak_kdf must be false in release builds"
+    );
+
+    let n = 1u64 << log_n;
+    let r = u64::from(SCRYPT_R);
+    (
+        LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
+        LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
+    )
+}
+
 /// Convert libsodium-style opslimit/memlimit to scrypt parameters (`log_n`, r, p)
 ///
 /// The C minisign implementation uses libsodium's scrypt interface, which
