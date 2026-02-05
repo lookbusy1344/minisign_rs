@@ -20,6 +20,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Default untrusted comment for signatures
+const DEFAULT_UNTRUSTED_COMMENT: &str = "signature from minisign secret key";
+
 /// Options for signing files
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
@@ -432,7 +435,7 @@ pub fn create_signature(
 
     // Generate untrusted comment if not provided
     let untrusted_comment = untrusted_comment.map_or_else(
-        || "signature from minisign secret key".to_string(),
+        || DEFAULT_UNTRUSTED_COMMENT.to_string(),
         String::from,
     );
 
