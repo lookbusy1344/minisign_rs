@@ -126,6 +126,33 @@ impl GenerateResult {
 ///
 /// A `GenerateResult` containing the paths and keynum
 ///
+/// # Examples
+///
+/// ```no_run
+/// use minisign::ops::{generate, GenerateOptions};
+/// use std::path::Path;
+///
+/// let secret_key_path = Path::new("~/.minisign/minisign.key");
+/// let public_key_path = Path::new("~/.minisign/minisign.pub");
+/// let password = Some(b"my_secure_password".as_ref());
+///
+/// let options = GenerateOptions::new(
+///     secret_key_path,
+///     public_key_path,
+///     None,   // comment
+///     false,  // force
+///     false,  // no_password
+///     false,  // allow_kdf_fallback
+///     false,  // force_weak_kdf
+/// );
+///
+/// let result = generate(&options, password)?;
+/// println!("Key pair generated successfully");
+/// println!("Secret key: {}", result.secret_key_file().display());
+/// println!("Public key: {}", result.public_key_file().display());
+/// # Ok::<(), minisign::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if:
