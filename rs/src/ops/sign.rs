@@ -243,6 +243,32 @@ pub fn sign_single_file(
 ///
 /// A `SignResult` containing the signature file path and trusted comment
 ///
+/// # Examples
+///
+/// ```no_run
+/// use minisign::ops::{sign, SignOptions};
+/// use std::path::Path;
+///
+/// let secret_key_path = Path::new("~/.minisign/minisign.key");
+/// let message_file = Path::new("file.txt");
+/// let password = Some(b"my_password".as_ref());
+///
+/// let options = SignOptions::new(
+///     secret_key_path,
+///     message_file,
+///     None,        // signature_path (defaults to message_file.minisig)
+///     true,        // prehashed (default mode)
+///     None,        // trusted_comment
+///     None,        // untrusted_comment
+///     false,       // force
+///     false,       // quiet
+/// );
+///
+/// let result = sign(&options, password)?;
+/// println!("File signed: {}", result.signature_file.display());
+/// # Ok::<(), minisign::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if:

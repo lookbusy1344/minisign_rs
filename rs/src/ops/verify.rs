@@ -148,6 +148,30 @@ pub struct FileVerifyResult {
 /// - The message file cannot be read
 /// - The signature is invalid
 /// - The global signature is invalid
+///
+/// # Examples
+///
+/// ```no_run
+/// use minisign::ops::{verify, VerifyOptions, PublicKeySource};
+/// use std::path::Path;
+///
+/// let signature_path = Path::new("file.txt.minisig");
+/// let data_path = Path::new("file.txt");
+/// let pubkey_source = PublicKeySource::File(Path::new("minisign.pub"));
+///
+/// let options = VerifyOptions::new(
+///     pubkey_source,
+///     signature_path,
+///     data_path,
+///     false, // output mode
+///     false, // quiet mode
+///     false, // force prehashed (reject legacy signatures)
+/// );
+///
+/// let result = verify(&options)?;
+/// println!("Signature verified: {}", result.trusted_comment);
+/// # Ok::<(), minisign::Error>(())
+/// ```
 pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     // Load the public key
     let pubkey = load_public_key(options.public_key())?;
