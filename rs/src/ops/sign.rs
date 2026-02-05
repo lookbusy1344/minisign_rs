@@ -20,6 +20,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Default untrusted comment for signatures
+const DEFAULT_UNTRUSTED_COMMENT: &str = "signature from minisign secret key";
+
 /// Options for signing files
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
@@ -243,6 +246,32 @@ pub fn sign_single_file(
 ///
 /// A `SignResult` containing the signature file path and trusted comment
 ///
+/// # Examples
+///
+/// ```no_run
+/// use minisign::ops::{sign, SignOptions};
+/// use std::path::Path;
+///
+/// let secret_key_path = Path::new("~/.minisign/minisign.key");
+/// let message_file = Path::new("file.txt");
+/// let password = Some(b"my_password".as_ref());
+///
+/// let options = SignOptions::new(
+///     secret_key_path,
+///     message_file,
+///     None,        // signature_path (defaults to message_file.minisig)
+///     true,        // prehashed (default mode)
+///     None,        // trusted_comment
+///     None,        // untrusted_comment
+///     false,       // force
+///     false,       // quiet
+/// );
+///
+/// let result = sign(&options, password)?;
+/// println!("File signed: {}", result.signature_file.display());
+/// # Ok::<(), minisign::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if:
@@ -405,10 +434,8 @@ pub fn create_signature(
         trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
 
     // Generate untrusted comment if not provided
-    let untrusted_comment = untrusted_comment.map_or_else(
-        || "signature from minisign secret key".to_string(),
-        String::from,
-    );
+    let untrusted_comment =
+        untrusted_comment.map_or_else(|| DEFAULT_UNTRUSTED_COMMENT.to_string(), String::from);
 
     // Validate comment lengths (matches C implementation behavior)
     if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {

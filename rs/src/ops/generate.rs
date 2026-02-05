@@ -5,10 +5,8 @@
 use super::file_utils::{write_public_key_file, write_secret_key_file};
 use crate::{
     Result,
-    constants::{
-        LIBSODIUM_MEMLIMIT_MULTIPLIER, LIBSODIUM_OPSLIMIT_MULTIPLIER, SCRYPT_LOG_N, SCRYPT_R,
-    },
-    crypto::generate_keypair,
+    constants::SCRYPT_LOG_N,
+    crypto::{calculate_kdf_params, generate_keypair},
     errors::Error,
     formats::encode_base64,
     keys::{PubkeyStruct, SeckeyStruct},
@@ -128,6 +126,33 @@ impl GenerateResult {
 ///
 /// A `GenerateResult` containing the paths and keynum
 ///
+/// # Examples
+///
+/// ```no_run
+/// use minisign::ops::{generate, GenerateOptions};
+/// use std::path::Path;
+///
+/// let secret_key_path = Path::new("~/.minisign/minisign.key");
+/// let public_key_path = Path::new("~/.minisign/minisign.pub");
+/// let password = Some(b"my_secure_password".as_ref());
+///
+/// let options = GenerateOptions::new(
+///     secret_key_path,
+///     public_key_path,
+///     None,   // comment
+///     false,  // force
+///     false,  // no_password
+///     false,  // allow_kdf_fallback
+///     false,  // force_weak_kdf
+/// );
+///
+/// let result = generate(&options, password)?;
+/// println!("Key pair generated successfully");
+/// println!("Secret key: {}", result.secret_key_file().display());
+/// println!("Public key: {}", result.public_key_file().display());
+/// # Ok::<(), minisign::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if:
@@ -184,35 +209,7 @@ pub fn generate_with_log_n(
         getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
-        #[cfg(debug_assertions)]
-        let (kdf_opslimit, kdf_memlimit) = if options.force_weak_kdf {
-            // DEBUG ONLY: Force weak parameters (N=2^17, 8x weaker than production)
-            eprintln!("\n*** DEBUG WARNING: INTENTIONALLY INSECURE KEY ***");
-            eprintln!("--force-weak-kdf creates keys that are 8x easier to brute-force.");
-            eprintln!("NEVER use in production. For testing purposes only.\n");
-            (4_194_304_u64, 134_217_728_u64) // N=2^17, r=8
-        } else {
-            let n = 1u64 << log_n;
-            let r = u64::from(SCRYPT_R);
-            (
-                LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
-                LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
-            )
-        };
-
-        #[cfg(not(debug_assertions))]
-        let (kdf_opslimit, kdf_memlimit) = {
-            assert!(
-                !options.force_weak_kdf,
-                "force_weak_kdf must be false in release builds"
-            );
-            let n = 1u64 << log_n;
-            let r = u64::from(SCRYPT_R);
-            (
-                LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
-                LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
-            )
-        };
+        let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf);
 
         SeckeyStruct::new_encrypted(
             keynum,
