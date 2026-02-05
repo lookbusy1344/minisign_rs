@@ -4,10 +4,7 @@
 
 use super::file_utils::{load_secret_key, write_secret_key_file};
 use crate::{
-    Result,
-    constants::SCRYPT_LOG_N,
-    crypto::calculate_kdf_params,
-    errors::Error,
+    Result, constants::SCRYPT_LOG_N, crypto::calculate_kdf_params, errors::Error,
     keys::SeckeyStruct,
 };
 use std::path::{Path, PathBuf};

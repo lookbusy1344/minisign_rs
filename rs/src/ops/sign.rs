@@ -434,10 +434,8 @@ pub fn create_signature(
         trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
 
     // Generate untrusted comment if not provided
-    let untrusted_comment = untrusted_comment.map_or_else(
-        || DEFAULT_UNTRUSTED_COMMENT.to_string(),
-        String::from,
-    );
+    let untrusted_comment =
+        untrusted_comment.map_or_else(|| DEFAULT_UNTRUSTED_COMMENT.to_string(), String::from);
 
     // Validate comment lengths (matches C implementation behavior)
     if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
