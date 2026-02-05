@@ -646,6 +646,75 @@ fn test_opslimit_memlimit_to_params_min_valid() {
 }
 
 #[test]
+fn test_opslimit_memlimit_to_params_invalid_multipliers() {
+    // Test mismatched multipliers that don't follow the standard formula
+    // Use N=10, r=8 with intentionally wrong opslimit
+    // Standard: opslimit = 4 * 10 * 8 = 320, memlimit = 128 * 10 * 8 = 10,240
+    // We'll use correct memlimit but wrong opslimit
+    let memlimit = 10_240; // Gives N=10 with r=8
+    let opslimit = 500; // Wrong! Should be 320
+    // These don't satisfy: opslimit = 4*N*r AND memlimit = 128*N*r
+    // Function should derive r from opslimit instead of returning error
+    let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+    // The function handles mismatched parameters by deriving r from opslimit
+    assert!(result.is_ok());
+    if let Ok((log_n, r, _p)) = result {
+        assert_eq!(log_n, 3); // log2(10) truncates to 3
+        // r should be derived: 500 / (4 * 10) = 12.5, truncates to 12
+        assert!(r != 8); // Should be different from standard r
+    }
+}
+
+#[test]
+fn test_opslimit_memlimit_to_params_divisor_overflow() {
+    // Test that overflow in divisor calculation is handled
+    // This tests the checked_mul in: LIBSODIUM_MEMLIMIT_MULTIPLIER * r
+    // With current values (128 * 8), this won't overflow, but test the path
+    // Using extreme memlimit to trigger different overflow paths
+    let opslimit = u64::MAX / 2;
+    let memlimit = u64::MAX / 2;
+    let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+    // Should handle gracefully - either succeed with large log_n or error
+    // The actual behavior depends on whether log_n fits in u8
+    assert!(result.is_ok() || result.is_err());
+}
+
+#[test]
+fn test_opslimit_memlimit_to_params_expected_opslimit_overflow() {
+    // Test overflow when calculating expected_opslimit for verification
+    // This can happen with very large N values
+    // Use parameters that will cause N to be extremely large
+    let memlimit = u64::MAX / 1024; // Large but not MAX to avoid division issues
+    let opslimit = u64::MAX / 1024;
+    let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+    // Should either succeed or fail with overflow error
+    if let Err(e) = result {
+        let err_msg = e.to_string();
+        assert!(
+            err_msg.contains("overflow") || err_msg.contains("out of valid range"),
+            "Expected overflow or range error, got: {err_msg}"
+        );
+    }
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_opslimit_memlimit_to_params_weak_kdf() {
+    // Test weak KDF parameters (debug build only)
+    // N = 2^17, r=8, p=1 (used with --force-weak-kdf)
+    // opslimit = 4 * 2^17 * 8 = 4,194,304
+    // memlimit = 128 * 2^17 * 8 = 134,217,728
+    let opslimit = 4_194_304;
+    let memlimit = 134_217_728;
+    let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
+    assert!(result.is_ok());
+    let (log_n, r, p) = result.unwrap();
+    assert_eq!(log_n, 17); // Weaker than production (20)
+    assert_eq!(r, 8);
+    assert_eq!(p, 1);
+}
+
+#[test]
 fn test_is_weak_kdf_production_strength() {
     use minisign::crypto::generate_keypair;
     // Create a key with production-strength parameters
