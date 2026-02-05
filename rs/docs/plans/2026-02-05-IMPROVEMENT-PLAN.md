@@ -23,7 +23,6 @@ This document outlines planned improvements to the minisign_rs codebase. The pro
 ### 🎯 Areas for Enhancement
 - Code duplication in KDF parameter calculation
 - Missing usage examples in public API documentation
-- Dependency specifications could be more precise
 - Some error paths need additional test coverage
 - Minor string allocation optimizations in hot paths
 
@@ -184,43 +183,6 @@ Add to the `generate()` function documentation:
 ---
 
 ### Phase 2: Dependency & Security (Medium Priority)
-
-#### Task 5: Strengthen Dependency Specifications
-**Impact**: Medium - Security & Maintenance
-**Estimated Effort**: 10 minutes
-**Files**: `rs/Cargo.toml:10-26`
-
-**Rationale**:
-Using patch version specifiers (`~x.y.z`) ensures we get bug fixes but not potentially breaking minor version updates for security-critical dependencies.
-
-**Changes**:
-```toml
-[dependencies]
-# Cryptographic dependencies - use patch versions for security
-ed25519-dalek = { version = "~2.2.0", features = ["rand_core"] }
-blake2 = "~0.10.0"
-scrypt = "~0.11.0"
-zeroize = { version = "~1.8.0", features = ["derive"] }
-subtle = "~2.6.0"
-getrandom = "~0.3.0"
-rand_core = { version = "~0.6.0", features = ["getrandom"] }
-
-# Other dependencies
-base64 = "~0.22.0"
-clap = { version = "~4.5.0", features = ["derive"] }
-thiserror = "~2.0.0"
-rpassword = "~7.4.0"
-dirs = "~6.0.0"
-git-version = "~0.3.0"
-rayon = "~1.0.0"
-```
-
-**Validation**:
-- Run `cargo update` to ensure dependencies resolve
-- Run `cargo test` to ensure compatibility
-- Check for any deprecation warnings
-
----
 
 #### Task 6: Add Error Path Tests
 **Impact**: Medium - Robustness
