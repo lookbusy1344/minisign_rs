@@ -355,8 +355,10 @@ minisign_rs -S -m large-file.bin -H
 **Signature marker:** `"Ed"` (mixed case) in the signature file
 
 **Advantages:**
-- **Maximum security** - Signature directly authenticates the file content
-- **No hash function dependency** - Only relies on Ed25519 security
+- **Stronger formal security proof** - The full message participates in Ed25519's nonce derivation, resilient even against hypothetical hash collisions
+- **Direct message authentication** - Signature authenticates the file content directly, not a pre-computed hash
+
+**Note on hash dependencies:** Both modes depend on hash functions. Legacy mode uses SHA-512 (internally by Ed25519 for nonce derivation), while prehashed mode uses both Blake2b-512 (for the pre-hash) and SHA-512 (within Ed25519). The security advantage of legacy mode is theoretical — Blake2b-512 has no known weaknesses and finding collisions is computationally infeasible.
 
 **Limitations:**
 - **1 GB file size limit** - Files must fit in memory for signing/verification
@@ -379,7 +381,7 @@ minisign_rs -S -m small-file.txt --legacy
 **Use legacy mode when:**
 - Maximum theoretical security is required
 - Files are small (< 100 MB)
-- Eliminating hash function from trust assumptions
+- Resilience to pre-hash collisions is desired (theoretical concern only)
 
 **Note:** Both modes use Ed25519 signatures and provide strong cryptographic security. The prehashed mode's security reduction is purely theoretical - Blake2b-512 is cryptographically secure and no practical attacks exist.
 
