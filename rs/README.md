@@ -138,7 +138,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | Short | Long | Description |
 |-------|------|-------------|
 | `-l` | `--legacy` | Legacy mode (sign only) |
-| `-H` | `--prehashed` | Sign or verify a prehashed file |
+| `-H` | `--prehashed` | Sign in prehashed mode, or require prehashed verification (reject legacy signatures) |
 | `-q` | `--quiet` | Quiet mode (minimal output) |
 | `-Q` | `--pretty-quiet` | Pretty quiet mode (show only trusted comment) |
 | `-f` | `--force` | Force overwrite of existing files |
@@ -230,6 +230,9 @@ minisign_rs -V -m file.txt --publickey RWQwpZXcv6r8MS48...
 
 # Verify in quiet mode
 minisign_rs -V -m file.txt --quiet
+
+# Require prehashed signature (reject legacy)
+minisign_rs -V -H -m file.txt -p key.pub
 ```
 
 #### Verify multiple files
@@ -379,6 +382,22 @@ minisign_rs -S -m small-file.txt --legacy
 - Eliminating hash function from trust assumptions
 
 **Note:** Both modes use Ed25519 signatures and provide strong cryptographic security. The prehashed mode's security reduction is purely theoretical - Blake2b-512 is cryptographically secure and no practical attacks exist.
+
+### Enforcing Prehashed Signatures
+
+The `-H` flag serves dual purposes depending on context:
+- **During signing (`-S -H`)**: Creates a prehashed signature (default behavior, explicit flag)
+- **During verification (`-V -H`)**: Rejects legacy (non-prehashed) signatures
+
+**Use case for verification enforcement:**
+When organizational policy requires modern signature formats only, use `-H` during verification to ensure legacy signatures are rejected. This matches the C minisign behavior.
+
+```bash
+# This will fail if the signature is legacy (non-prehashed)
+minisign_rs -V -H -m file.txt -p key.pub
+
+# Error output: "Legacy (non-prehashed) signature found"
+```
 
 ## Configuration
 

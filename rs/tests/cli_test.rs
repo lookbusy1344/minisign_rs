@@ -1791,3 +1791,120 @@ fn test_verify_multiple_files() {
         "Expected no per-file 'Key ID:' labels, found {key_id_label_count}:\n{stdout}"
     );
 }
+
+#[test]
+fn test_cli_verify_h_flag_rejects_legacy() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let message_file = temp_dir.path().join("message.txt");
+    let secret_key_file = temp_dir.path().join("test.key");
+    let public_key_file = temp_dir.path().join("test.pub");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Create a message file
+    fs::write(&message_file, b"Test message for -H flag").expect("Failed to write message");
+
+    // Generate keypair
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W") // No password
+        .arg("-s")
+        .arg(&secret_key_file)
+        .arg("-p")
+        .arg(&public_key_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Sign in LEGACY mode (non-prehashed, using -l flag)
+    minisign_cmd()
+        .arg("-S")
+        .arg("-l") // Legacy mode
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key_file)
+        .arg("-x")
+        .arg(&sig_file)
+        .arg("-W") // No password
+        .assert()
+        .success();
+
+    // Verify with -H flag should REJECT legacy signature
+    minisign_cmd()
+        .arg("-V")
+        .arg("-H") // Force prehashed
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key_file)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "Legacy (non-prehashed) signature found",
+        ));
+
+    // Verify WITHOUT -H flag should succeed
+    minisign_cmd()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key_file)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_cli_verify_h_flag_accepts_prehashed() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let message_file = temp_dir.path().join("message.txt");
+    let secret_key_file = temp_dir.path().join("test.key");
+    let public_key_file = temp_dir.path().join("test.pub");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Create a message file
+    fs::write(&message_file, b"Test message for -H flag").expect("Failed to write message");
+
+    // Generate keypair
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W") // No password
+        .arg("-s")
+        .arg(&secret_key_file)
+        .arg("-p")
+        .arg(&public_key_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Sign in PREHASHED mode (default, no -l flag)
+    minisign_cmd()
+        .arg("-S")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key_file)
+        .arg("-x")
+        .arg(&sig_file)
+        .arg("-W") // No password
+        .assert()
+        .success();
+
+    // Verify with -H flag should ACCEPT prehashed signature
+    minisign_cmd()
+        .arg("-V")
+        .arg("-H") // Force prehashed
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&public_key_file)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success();
+}

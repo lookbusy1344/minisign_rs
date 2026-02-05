@@ -252,6 +252,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             message_file,
             cli.output,
             cli.quiet,
+            cli.prehashed,
         );
 
         let result = verify(&options)?;
@@ -283,6 +284,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             std::path::Path::new(""),
             cli.output,
             cli.quiet,
+            cli.prehashed,
         );
 
         verify_multiple_files(message_files.into_owned(), &options, cli.sequential)?;

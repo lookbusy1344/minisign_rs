@@ -55,6 +55,7 @@ fn test_empty_file_signing() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify empty file signature");
 }
@@ -103,6 +104,7 @@ fn test_empty_file_legacy_mode() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify empty file legacy signature");
 }
@@ -153,6 +155,7 @@ fn test_unicode_in_trusted_comment() {
         message_file.as_path(),
         false,
         false,
+        false,
     );
     let result = verify(&verify_opts).expect("Should verify signature with Unicode");
     assert!(result.trusted_comment.contains("🔐"));
@@ -200,6 +203,7 @@ fn test_unicode_in_untrusted_comment() {
         PublicKeySource::File(public_key.as_path()),
         sig_file.as_path(),
         message_file.as_path(),
+        false,
         false,
         false,
     );
@@ -253,6 +257,7 @@ fn test_large_file_prehashed() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify large file signature");
 }
@@ -306,6 +311,7 @@ fn test_symlink_handling() {
         message_link.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify through symlink");
 
@@ -316,6 +322,7 @@ fn test_symlink_handling() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts2).expect("Should verify real file with symlink signature");
 }
@@ -371,6 +378,7 @@ fn test_generate_key_with_empty_password() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify signature created with empty password");
 }
@@ -523,6 +531,7 @@ fn test_untrusted_comment_max_valid_length() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify signature with max valid comment");
 }
@@ -577,6 +586,7 @@ fn test_untrusted_comment_warning_threshold() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify signature despite warning");
 }
@@ -632,6 +642,7 @@ fn test_trusted_comment_max_valid_length() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify signature with max valid trusted comment");
 }
@@ -814,6 +825,7 @@ fn test_symlink_outside_working_directory() {
         outside_message.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify using real file path");
 }
@@ -1044,6 +1056,7 @@ fn test_unicode_rtl_override() {
         message_file.as_path(),
         false,
         true,
+        false,
     );
     verify(&verify_opts).expect("Should verify signature with RTL comment");
 }

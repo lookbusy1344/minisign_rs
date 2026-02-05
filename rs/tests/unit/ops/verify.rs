@@ -26,6 +26,7 @@ fn test_verify_c_generated_signature() {
         Path::new("tests/fixtures/messages/hello.txt"),
         false,
         false,
+        false,
     );
 
     let result = verify(&options).expect("verification should succeed");
@@ -47,6 +48,7 @@ fn test_verify_wrong_message_fails() {
         wrong_message_path.as_path(),
         false,
         false,
+        false,
     );
 
     let result = verify(&options);
@@ -61,6 +63,7 @@ fn test_verify_wrong_key_fails() {
         Path::new("tests/fixtures/messages/hello.txt"),
         false,
         false,
+        false,
     );
 
     let result = verify(&options);
@@ -73,6 +76,7 @@ fn test_verify_nonexistent_file() {
         PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
         Path::new("tests/fixtures/signatures/hello.txt.minisig"),
         Path::new("nonexistent.txt"),
+        false,
         false,
         false,
     );
@@ -107,7 +111,7 @@ fn test_verify_message_signature_prehashed() {
     let message_file = Path::new("tests/fixtures/messages/hello.txt");
 
     // Should succeed with correct message
-    verify_message_signature(&pubkey, &sig_box, message_file)
+    verify_message_signature(&pubkey, &sig_box, message_file, false)
         .expect("should verify correct message");
 
     // Should fail with wrong message (create a temp file with wrong content)
@@ -115,7 +119,7 @@ fn test_verify_message_signature_prehashed() {
     let wrong_message_file = temp_dir.path().join("wrong.txt");
     fs::write(&wrong_message_file, b"Wrong message").unwrap();
 
-    let result = verify_message_signature(&pubkey, &sig_box, &wrong_message_file);
+    let result = verify_message_signature(&pubkey, &sig_box, &wrong_message_file, false);
     assert!(result.is_err(), "should fail with wrong message");
 }
 
@@ -164,6 +168,7 @@ fn test_verify_with_wrong_keynum() {
         PublicKeySource::File(wrong_pubkey_file.as_path()),
         sig_file.as_path(),
         message_file.as_path(),
+        false,
         false,
         false,
     );
@@ -231,6 +236,7 @@ fn test_verify_file_too_large_fails() {
         message_path.as_path(),
         false,
         false,
+        false,
     );
 
     verify(&verify_opts).expect("verification should succeed with small file");
@@ -277,6 +283,7 @@ fn test_verify_prehashed_mode_no_size_limit() {
         PublicKeySource::File(pk_path.as_path()),
         sig_path.as_path(),
         message_path.as_path(),
+        false,
         false,
         false,
     );
@@ -329,6 +336,7 @@ fn test_verify_multiple_files_sequential() {
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
+        false,
         false,
         false,
     );
@@ -384,6 +392,7 @@ fn test_verify_multiple_files_parallel() {
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
+        false,
         false,
         false,
     );
@@ -449,6 +458,7 @@ fn test_verify_multiple_files_partial_failure() {
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
+        false,
         false,
         false,
     );
@@ -528,6 +538,7 @@ fn test_verify_multiple_files_all_attempted() {
         Path::new(""),
         false,
         false,
+        false,
     );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
@@ -586,6 +597,7 @@ fn test_verify_multiple_files_quiet_mode() {
         Path::new(""),
         false,
         true,
+        false,
     );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
@@ -660,6 +672,7 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
         Path::new(""),
         false,
         false,
+        false,
     );
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
@@ -668,4 +681,159 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
 
     // The actual output verification would need stderr capture.
     // For now, this test documents expected behavior and will pass after the fix.
+}
+
+#[test]
+fn test_verify_rejects_legacy_with_force_prehashed() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create message and sign in LEGACY mode (non-prehashed, "Ed")
+    let message_path = temp_dir.path().join("message.txt");
+    std::fs::write(&message_path, b"Test message").unwrap();
+
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        false, // prehashed=false means LEGACY mode
+        None,
+        None,
+        false,
+        false,
+    );
+
+    sign(&sign_opts, None).expect("signing should succeed");
+
+    // Try to verify with force_prehashed=true - should REJECT legacy signature
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+        false,
+        false,
+        true, // force_prehashed=true
+    );
+
+    let result = verify(&verify_opts);
+    assert!(
+        result.is_err(),
+        "Should reject legacy signature with force_prehashed"
+    );
+
+    // Verify the error is LegacySignatureRejected
+    if let Err(e) = result {
+        match e {
+            Error::LegacySignatureRejected => (), // Expected
+            _ => panic!("Expected LegacySignatureRejected error, got: {e:?}"),
+        }
+    }
+}
+
+#[test]
+fn test_verify_accepts_legacy_without_force_prehashed() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create message and sign in LEGACY mode (non-prehashed, "Ed")
+    let message_path = temp_dir.path().join("message.txt");
+    std::fs::write(&message_path, b"Test message").unwrap();
+
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        false, // prehashed=false means LEGACY mode
+        None,
+        None,
+        false,
+        false,
+    );
+
+    sign(&sign_opts, None).expect("signing should succeed");
+
+    // Verify with force_prehashed=false - should ACCEPT legacy signature
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+        false,
+        false,
+        false, // force_prehashed=false
+    );
+
+    let result = verify(&verify_opts);
+    assert!(
+        result.is_ok(),
+        "Should accept legacy signature without force_prehashed"
+    );
+}
+
+#[test]
+fn test_verify_accepts_prehashed_with_force_prehashed() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate keypair
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    // Create message and sign in PREHASHED mode (default, "ED")
+    let message_path = temp_dir.path().join("message.txt");
+    std::fs::write(&message_path, b"Test message").unwrap();
+
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sign_opts = SignOptions::new(
+        sk_path.as_path(),
+        message_path.as_path(),
+        Some(sig_path.as_path()),
+        true, // prehashed=true means PREHASHED mode
+        None,
+        None,
+        false,
+        false,
+    );
+
+    sign(&sign_opts, None).expect("signing should succeed");
+
+    // Verify with force_prehashed=true - should ACCEPT prehashed signature
+    let verify_opts = VerifyOptions::new(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+        false,
+        false,
+        true, // force_prehashed=true
+    );
+
+    let result = verify(&verify_opts);
+    assert!(
+        result.is_ok(),
+        "Should accept prehashed signature with force_prehashed"
+    );
 }

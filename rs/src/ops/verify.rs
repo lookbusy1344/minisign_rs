@@ -26,6 +26,8 @@ pub struct VerifyOptions<'a> {
     output: bool,
     /// Quiet mode (no output)
     quiet: bool,
+    /// Require prehashed signatures (reject legacy signatures)
+    force_prehashed: bool,
 }
 
 impl<'a> VerifyOptions<'a> {
@@ -38,6 +40,7 @@ impl<'a> VerifyOptions<'a> {
     /// * `message_file` - Path to the message file
     /// * `output` - Output verification result to stdout
     /// * `quiet` - Quiet mode (no output)
+    /// * `force_prehashed` - Require prehashed signatures (reject legacy)
     #[must_use]
     pub fn new(
         public_key: PublicKeySource<'a>,
@@ -45,6 +48,7 @@ impl<'a> VerifyOptions<'a> {
         message_file: &'a Path,
         output: bool,
         quiet: bool,
+        force_prehashed: bool,
     ) -> Self {
         Self {
             public_key,
@@ -52,6 +56,7 @@ impl<'a> VerifyOptions<'a> {
             message_file,
             output,
             quiet,
+            force_prehashed,
         }
     }
 
@@ -83,6 +88,12 @@ impl<'a> VerifyOptions<'a> {
     #[must_use]
     pub fn quiet(&self) -> bool {
         self.quiet
+    }
+
+    /// Get the `force_prehashed` flag
+    #[must_use]
+    pub fn force_prehashed(&self) -> bool {
+        self.force_prehashed
     }
 }
 
@@ -145,7 +156,12 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     let sig_box = load_signature(options.signature_file())?;
 
     // Verify the signature on the message
-    verify_message_signature(&pubkey, &sig_box, options.message_file())?;
+    verify_message_signature(
+        &pubkey,
+        &sig_box,
+        options.message_file(),
+        options.force_prehashed(),
+    )?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
@@ -210,6 +226,7 @@ pub fn load_signature(path: impl AsRef<Path>) -> Result<SignatureBox> {
 ///
 /// Returns an error if:
 /// - Key number doesn't match
+/// - Legacy signature found when `force_prehashed` is true
 /// - File cannot be read
 /// - File size exceeds limit (non-prehashed mode)
 /// - Signature verification fails
@@ -221,6 +238,7 @@ pub fn verify_message_signature(
     pubkey: &PubkeyStruct,
     sig_box: &SignatureBox,
     message_file: &Path,
+    force_prehashed: bool,
 ) -> Result<()> {
     // First, verify that the keynum matches
     if pubkey.keynum() != sig_box.sig_struct().keynum() {
@@ -228,6 +246,11 @@ pub fn verify_message_signature(
             sig_keynum: sig_box.sig_struct().keynum().to_key_id(),
             pub_keynum: pubkey.keynum().to_key_id(),
         });
+    }
+
+    // Check if legacy signature is rejected (matches C minisign behavior with -H flag)
+    if force_prehashed && !sig_box.sig_struct().is_prehashed() {
+        return Err(Error::LegacySignatureRejected);
     }
 
     // For prehashed signatures, we stream hash the message
@@ -255,14 +278,14 @@ pub fn verify_message_signature(
 fn verify_file_with_key(
     message_file: &Path,
     pubkey: &PubkeyStruct,
-    _options: &VerifyOptions<'_>,
+    options: &VerifyOptions<'_>,
 ) -> Result<VerifyResult> {
     let sig_file_path = PathBuf::from(format!("{}.minisig", message_file.display()));
 
     let sig_box = load_signature(&sig_file_path)?;
 
     // Verify the signature on the message
-    verify_message_signature(pubkey, &sig_box, message_file)?;
+    verify_message_signature(pubkey, &sig_box, message_file, options.force_prehashed())?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;

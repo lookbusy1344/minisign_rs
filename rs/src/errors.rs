@@ -58,6 +58,9 @@ pub enum Error {
     #[error("invalid signature")]
     InvalidSignature,
 
+    #[error("Legacy (non-prehashed) signature found")]
+    LegacySignatureRejected,
+
     #[error("key mismatch: signature keyid {sig_keynum} doesn't match")]
     KeyMismatch {
         sig_keynum: String,
