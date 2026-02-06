@@ -538,7 +538,7 @@ fn test_untrusted_comment_max_valid_length() {
 
 /// Test untrusted comment at warning threshold (1004 bytes)
 #[test]
-fn test_untrusted_comment_warning_threshold() {
+fn test_untrusted_comment_error_threshold() {
     use minisign::constants::{COMMENT_PREFIX_SIZE, COMMENTMAXBYTES};
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -561,23 +561,72 @@ fn test_untrusted_comment_warning_threshold() {
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
-    // Warning threshold: COMMENTMAXBYTES - COMMENT_PREFIX_SIZE = 1024 - 20 = 1004
-    let warning_comment = "a".repeat(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE);
-    assert_eq!(warning_comment.len(), 1004);
+    // Error threshold: COMMENTMAXBYTES - COMMENT_PREFIX_SIZE = 1024 - 20 = 1004
+    // Comments at or above this length should error (changed from warning for consistency)
+    let error_comment = "a".repeat(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE);
+    assert_eq!(error_comment.len(), 1004);
 
-    // Should succeed but emit warning to stderr (we can't easily capture stderr in test)
+    // Should now error instead of warning (for consistency with trusted comment behavior)
     let sign_opts = SignOptions::new(
         secret_key.as_path(),
         message_file.as_path(),
         Some(sig_file.as_path()),
         true,
         None,
-        Some(warning_comment),
+        Some(error_comment),
         true,
         false,
     );
 
-    sign(&sign_opts, None).expect("Should sign but warn about untrusted comment length");
+    let result = sign(&sign_opts, None);
+    assert!(result.is_err());
+
+    // Note: The C implementation only warns for untrusted comments, but the Rust
+    // implementation now makes both untrusted and trusted comment length violations
+    // fatal errors for consistency and to prevent creating incompatible signature files.
+}
+
+#[test]
+fn test_untrusted_comment_just_under_threshold() {
+    use minisign::constants::{COMMENT_PREFIX_SIZE, COMMENTMAXBYTES};
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    // Generate key
+    let gen_opts = GenerateOptions::new(
+        secret_key.as_path(),
+        public_key.as_path(),
+        None,
+        true,
+        true,
+        false,
+        false,
+    );
+    generate(&gen_opts, None).expect("Failed to generate key");
+
+    fs::write(&message_file, b"Test message").expect("Failed to write message");
+
+    // Just under threshold: COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1 = 1003
+    let valid_comment = "a".repeat(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1);
+    assert_eq!(valid_comment.len(), 1003);
+
+    // Should succeed without warning
+    let sign_opts = SignOptions::new(
+        secret_key.as_path(),
+        message_file.as_path(),
+        Some(sig_file.as_path()),
+        true,
+        None,
+        Some(valid_comment),
+        true,
+        false,
+    );
+
+    sign(&sign_opts, None).expect("Should sign successfully");
 
     // Verify signature still works
     let verify_opts = VerifyOptions::new(

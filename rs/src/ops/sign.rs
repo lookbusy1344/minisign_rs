@@ -11,7 +11,7 @@ use crate::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
     },
-    validation::validate_comment,
+    validation::validate_comment_with_length,
 };
 use rayon::prelude::*;
 use std::{
@@ -419,20 +419,19 @@ pub fn create_signature(
     let untrusted_comment =
         untrusted_comment.map_or_else(|| DEFAULT_UNTRUSTED_COMMENT.to_string(), String::from);
 
-    // Validate comment lengths (matches C implementation behavior)
-    if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
-        eprintln!("Warning: comment too long. This breaks compatibility with signify.");
-    }
+    // Validate comments for printability, carriage returns, and length (matches C implementation behavior)
+    // Both untrusted and trusted comments now use fatal errors for consistency
+    validate_comment_with_length(
+        &untrusted_comment,
+        Some(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE),
+        "untrusted",
+    )?;
 
-    if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
-        return Err(Error::InvalidComment(
-            "trusted comment exceeds maximum length".to_string(),
-        ));
-    }
-
-    // Validate comments for printability and carriage returns (matches C implementation)
-    validate_comment(&untrusted_comment)?;
-    validate_comment(&trusted_comment)?;
+    validate_comment_with_length(
+        &trusted_comment,
+        Some(TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE),
+        "trusted",
+    )?;
 
     // Now that validation is complete, proceed with file I/O and crypto operations
 

@@ -380,7 +380,7 @@ fn test_trusted_comment_at_limit() {
 }
 
 #[test]
-fn test_untrusted_comment_too_long_warns() {
+fn test_untrusted_comment_too_long_errors() {
     let temp_dir = TempDir::new().unwrap();
     let message_path = temp_dir.path().join("message.txt");
     fs::write(&message_path, b"test").unwrap();
@@ -392,7 +392,7 @@ fn test_untrusted_comment_too_long_warns() {
     // So limit is 1024 - 20 = 1004 bytes
     let too_long_comment = "a".repeat(1004);
 
-    // Should succeed but emit warning (warning goes to stderr, we can't easily capture it in test)
+    // Should now error (changed from warning for consistency with trusted comments)
     let result = create_signature(
         &secret_key,
         keynum,
@@ -402,8 +402,9 @@ fn test_untrusted_comment_too_long_warns() {
         Some(&too_long_comment),
     );
 
-    // Should still succeed (only warning, not error)
-    assert!(result.is_ok());
+    // Should fail with InvalidComment error
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), Error::InvalidComment(_)));
 }
 
 #[test]

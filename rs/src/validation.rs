@@ -130,3 +130,58 @@ pub fn validate_comment(s: &str) -> Result<()> {
     validate_no_embedded_cr(s)?;
     Ok(())
 }
+
+/// Validate a comment string with optional length limit
+///
+/// This function centralizes all comment validation logic:
+/// - Printability check (via `is_printable()`)
+/// - Carriage return check (via `validate_no_embedded_cr()`)
+/// - Optional length check
+///
+/// # Arguments
+///
+/// * `s` - String slice to validate
+/// * `max_length` - Optional maximum length in bytes. If provided, the comment must be
+///   strictly less than this value to allow for format prefixes (e.g., "untrusted comment: ")
+/// * `comment_type` - Description for error messages (e.g., "untrusted", "trusted")
+///
+/// # Errors
+///
+/// Returns `Error::InvalidComment` if:
+/// - The string contains unprintable characters
+/// - The string contains embedded '\r' characters
+/// - The string length exceeds `max_length` (if provided)
+///
+/// # Examples
+///
+/// ```
+/// use minisign::validation::validate_comment_with_length;
+///
+/// // Basic validation without length check
+/// assert!(validate_comment_with_length("Hello", None, "test").is_ok());
+///
+/// // With length limit
+/// assert!(validate_comment_with_length("Hello", Some(10), "test").is_ok());
+/// assert!(validate_comment_with_length("Very long text", Some(5), "test").is_err());
+/// ```
+pub fn validate_comment_with_length(
+    s: &str,
+    max_length: Option<usize>,
+    comment_type: &str,
+) -> Result<()> {
+    // First validate content (printability and carriage returns)
+    validate_comment(s)?;
+
+    // Then validate length if provided
+    if let Some(max_len) = max_length
+        && s.len() >= max_len
+    {
+        return Err(Error::InvalidComment(format!(
+            "{comment_type} comment too long: {} bytes (limit: {} bytes)",
+            s.len(),
+            max_len
+        )));
+    }
+
+    Ok(())
+}
