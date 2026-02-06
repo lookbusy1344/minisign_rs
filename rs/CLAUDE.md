@@ -11,6 +11,7 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - All secrets use `Zeroize` + `ZeroizeOnDrop`
 - No `.unwrap()`/`.expect()` in production paths
 - Use `?` operator for errors
+- Use inline format strings: `format!("Hello {name}")` not `format!("Hello {}", name)`
 
 ## Performance & Memory Efficiency
 - **Avoid cloning** - NOT idiomatic, expensive
