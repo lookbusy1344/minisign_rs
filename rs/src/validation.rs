@@ -229,6 +229,8 @@ pub fn validate_comment_with_length(
 pub fn validate_windows_path(path: &std::path::Path) -> Result<()> {
     use std::path::Path;
 
+    const SIMPLE_RESERVED: &[&str] = &["CON", "PRN", "AUX", "NUL"];
+
     // Extract just the filename (not the full path)
     let filename = path
         .file_name()
@@ -245,7 +247,6 @@ pub fn validate_windows_path(path: &std::path::Path) -> Result<()> {
     let base_upper = base_name.to_uppercase();
 
     // Check simple reserved names
-    const SIMPLE_RESERVED: &[&str] = &["CON", "PRN", "AUX", "NUL"];
     if SIMPLE_RESERVED.contains(&base_upper.as_str()) {
         return Err(Error::InvalidPath(path.to_path_buf()));
     }
