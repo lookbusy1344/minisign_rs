@@ -22,6 +22,11 @@ pub fn decode_base64(data: impl AsRef<[u8]>) -> Result<Vec<u8>> {
 /// # Errors
 ///
 /// Returns error if the slice is shorter than 8 bytes.
+///
+/// # Panics
+///
+/// Never panics - the conversion from slice to array is guaranteed to succeed
+/// after the length check.
 pub fn read_u64_le(bytes: &[u8]) -> Result<u64> {
     let buf: [u8; 8] = bytes
         .get(..8)
@@ -57,6 +62,11 @@ pub fn write_u64_le(bytes: &mut [u8], value: u64) -> Result<()> {
 /// # Errors
 ///
 /// Returns error if the slice is shorter than 2 bytes.
+///
+/// # Panics
+///
+/// Never panics - the conversion from slice to array is guaranteed to succeed
+/// after the length check.
 pub fn read_u16_le(bytes: &[u8]) -> Result<u16> {
     let buf: [u8; 2] = bytes
         .get(..2)

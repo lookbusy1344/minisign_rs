@@ -1,12 +1,15 @@
 use clap::Parser;
+use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
     ops::{
-        ChangeOptions, GenerateOptions, InspectOptions, PublicKeySource, RecreateOptions,
-        SignOptions, VerifyOptions, change, generate, inspect, recreate, sign, verify,
+        ChangeOptions, GenerateOptions, InspectOptions, InspectPrivateOptions, InspectResult,
+        KeyType, PublicKeySource, RecreateOptions, SecurityLevel, SignOptions,
+        SignatureInspectResult, VerifyOptions, change, generate, inspect, inspect_base64,
+        inspect_private, inspect_signature, recreate, sign, verify,
     },
 };
 use std::io::IsTerminal;
@@ -381,7 +384,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
 }
 
 /// Display the signature inspection result
-fn display_signature_inspect_result(result: &minisign::ops::inspect::SignatureInspectResult) {
+fn display_signature_inspect_result(result: &SignatureInspectResult) {
     use minisign::signature::SignatureAlgorithm;
 
     println!("Signature Information:");
@@ -396,9 +399,7 @@ fn display_signature_inspect_result(result: &minisign::ops::inspect::SignatureIn
 }
 
 /// Display the inspection result
-fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
-    use minisign::ops::inspect::{KeyType, SecurityLevel};
-
+fn display_inspect_result(result: &InspectResult) {
     // Display security level prominently first (for secret keys)
     if let Some(security_level) = result.security_level {
         match security_level {
@@ -413,7 +414,8 @@ fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
     println!("Key Information:");
 
     // For encrypted secret keys, key ID is not available without decryption
-    if result.key_type == KeyType::SecretEncrypted && result.key_id == "0000000000000000" {
+    if result.key_type == KeyType::SecretEncrypted && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
+    {
         println!("├─ Key ID: [encrypted - password required to view]");
         println!("├─ Key ID (words): [decrypt key to view]");
     } else {
@@ -471,10 +473,6 @@ fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
 }
 
 fn handle_inspect(cli: &Cli) -> Result<()> {
-    use minisign::ops::inspect::{
-        InspectPrivateOptions, KeyType, inspect_base64, inspect_private, inspect_signature,
-    };
-
     // Check if we're inspecting a signature file
     if let Some(ref sig_file) = cli.signature_file {
         let result = inspect_signature(sig_file)?;
@@ -522,7 +520,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     // Smart decryption: If key is encrypted and --no-decrypt is not set, prompt for password
     let mut decrypted = false;
     if result.key_type == KeyType::SecretEncrypted
-        && result.key_id == "0000000000000000"
+        && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
         && !cli.no_decrypt
         && let Some(path) = key_file_path
     {

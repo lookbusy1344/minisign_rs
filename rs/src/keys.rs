@@ -640,6 +640,10 @@ impl SeckeyStruct {
     }
 
     /// Serialize to bytes
+    ///
+    /// # Panics
+    ///
+    /// Never panics - all slices are correctly sized by the struct layout constants.
     #[must_use]
     pub fn to_bytes(&self) -> [u8; SECKEY_STRUCT_SIZE] {
         let mut bytes = [0u8; SECKEY_STRUCT_SIZE];

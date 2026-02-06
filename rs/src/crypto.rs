@@ -174,6 +174,10 @@ impl KeyNum {
     /// Formats the keynum as a 16-character uppercase hexadecimal string
     /// by interpreting the 8 bytes as a little-endian u64, matching the
     /// C minisign implementation's `le64_load()` + `%016PRIX64` format.
+    ///
+    /// # Panics
+    ///
+    /// Never panics - `KeyNum` is always exactly 8 bytes by construction.
     #[must_use]
     pub fn to_key_id(&self) -> String {
         use crate::formats::read_u64_le;
