@@ -352,10 +352,9 @@ fn test_recreate_public_key() {
         .assert()
         .success();
 
-    // Recreate public key (use -W since key is unencrypted)
+    // Recreate public key (no -W needed - key is unencrypted)
     minisign_cmd()
         .arg("-R")
-        .arg("-W")
         .arg("-s")
         .arg(&secret_key)
         .arg("-p")
@@ -1034,7 +1033,6 @@ fn test_recreate_long_name() {
 
     minisign_cmd()
         .arg("--recreate")
-        .arg("-W")
         .arg("--secretkey-path")
         .arg(&secret_key)
         .arg("--publickey-path")
@@ -1916,4 +1914,138 @@ fn test_cli_verify_h_flag_accepts_prehashed() {
         .arg(&sig_file)
         .assert()
         .success();
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_change_password_remove_with_w_flag() {
+    // Test M9: -W flag with change operation should remove password
+    // but still prompt for current password if key is encrypted
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password_file = temp_dir.path().join("password.txt");
+
+    // Generate encrypted key with weak KDF
+    fs::write(&password_file, "testpass").unwrap();
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--force-weak-kdf")
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Change to remove password using -K -W
+    // This should prompt for current password via --password-file
+    // and not prompt for new password (because of -W)
+    minisign_cmd()
+        .arg("-K") // Change password
+        .arg("-W") // No new password (remove encryption)
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Verify the key is now unencrypted by inspecting it
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-W") // Key should not need password now
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    assert!(output_str.contains("Security Level: NONE (UNENCRYPTED)"));
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_change_password_add_with_w_flag_on_unencrypted() {
+    // Test that -W on an already unencrypted key during change is a no-op
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    // Generate unencrypted key
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W") // No password
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Try to "change" password with -W on already unencrypted key
+    // Should succeed (no-op: unencrypted -> unencrypted)
+    minisign_cmd()
+        .arg("-K")
+        .arg("-W")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    // Verify still unencrypted
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-W")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    assert!(output_str.contains("Security Level: NONE (UNENCRYPTED)"));
+}
+
+#[test]
+fn test_recreate_rejects_w_flag() {
+    // Test M9: -W flag should not be accepted for recreate operation
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    // Generate unencrypted key
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Try recreate with -W flag - should fail with clear error
+    minisign_cmd()
+        .arg("-R") // Recreate
+        .arg("-W") // Should be rejected
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-f")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no-password"))
+        .stderr(predicate::str::contains("not supported"))
+        .stderr(predicate::str::contains("recreate"));
 }

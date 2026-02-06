@@ -1,5 +1,6 @@
 use clap::Parser;
 use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
+use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
@@ -297,6 +298,16 @@ fn handle_verify(cli: &Cli) -> Result<()> {
 }
 
 fn handle_recreate(cli: &Cli) -> Result<()> {
+    // Reject -W flag for recreate operation
+    // -W is documented as "generate and change only" in cli.rs
+    if cli.no_password {
+        return Err(Error::Usage(
+            "-W (--no-password) is not supported for recreate operation. \
+             Use -K (--change-password) with -W to remove password first."
+                .into(),
+        ));
+    }
+
     // Get secret key path
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
@@ -305,11 +316,14 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let default_public_key = Cli::default_public_key_path();
     let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
-    // Prompt for password
-    let password = if cli.no_password {
-        None
-    } else {
+    // Load the key to check if it's encrypted
+    let seckey = load_secret_key(secret_key_file)?;
+
+    // Prompt for password only if the key is encrypted
+    let password = if seckey.is_encrypted() {
         Some(prompt_password("Password: ", cli.password_file.as_deref())?)
+    } else {
+        None
     };
 
     let options = RecreateOptions::new(
@@ -336,17 +350,23 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
-    // Prompt for current password (if the key is encrypted)
-    let current_password = if cli.no_password {
-        None
-    } else {
+    // Load the key to check if it's encrypted (without decrypting)
+    let seckey = load_secret_key(secret_key_file)?;
+
+    // Prompt for current password ONLY if the key is encrypted
+    // -W flag only affects the NEW password (desired end state)
+    // We MUST have the old password to decrypt an encrypted key
+    let current_password = if seckey.is_encrypted() {
         Some(prompt_password(
             "Current password: ",
             cli.password_file.as_deref(),
         )?)
+    } else {
+        None
     };
 
-    // Prompt for new password (if we want one)
+    // Prompt for new password based on -W flag
+    // -W means "don't use a new password" (remove encryption)
     let new_password = if cli.no_password {
         None
     } else {

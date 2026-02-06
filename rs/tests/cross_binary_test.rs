@@ -431,10 +431,9 @@ fn test_cross_recreate_c_key_rust_recreate() {
         String::from_utf8_lossy(&c_gen.stderr)
     );
 
-    // Recreate public key with Rust
+    // Recreate public key with Rust (no -W needed - key is unencrypted)
     rust_minisign()
         .arg("-R")
-        .arg("-W")
         .arg("-s")
         .arg(&secret_key)
         .arg("-p")
