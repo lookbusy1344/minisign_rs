@@ -209,7 +209,7 @@ pub fn generate_with_log_n(
         getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
-        let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf);
+        let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
 
         SeckeyStruct::new_encrypted(
             keynum,

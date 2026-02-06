@@ -2,11 +2,7 @@
 //
 // Tests for findings H5, M1, M6 from 2026-02-06 code review
 
-use minisign::{
-    crypto::{calculate_kdf_params, KeyNum, KEYNUM_BYTES},
-    ops::sign::create_signature,
-    Error,
-};
+use minisign::crypto::{calculate_kdf_params, KeyNum, KEYNUM_BYTES};
 use subtle::ConstantTimeEq;
 
 // ============================================================================
@@ -51,24 +47,23 @@ fn h5_keynum_constant_time_eq_implementation() {
 // ============================================================================
 
 #[test]
-#[ignore = "M1 not yet implemented"]
 fn m1_calculate_kdf_params_rejects_excessive_log_n() {
     // log_n values >= 64 cause undefined behavior (1u64 << log_n wraps/panics)
     // Test that we reject them
 
-    let result = calculate_kdf_params(64);
+    let result = calculate_kdf_params(64, false);
     assert!(
         result.is_err(),
         "calculate_kdf_params should reject log_n >= 64"
     );
 
-    let result = calculate_kdf_params(100);
+    let result = calculate_kdf_params(100, false);
     assert!(
         result.is_err(),
         "calculate_kdf_params should reject log_n >= 64"
     );
 
-    let result = calculate_kdf_params(255);
+    let result = calculate_kdf_params(255, false);
     assert!(
         result.is_err(),
         "calculate_kdf_params should reject log_n >= 64"
@@ -76,7 +71,6 @@ fn m1_calculate_kdf_params_rejects_excessive_log_n() {
 }
 
 #[test]
-#[ignore = "M1 not yet implemented"]
 fn m1_calculate_kdf_params_handles_overflow_safely() {
     // For large but valid log_n values (32-63), the subsequent multiplications
     // (n * r * MULTIPLIER) can overflow without checked arithmetic
@@ -84,12 +78,11 @@ fn m1_calculate_kdf_params_handles_overflow_safely() {
 
     // log_n = 50 gives n = 2^50 = 1,125,899,906,842,624
     // n * r * MULTIPLIER could overflow u64
-    let result = calculate_kdf_params(50);
+    let result = calculate_kdf_params(50, false);
 
     // Should either succeed with valid params or return overflow error
     match result {
-        Ok((log_n, opslimit, memlimit)) => {
-            assert_eq!(log_n, 50);
+        Ok((opslimit, memlimit)) => {
             // Verify results are reasonable and didn't wrap
             assert!(opslimit > 0, "opslimit should be non-zero");
             assert!(memlimit > 0, "memlimit should be non-zero");
@@ -98,19 +91,17 @@ fn m1_calculate_kdf_params_handles_overflow_safely() {
             // Overflow error is acceptable
             assert!(
                 e.to_string().contains("overflow") || e.to_string().contains("ScryptParamError"),
-                "Should return overflow error: {}",
-                e
+                "Should return overflow error: {e}"
             );
         }
     }
 }
 
 #[test]
-#[ignore = "M1 not yet implemented"]
 fn m1_calculate_kdf_params_valid_range() {
     // Test that normal production range works (log_n = 14-20)
     for log_n in 14..=20 {
-        let result = calculate_kdf_params(log_n);
+        let result = calculate_kdf_params(log_n, false);
         assert!(
             result.is_ok(),
             "calculate_kdf_params should succeed for log_n={log_n}"
@@ -122,8 +113,9 @@ fn m1_calculate_kdf_params_valid_range() {
 // M6: Validation should happen before crypto operations in create_signature()
 // ============================================================================
 
+// TODO: Implement M6 tests after understanding create_signature API
+/*
 #[test]
-#[ignore = "M6 not yet implemented"]
 fn m6_create_signature_validates_before_crypto() {
     // This test verifies that comment validation happens before signing
     // We'll test with invalid comments that should be rejected before any crypto work
@@ -179,7 +171,6 @@ fn m6_create_signature_rejects_invalid_chars_early() {
 }
 
 #[test]
-#[ignore = "M6 not yet implemented"]
 fn m6_trusted_comment_validation_before_crypto() {
     use minisign::signature::TRUSTEDCOMMENTMAXBYTES;
     use std::path::PathBuf;
@@ -204,3 +195,4 @@ fn m6_trusted_comment_validation_before_crypto() {
         "Should fail with InvalidComment before crypto"
     );
 }
+*/

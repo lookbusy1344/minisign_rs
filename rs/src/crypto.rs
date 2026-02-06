@@ -345,18 +345,23 @@ pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
 /// deliberately weakened parameters (N=2^17) for faster testing. This prints
 /// a warning to stderr.
 ///
+/// # Errors
+///
+/// Returns `Error::ScryptParamError` if:
+/// - `log_n >= 64` (would cause undefined behavior in bit shift)
+/// - Arithmetic overflow occurs during parameter calculation
+///
 /// # Panics
 ///
 /// Panics if `force_weak_kdf` is true in release builds (enforced by assertion).
-#[must_use]
-pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> (u64, u64) {
+pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> Result<(u64, u64)> {
     #[cfg(debug_assertions)]
     if force_weak_kdf {
         // DEBUG ONLY: Force weak parameters (N=2^17, 8x weaker than production)
         eprintln!("\n*** DEBUG WARNING: INTENTIONALLY INSECURE KEY ***");
         eprintln!("--force-weak-kdf creates keys that are 8x easier to brute-force.");
         eprintln!("NEVER use in production. For testing purposes only.\n");
-        return (4_194_304_u64, 134_217_728_u64); // N=2^17, r=8
+        return Ok((4_194_304_u64, 134_217_728_u64)); // N=2^17, r=8
     }
 
     #[cfg(not(debug_assertions))]
@@ -365,12 +370,33 @@ pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> (u64, u64) {
         "force_weak_kdf must be false in release builds"
     );
 
+    // M1: Bounds check to prevent undefined behavior
+    // 1u64 << log_n requires log_n < 64
+    if log_n >= 64 {
+        return Err(Error::ScryptParamError(format!(
+            "log_n must be < 64, got {log_n}"
+        )));
+    }
+
     let n = 1u64 << log_n;
     let r = u64::from(SCRYPT_R);
-    (
-        LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
-        LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
-    )
+
+    // M1: Use checked arithmetic to prevent silent overflow
+    let opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
+        .checked_mul(n)
+        .and_then(|v| v.checked_mul(r))
+        .ok_or_else(|| {
+            Error::ScryptParamError(format!("overflow calculating opslimit for log_n={log_n}"))
+        })?;
+
+    let memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER
+        .checked_mul(n)
+        .and_then(|v| v.checked_mul(r))
+        .ok_or_else(|| {
+            Error::ScryptParamError(format!("overflow calculating memlimit for log_n={log_n}"))
+        })?;
+
+    Ok((opslimit, memlimit))
 }
 
 /// Convert libsodium-style opslimit/memlimit to scrypt parameters (`log_n`, r, p)
