@@ -18,7 +18,7 @@ use minisign::{
     signature::{SigStruct, SignatureBox},
 };
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 #[test]
@@ -845,4 +845,41 @@ fn test_sign_summary_shows_only_filenames_not_error_details() {
 
     // The actual output verification would need stderr capture.
     // For now, this test documents expected behavior and will pass after the fix.
+}
+
+#[test]
+fn test_sign_multiple_files_deduplication() {
+    // Test that duplicate files in the input are properly deduplicated
+    // This prevents race conditions when the same file is passed multiple times
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create one file
+    let test_file = temp_dir.path().join("test1.txt");
+    fs::write(&test_file, b"content 1").unwrap();
+
+    // Create file list with duplicates
+    let files = vec![test_file.clone(), test_file.clone(), test_file.clone()];
+
+    let opts = SignOptions::new(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+        None,
+        true, // force
+        None,
+        None,
+        true, // quiet
+        false,
+    );
+
+    // Sign using the public API with duplicates
+    let result = sign_multiple_files(files, &opts, None, false);
+
+    // Should succeed (deduplication prevents race condition)
+    assert!(result.is_ok());
+
+    // Only one signature file should exist
+    let mut sig_path = test_file.as_os_str().to_os_string();
+    sig_path.push(".minisig");
+    let sig_path = PathBuf::from(sig_path);
+    assert!(sig_path.exists());
 }

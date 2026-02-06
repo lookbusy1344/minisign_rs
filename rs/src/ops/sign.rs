@@ -311,6 +311,23 @@ pub fn sign_multiple_files(
     password: Option<&[u8]>,
     sequential: bool,
 ) -> Result<()> {
+    // Deduplicate files to prevent race conditions when signing the same file multiple times
+    // Use a HashSet to track unique paths
+    let mut seen = std::collections::HashSet::new();
+    let mut deduped_files = Vec::new();
+
+    for file in files {
+        // Try to canonicalize for better deduplication (e.g., ./file vs file)
+        // Fall back to original path if canonicalization fails (file doesn't exist yet)
+        let canonical = file.canonicalize().unwrap_or_else(|_| file.clone());
+
+        if seen.insert(canonical) {
+            deduped_files.push(file);
+        }
+    }
+
+    let files = deduped_files;
+
     // Fast path for single file
     if files.len() == 1 {
         sign_single_file(&files[0], options, password)?;
