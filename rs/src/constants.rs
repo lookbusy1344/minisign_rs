@@ -76,3 +76,10 @@ pub const PRODUCTION_MEMLIMIT: u64 = 1_073_741_824;
 /// - Larger files should use prehashed mode (already supports streaming)
 /// - Matches industry best practices (e.g., similar to git object size limits)
 pub const MAX_MESSAGE_SIZE_BYTES: u64 = 1024 * 1024 * 1024; // 1 GB
+
+/// Placeholder key ID displayed for encrypted keys before decryption
+///
+/// When a secret key is encrypted, its keynum is also encrypted. Before
+/// decryption, the key ID is displayed as "0000000000000000" to indicate
+/// that the real key ID is not yet available without the password.
+pub const ENCRYPTED_KEYNUM_PLACEHOLDER: &str = "0000000000000000";

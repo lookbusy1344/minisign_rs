@@ -42,7 +42,7 @@ impl<'a> VerifyOptions<'a> {
     /// * `quiet` - Quiet mode (no output)
     /// * `force_prehashed` - Require prehashed signatures (reject legacy)
     #[must_use]
-    pub fn new(
+    pub const fn new(
         public_key: PublicKeySource<'a>,
         signature_file: &'a Path,
         message_file: &'a Path,
@@ -62,37 +62,37 @@ impl<'a> VerifyOptions<'a> {
 
     /// Get the public key source
     #[must_use]
-    pub fn public_key(&self) -> &PublicKeySource<'a> {
+    pub const fn public_key(&self) -> &PublicKeySource<'a> {
         &self.public_key
     }
 
     /// Get the signature file path
     #[must_use]
-    pub fn signature_file(&self) -> &Path {
+    pub const fn signature_file(&self) -> &Path {
         self.signature_file
     }
 
     /// Get the message file path
     #[must_use]
-    pub fn message_file(&self) -> &Path {
+    pub const fn message_file(&self) -> &Path {
         self.message_file
     }
 
     /// Get the output flag
     #[must_use]
-    pub fn output(&self) -> bool {
+    pub const fn output(&self) -> bool {
         self.output
     }
 
     /// Get the quiet flag
     #[must_use]
-    pub fn quiet(&self) -> bool {
+    pub const fn quiet(&self) -> bool {
         self.quiet
     }
 
     /// Get the `force_prehashed` flag
     #[must_use]
-    pub fn force_prehashed(&self) -> bool {
+    pub const fn force_prehashed(&self) -> bool {
         self.force_prehashed
     }
 }
@@ -264,8 +264,11 @@ pub fn verify_message_signature(
     message_file: &Path,
     force_prehashed: bool,
 ) -> Result<()> {
-    // First, verify that the keynum matches
-    if pubkey.keynum() != sig_box.sig_struct().keynum() {
+    // H5: Use constant-time comparison for keynum to prevent timing side-channels
+    // during signature verification (matches constant-time comparison used for
+    // checksum validation in keys.rs)
+    use subtle::ConstantTimeEq;
+    if !bool::from(pubkey.keynum().ct_eq(sig_box.sig_struct().keynum())) {
         return Err(Error::KeyMismatch {
             sig_keynum: sig_box.sig_struct().keynum().to_key_id(),
             pub_keynum: pubkey.keynum().to_key_id(),
@@ -304,7 +307,10 @@ fn verify_file_with_key(
     pubkey: &PubkeyStruct,
     options: &VerifyOptions<'_>,
 ) -> Result<VerifyResult> {
-    let sig_file_path = PathBuf::from(format!("{}.minisig", message_file.display()));
+    // Append .minisig extension using OsString to handle non-UTF8 paths correctly
+    let mut sig_path = message_file.as_os_str().to_os_string();
+    sig_path.push(".minisig");
+    let sig_file_path = PathBuf::from(sig_path);
 
     let sig_box = load_signature(&sig_file_path)?;
 

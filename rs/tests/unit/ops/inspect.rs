@@ -1,5 +1,6 @@
 //! Unit tests for key inspection operations
 
+use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
 use minisign::crypto::generate_keypair;
 use minisign::keys::SeckeyStruct;
 use minisign::ops::inspect::{InspectOptions, KeyType, SecurityLevel, inspect, inspect_base64};
@@ -433,7 +434,7 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
     // Verify the real keynum is shown (not zeros)
     let expected_key_id = keynum.to_key_id();
     assert_eq!(result.key_id, expected_key_id);
-    assert_ne!(result.key_id, "0000000000000000");
+    assert_ne!(result.key_id, ENCRYPTED_KEYNUM_PLACEHOLDER);
 
     // Verify key type and security level
     assert_eq!(result.key_type, KeyType::SecretEncrypted);

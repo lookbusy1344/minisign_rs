@@ -166,8 +166,8 @@ proptest! {
 }
 #[test]
 fn test_untrusted_comment_with_control_characters() {
-    // Create a signature box with control characters in untrusted comment
-    let sig_box = SignatureBox::new(
+    // H1: SignatureBox::new() now validates and should reject control characters
+    let result = SignatureBox::new(
         "test\x00null".to_string(), // Embedded null byte
         SigStruct::new(
             KeyNum::from_bytes([0; 8]),
@@ -177,16 +177,14 @@ fn test_untrusted_comment_with_control_characters() {
         "valid comment".to_string(),
         Signature::from_bytes([0; SIGNATURE_BYTES]),
     );
-    let serialized = sig_box.to_file_contents();
-    let result = SignatureBox::from_file_contents(&serialized);
-    // Should fail validation due to control character
+    // Should fail construction due to control character
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("invalid comment"));
 }
 #[test]
 fn test_untrusted_comment_with_carriage_return() {
-    // Create a signature box with carriage return in untrusted comment
-    let sig_box = SignatureBox::new(
+    // H1: SignatureBox::new() now validates and should reject carriage returns
+    let result = SignatureBox::new(
         "test\rcarriage".to_string(),
         SigStruct::new(
             KeyNum::from_bytes([0; 8]),
@@ -196,9 +194,7 @@ fn test_untrusted_comment_with_carriage_return() {
         "valid comment".to_string(),
         Signature::from_bytes([0; SIGNATURE_BYTES]),
     );
-    let serialized = sig_box.to_file_contents();
-    let result = SignatureBox::from_file_contents(&serialized);
-    // Should fail validation due to carriage return
+    // Should fail construction due to carriage return
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     // The error message should mention either "carriage return" or just "invalid comment"

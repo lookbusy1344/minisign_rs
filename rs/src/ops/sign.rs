@@ -11,7 +11,7 @@ use crate::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
     },
-    validation::validate_comment,
+    validation::validate_comment_with_length,
 };
 use rayon::prelude::*;
 use std::{
@@ -61,7 +61,7 @@ impl<'a> SignOptions<'a> {
     #[allow(clippy::fn_params_excessive_bools)]
     #[allow(clippy::too_many_arguments)]
     #[must_use]
-    pub fn new(
+    pub const fn new(
         secret_key_file: &'a Path,
         message_file: &'a Path,
         signature_file: Option<&'a Path>,
@@ -85,25 +85,25 @@ impl<'a> SignOptions<'a> {
 
     /// Get the secret key file path
     #[must_use]
-    pub fn secret_key_file(&self) -> &Path {
+    pub const fn secret_key_file(&self) -> &Path {
         self.secret_key_file
     }
 
     /// Get the message file path
     #[must_use]
-    pub fn message_file(&self) -> &Path {
+    pub const fn message_file(&self) -> &Path {
         self.message_file
     }
 
     /// Get the signature file path
     #[must_use]
-    pub fn signature_file(&self) -> Option<&Path> {
+    pub const fn signature_file(&self) -> Option<&Path> {
         self.signature_file
     }
 
     /// Get the prehashed flag
     #[must_use]
-    pub fn prehashed(&self) -> bool {
+    pub const fn prehashed(&self) -> bool {
         self.prehashed
     }
 
@@ -121,13 +121,13 @@ impl<'a> SignOptions<'a> {
 
     /// Get the force flag
     #[must_use]
-    pub fn force(&self) -> bool {
+    pub const fn force(&self) -> bool {
         self.force
     }
 
     /// Get the quiet flag
     #[must_use]
-    pub fn quiet(&self) -> bool {
+    pub const fn quiet(&self) -> bool {
         self.quiet
     }
 }
@@ -180,7 +180,12 @@ fn sign_file_with_key(
     options: &SignOptions<'_>,
 ) -> Result<SignResult> {
     let sig_file_path = options.signature_file().map_or_else(
-        || PathBuf::from(format!("{}.minisig", message_file.display())),
+        || {
+            // Append .minisig extension using OsString to handle non-UTF8 paths correctly
+            let mut path = message_file.as_os_str().to_os_string();
+            path.push(".minisig");
+            PathBuf::from(path)
+        },
         Path::to_path_buf,
     );
 
@@ -306,6 +311,23 @@ pub fn sign_multiple_files(
     password: Option<&[u8]>,
     sequential: bool,
 ) -> Result<()> {
+    // Deduplicate files to prevent race conditions when signing the same file multiple times
+    // Use a HashSet to track unique paths
+    let mut seen = std::collections::HashSet::new();
+    let mut deduped_files = Vec::new();
+
+    for file in files {
+        // Try to canonicalize for better deduplication (e.g., ./file vs file)
+        // Fall back to original path if canonicalization fails (file doesn't exist yet)
+        let canonical = file.canonicalize().unwrap_or_else(|_| file.clone());
+
+        if seen.insert(canonical) {
+            deduped_files.push(file);
+        }
+    }
+
+    let files = deduped_files;
+
     // Fast path for single file
     if files.len() == 1 {
         sign_single_file(&files[0], options, password)?;
@@ -408,6 +430,33 @@ pub fn create_signature(
     trusted_comment: Option<&str>,
     untrusted_comment: Option<&str>,
 ) -> Result<SignatureBox> {
+    // M6: Validate comments BEFORE any file I/O or crypto operations
+    // This ensures we fail fast on invalid input without wasting resources
+
+    // Generate trusted comment if not provided
+    let trusted_comment =
+        trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
+
+    // Generate untrusted comment if not provided
+    let untrusted_comment =
+        untrusted_comment.map_or_else(|| DEFAULT_UNTRUSTED_COMMENT.to_string(), String::from);
+
+    // Validate comments for printability, carriage returns, and length (matches C implementation behavior)
+    // Both untrusted and trusted comments now use fatal errors for consistency
+    validate_comment_with_length(
+        &untrusted_comment,
+        Some(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE),
+        "untrusted",
+    )?;
+
+    validate_comment_with_length(
+        &trusted_comment,
+        Some(TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE),
+        "trusted",
+    )?;
+
+    // Now that validation is complete, proceed with file I/O and crypto operations
+
     // Determine what data to sign
     let data_to_sign = if prehashed {
         // Open file and stream hash
@@ -429,37 +478,16 @@ pub fn create_signature(
     // Create the SigStruct
     let sig_struct = SigStruct::new(keynum, signature, prehashed);
 
-    // Generate trusted comment if not provided
-    let trusted_comment =
-        trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
-
-    // Generate untrusted comment if not provided
-    let untrusted_comment =
-        untrusted_comment.map_or_else(|| DEFAULT_UNTRUSTED_COMMENT.to_string(), String::from);
-
-    // Validate comment lengths (matches C implementation behavior)
-    if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
-        eprintln!("Warning: comment too long. This breaks compatibility with signify.");
-    }
-
-    if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
-        return Err(Error::Other("Trusted comment too long".to_string()));
-    }
-
-    // Validate comments for printability and carriage returns (matches C implementation)
-    validate_comment(&untrusted_comment)?;
-    validate_comment(&trusted_comment)?;
-
     // Create global signature (signs: signature_bytes || trusted_comment)
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
     let global_signature = crypto_sign(secret_key, &global_sig_data)?;
 
-    Ok(SignatureBox::new(
+    SignatureBox::new(
         untrusted_comment,
         sig_struct,
         trusted_comment,
         global_signature,
-    ))
+    )
 }
 
 /// Create the data that the global signature signs
@@ -530,6 +558,10 @@ pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<
 
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
+
+    // H4: Ensure durability - sync to disk before returning success
+    // Matches behavior of write_secret_key_file() and write_public_key_file()
+    file.sync_all().map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
 }

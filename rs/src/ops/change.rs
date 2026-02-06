@@ -35,7 +35,7 @@ impl<'a> ChangeOptions<'a> {
     /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
     #[allow(clippy::fn_params_excessive_bools)]
     #[must_use]
-    pub fn new(
+    pub const fn new(
         secret_key_file: &'a Path,
         remove_password: bool,
         allow_kdf_fallback: bool,
@@ -138,7 +138,7 @@ pub fn change_with_log_n(
         getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
 
         // Calculate KDF parameters using libsodium formula
-        let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf);
+        let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
 
         SeckeyStruct::new_encrypted(
             keynum,

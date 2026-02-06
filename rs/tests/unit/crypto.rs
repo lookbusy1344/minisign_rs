@@ -274,3 +274,105 @@ fn test_blake2b_512_stream() {
     let hash_direct = blake2b_512(&large_data);
     assert_eq!(hash_stream, hash_direct);
 }
+
+/// Test that generating multiple keys produces unique values
+///
+/// This verifies RNG quality by generating N keys and ensuring:
+/// 1. All public keys are distinct
+/// 2. All secret keys are distinct
+/// 3. All keynums are distinct
+///
+/// This guards against RNG failures, key reuse bugs, and other
+/// uniqueness violations that would compromise security.
+#[test]
+fn test_keypair_uniqueness() {
+    use std::collections::HashSet;
+
+    const NUM_KEYS: usize = 50;
+
+    let mut public_keys = HashSet::new();
+    let mut secret_keys = HashSet::new();
+    let mut keynums = HashSet::new();
+
+    // Generate NUM_KEYS keypairs
+    for _ in 0..NUM_KEYS {
+        let (secret_key, public_key, keynum) =
+            generate_keypair().expect("key generation should succeed");
+
+        // Insert into sets (returns false if already present)
+        assert!(
+            public_keys.insert(public_key.as_bytes().to_vec()),
+            "Duplicate public key detected - RNG may be compromised"
+        );
+        assert!(
+            secret_keys.insert(secret_key.as_bytes().to_vec()),
+            "Duplicate secret key detected - RNG may be compromised"
+        );
+        assert!(
+            keynums.insert(keynum.as_bytes().to_vec()),
+            "Duplicate keynum detected - RNG may be compromised"
+        );
+    }
+
+    // Verify all sets have the expected number of unique entries
+    assert_eq!(
+        public_keys.len(),
+        NUM_KEYS,
+        "Not all public keys are unique"
+    );
+    assert_eq!(
+        secret_keys.len(),
+        NUM_KEYS,
+        "Not all secret keys are unique"
+    );
+    assert_eq!(keynums.len(), NUM_KEYS, "Not all keynums are unique");
+}
+
+#[test]
+fn test_debug_implementations() {
+    // Test L2: Verify Debug implementations are consistent and appropriate
+    let (secret_key, public_key, _keynum) =
+        generate_keypair().expect("key generation should succeed");
+
+    // SecretKey should redact sensitive data
+    let secret_debug = format!("{secret_key:?}");
+    assert!(
+        secret_debug.contains("[REDACTED]"),
+        "SecretKey Debug should redact sensitive data"
+    );
+    assert!(
+        !secret_debug.contains(&format!("{:02x}", secret_key.as_bytes()[0])),
+        "SecretKey Debug should not show any key bytes"
+    );
+
+    // PublicKey should show partial data (not sensitive)
+    let public_debug = format!("{public_key:?}");
+    assert!(
+        public_debug.contains("PublicKey"),
+        "PublicKey Debug should include type name"
+    );
+    // Should show at least the first byte
+    assert!(
+        public_debug.contains(&format!("{:02x}", public_key.as_bytes()[0])),
+        "PublicKey Debug should show some key data for debugging"
+    );
+
+    // Test Signature Debug format
+    let message = b"test message";
+    let signature = sign(&secret_key, message).expect("signing should succeed");
+    let sig_debug = format!("{signature:?}");
+    assert!(
+        sig_debug.contains("Signature"),
+        "Signature Debug should include type name"
+    );
+    assert!(
+        sig_debug.contains(&format!("{:02x}", signature.as_bytes()[0])),
+        "Signature Debug should show some data for debugging"
+    );
+
+    // Verify PublicKey and Signature have consistent format (both show data)
+    assert!(
+        public_debug.contains("..") && sig_debug.contains(".."),
+        "PublicKey and Signature should have consistent truncation markers"
+    );
+}

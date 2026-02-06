@@ -10,6 +10,7 @@ use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, Verifier, V
 use rand_core::OsRng;
 use scrypt::{Params as ScryptParams, scrypt};
 use std::io::Read;
+use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 // Constants from the minisign specification
@@ -49,13 +50,13 @@ pub struct SecretKey([u8; SECRET_KEY_BYTES]);
 impl SecretKey {
     /// Create a new secret key from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; SECRET_KEY_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; SECRET_KEY_BYTES]) -> Self {
         Self(bytes)
     }
 
     /// Get a reference to the secret key bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; SECRET_KEY_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; SECRET_KEY_BYTES] {
         &self.0
     }
 }
@@ -73,20 +74,25 @@ pub struct PublicKey([u8; PUBLIC_KEY_BYTES]);
 impl PublicKey {
     /// Create a new public key from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; PUBLIC_KEY_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; PUBLIC_KEY_BYTES]) -> Self {
         Self(bytes)
     }
 
     /// Get a reference to the public key bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; PUBLIC_KEY_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; PUBLIC_KEY_BYTES] {
         &self.0
     }
 }
 
 impl std::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PublicKey({:02x}..)", self.0[0])
+        // Show first 4 bytes for better debugging (public keys are not sensitive)
+        write!(
+            f,
+            "PublicKey({:02x}{:02x}{:02x}{:02x}..)",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
     }
 }
 
@@ -97,31 +103,52 @@ pub struct Signature([u8; SIGNATURE_BYTES]);
 impl Signature {
     /// Create a new signature from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; SIGNATURE_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; SIGNATURE_BYTES]) -> Self {
         Self(bytes)
     }
 
     /// Get a reference to the signature bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; SIGNATURE_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; SIGNATURE_BYTES] {
         &self.0
     }
 }
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Signature({:02x}..)", self.0[0])
+        // Show first 4 bytes for better debugging (signatures are not sensitive)
+        write!(
+            f,
+            "Signature({:02x}{:02x}{:02x}{:02x}..)",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
     }
 }
 
 /// Key number / identifier (8 bytes)
+///
+/// # Security Note
+///
+/// `KeyNum` implements both `PartialEq` (standard comparison) and `ConstantTimeEq`
+/// (constant-time comparison via the `subtle` crate). While keynums appear in
+/// plaintext in signature files and are not secret, the verification path uses
+/// constant-time comparison to prevent potential timing side-channels during
+/// signature validation.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct KeyNum([u8; KEYNUM_BYTES]);
+
+// H5: Implement ConstantTimeEq for KeyNum to enable constant-time comparison
+// in the verification path, preventing timing side-channels
+impl ConstantTimeEq for KeyNum {
+    fn ct_eq(&self, other: &Self) -> subtle::Choice {
+        self.0.ct_eq(&other.0)
+    }
+}
 
 impl KeyNum {
     /// Create a new key number from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; KEYNUM_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; KEYNUM_BYTES]) -> Self {
         Self(bytes)
     }
 
@@ -138,7 +165,7 @@ impl KeyNum {
 
     /// Get a reference to the key number bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; KEYNUM_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; KEYNUM_BYTES] {
         &self.0
     }
 
@@ -157,10 +184,15 @@ impl KeyNum {
     /// Formats the keynum as a 16-character uppercase hexadecimal string
     /// by interpreting the 8 bytes as a little-endian u64, matching the
     /// C minisign implementation's `le64_load()` + `%016PRIX64` format.
+    ///
+    /// # Panics
+    ///
+    /// Never panics - `KeyNum` is always exactly 8 bytes by construction.
     #[must_use]
     pub fn to_key_id(&self) -> String {
         use crate::formats::read_u64_le;
-        let value = read_u64_le(&self.0);
+        // KeyNum is always 8 bytes, so this should never fail
+        let value = read_u64_le(&self.0).expect("KeyNum is always 8 bytes");
         format!("{value:016X}")
     }
 }
@@ -328,18 +360,23 @@ pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
 /// deliberately weakened parameters (N=2^17) for faster testing. This prints
 /// a warning to stderr.
 ///
+/// # Errors
+///
+/// Returns `Error::ScryptParamError` if:
+/// - `log_n >= 64` (would cause undefined behavior in bit shift)
+/// - Arithmetic overflow occurs during parameter calculation
+///
 /// # Panics
 ///
 /// Panics if `force_weak_kdf` is true in release builds (enforced by assertion).
-#[must_use]
-pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> (u64, u64) {
+pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> Result<(u64, u64)> {
     #[cfg(debug_assertions)]
     if force_weak_kdf {
         // DEBUG ONLY: Force weak parameters (N=2^17, 8x weaker than production)
         eprintln!("\n*** DEBUG WARNING: INTENTIONALLY INSECURE KEY ***");
         eprintln!("--force-weak-kdf creates keys that are 8x easier to brute-force.");
         eprintln!("NEVER use in production. For testing purposes only.\n");
-        return (4_194_304_u64, 134_217_728_u64); // N=2^17, r=8
+        return Ok((4_194_304_u64, 134_217_728_u64)); // N=2^17, r=8
     }
 
     #[cfg(not(debug_assertions))]
@@ -348,12 +385,33 @@ pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> (u64, u64) {
         "force_weak_kdf must be false in release builds"
     );
 
+    // M1: Bounds check to prevent undefined behavior
+    // 1u64 << log_n requires log_n < 64
+    if log_n >= 64 {
+        return Err(Error::ScryptParamError(format!(
+            "log_n must be < 64, got {log_n}"
+        )));
+    }
+
     let n = 1u64 << log_n;
     let r = u64::from(SCRYPT_R);
-    (
-        LIBSODIUM_OPSLIMIT_MULTIPLIER * n * r,
-        LIBSODIUM_MEMLIMIT_MULTIPLIER * n * r,
-    )
+
+    // M1: Use checked arithmetic to prevent silent overflow
+    let opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
+        .checked_mul(n)
+        .and_then(|v| v.checked_mul(r))
+        .ok_or_else(|| {
+            Error::ScryptParamError(format!("overflow calculating opslimit for log_n={log_n}"))
+        })?;
+
+    let memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER
+        .checked_mul(n)
+        .and_then(|v| v.checked_mul(r))
+        .ok_or_else(|| {
+            Error::ScryptParamError(format!("overflow calculating memlimit for log_n={log_n}"))
+        })?;
+
+    Ok((opslimit, memlimit))
 }
 
 /// Convert libsodium-style opslimit/memlimit to scrypt parameters (`log_n`, r, p)
@@ -405,6 +463,8 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 
     if expected_opslimit != opslimit {
         // Non-standard parameters: derive r from opslimit
+        // H3: Explicit error instead of silent fallback to prevent processing
+        // corrupted/malicious keys with weaker-than-intended KDF parameters
         let derived_r = opslimit
             .checked_div(
                 LIBSODIUM_OPSLIMIT_MULTIPLIER
@@ -414,12 +474,22 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
                     })?,
             )
             .and_then(|v| u32::try_from(v).ok())
-            .unwrap_or(r);
+            .ok_or_else(|| {
+                Error::ScryptParamError(
+                    "failed to derive r from opslimit: overflow or invalid value".into(),
+                )
+            })?;
         return Ok((log_n, derived_r, p));
     }
 
     Ok((log_n, r, p))
 }
+
+/// Maximum output length for KDF operations (1 KB)
+///
+/// This prevents resource exhaustion from excessively large KDF output requests.
+/// Current legitimate uses require at most 104 bytes (`ENCRYPTED_BLOB_SIZE`).
+const MAX_KDF_OUTPUT_LEN: usize = 1024;
 
 /// Derive a key from a password using Scrypt with custom parameters
 ///
@@ -430,7 +500,7 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 /// * `log_n` - The log2 of the work factor N (e.g., 20 for N=1,048,576)
 /// * `r` - Block size parameter
 /// * `p` - Parallelization parameter
-/// * `output_len` - The desired output length in bytes
+/// * `output_len` - The desired output length in bytes (max 1024)
 ///
 /// # Returns
 ///
@@ -438,7 +508,8 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 ///
 /// # Errors
 ///
-/// Returns `Error::KdfError` if key derivation fails
+/// Returns `Error::KdfError` if key derivation fails or if `output_len`
+/// exceeds `MAX_KDF_OUTPUT_LEN` (1024 bytes).
 pub fn derive_key_with_params(
     password: &[u8],
     salt: &[u8],
@@ -447,6 +518,12 @@ pub fn derive_key_with_params(
     p: u32,
     output_len: usize,
 ) -> Result<Zeroizing<Vec<u8>>> {
+    if output_len > MAX_KDF_OUTPUT_LEN {
+        return Err(Error::KdfError(format!(
+            "output length {output_len} exceeds maximum {MAX_KDF_OUTPUT_LEN} bytes"
+        )));
+    }
+
     let mut output = Zeroizing::new(vec![0u8; output_len]);
 
     // The scrypt Params::new() has a max len of 64 bytes, but the low-level scrypt()

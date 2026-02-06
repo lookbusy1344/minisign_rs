@@ -19,66 +19,80 @@ pub fn decode_base64(data: impl AsRef<[u8]>) -> Result<Vec<u8>> {
 
 /// Read a little-endian u64 from bytes
 ///
+/// # Errors
+///
+/// Returns error if the slice is shorter than 8 bytes.
+///
 /// # Panics
 ///
-/// Panics if the slice is shorter than 8 bytes.
-/// Callers MUST validate length before calling this function.
-#[must_use]
-pub fn read_u64_le(bytes: &[u8]) -> u64 {
-    debug_assert!(
-        bytes.len() >= 8,
-        "read_u64_le requires at least 8 bytes, got {}",
-        bytes.len()
-    );
-    let mut buf = [0u8; 8];
-    buf.copy_from_slice(&bytes[..8]);
-    u64::from_le_bytes(buf)
+/// Never panics - the conversion from slice to array is guaranteed to succeed
+/// after the length check.
+pub fn read_u64_le(bytes: &[u8]) -> Result<u64> {
+    let buf: [u8; 8] = bytes
+        .get(..8)
+        .ok_or_else(|| {
+            Error::Other(format!(
+                "read_u64_le requires at least 8 bytes, got {}",
+                bytes.len()
+            ))
+        })?
+        .try_into()
+        .expect("slice is exactly 8 bytes");
+    Ok(u64::from_le_bytes(buf))
 }
 
 /// Write a little-endian u64 to a mutable byte slice
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if the slice is shorter than 8 bytes.
-/// Callers MUST validate length before calling this function.
-pub fn write_u64_le(bytes: &mut [u8], value: u64) {
-    debug_assert!(
-        bytes.len() >= 8,
-        "write_u64_le requires at least 8 bytes, got {}",
-        bytes.len()
-    );
+/// Returns error if the slice is shorter than 8 bytes.
+pub fn write_u64_le(bytes: &mut [u8], value: u64) -> Result<()> {
+    if bytes.len() < 8 {
+        return Err(Error::Other(format!(
+            "write_u64_le requires at least 8 bytes, got {}",
+            bytes.len()
+        )));
+    }
     bytes[..8].copy_from_slice(&value.to_le_bytes());
+    Ok(())
 }
 
 /// Read a little-endian u16 from bytes
 ///
+/// # Errors
+///
+/// Returns error if the slice is shorter than 2 bytes.
+///
 /// # Panics
 ///
-/// Panics if the slice is shorter than 2 bytes.
-/// Callers MUST validate length before calling this function.
-#[must_use]
-pub fn read_u16_le(bytes: &[u8]) -> u16 {
-    debug_assert!(
-        bytes.len() >= 2,
-        "read_u16_le requires at least 2 bytes, got {}",
-        bytes.len()
-    );
-    let mut buf = [0u8; 2];
-    buf.copy_from_slice(&bytes[..2]);
-    u16::from_le_bytes(buf)
+/// Never panics - the conversion from slice to array is guaranteed to succeed
+/// after the length check.
+pub fn read_u16_le(bytes: &[u8]) -> Result<u16> {
+    let buf: [u8; 2] = bytes
+        .get(..2)
+        .ok_or_else(|| {
+            Error::Other(format!(
+                "read_u16_le requires at least 2 bytes, got {}",
+                bytes.len()
+            ))
+        })?
+        .try_into()
+        .expect("slice is exactly 2 bytes");
+    Ok(u16::from_le_bytes(buf))
 }
 
 /// Write a little-endian u16 to a mutable byte slice
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if the slice is shorter than 2 bytes.
-/// Callers MUST validate length before calling this function.
-pub fn write_u16_le(bytes: &mut [u8], value: u16) {
-    debug_assert!(
-        bytes.len() >= 2,
-        "write_u16_le requires at least 2 bytes, got {}",
-        bytes.len()
-    );
+/// Returns error if the slice is shorter than 2 bytes.
+pub fn write_u16_le(bytes: &mut [u8], value: u16) -> Result<()> {
+    if bytes.len() < 2 {
+        return Err(Error::Other(format!(
+            "write_u16_le requires at least 2 bytes, got {}",
+            bytes.len()
+        )));
+    }
     bytes[..2].copy_from_slice(&value.to_le_bytes());
+    Ok(())
 }

@@ -44,8 +44,8 @@ fn test_u64_le_roundtrip() {
 
     for value in test_values {
         let mut buf = [0u8; 8];
-        write_u64_le(&mut buf, value);
-        let read_value = read_u64_le(&buf);
+        write_u64_le(&mut buf, value).unwrap();
+        let read_value = read_u64_le(&buf).unwrap();
         assert_eq!(value, read_value, "u64 roundtrip failed for {value:#x}");
     }
 }
@@ -70,13 +70,13 @@ fn test_u64_le_known_values() {
 
     for (value, expected_bytes) in test_cases {
         let mut buf = [0u8; 8];
-        write_u64_le(&mut buf, value);
+        write_u64_le(&mut buf, value).unwrap();
         assert_eq!(
             buf, expected_bytes,
             "write_u64_le produced wrong bytes for {value:#x}"
         );
 
-        let read_value = read_u64_le(&expected_bytes);
+        let read_value = read_u64_le(&expected_bytes).unwrap();
         assert_eq!(read_value, value, "read_u64_le read wrong value from bytes");
     }
 }
@@ -87,8 +87,8 @@ fn test_u16_le_roundtrip() {
 
     for value in test_values {
         let mut buf = [0u8; 2];
-        write_u16_le(&mut buf, value);
-        let read_value = read_u16_le(&buf);
+        write_u16_le(&mut buf, value).unwrap();
+        let read_value = read_u16_le(&buf).unwrap();
         assert_eq!(value, read_value, "u16 roundtrip failed for {value:#x}");
     }
 }
@@ -104,29 +104,31 @@ fn test_u16_le_known_values() {
 
     for (value, expected_bytes) in test_cases {
         let mut buf = [0u8; 2];
-        write_u16_le(&mut buf, value);
+        write_u16_le(&mut buf, value).unwrap();
         assert_eq!(
             buf, expected_bytes,
             "write_u16_le produced wrong bytes for {value:#x}"
         );
 
-        let read_value = read_u16_le(&expected_bytes);
+        let read_value = read_u16_le(&expected_bytes).unwrap();
         assert_eq!(read_value, value, "read_u16_le read wrong value from bytes");
     }
 }
 
 #[test]
-#[should_panic(expected = "read_u64_le requires at least 8 bytes")]
 fn test_read_u64_le_short_buffer() {
     let buf = [0u8; 7];
-    let _ = read_u64_le(&buf);
+    let result = read_u64_le(&buf);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("at least 8 bytes"));
 }
 
 #[test]
-#[should_panic(expected = "write_u64_le requires at least 8 bytes")]
 fn test_write_u64_le_short_buffer() {
     let mut buf = [0u8; 7];
-    write_u64_le(&mut buf, 42);
+    let result = write_u64_le(&mut buf, 42);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("at least 8 bytes"));
 }
 
 // Property-based tests
@@ -145,8 +147,8 @@ proptest! {
     #[test]
     fn prop_u64_le_roundtrip(value: u64) {
         let mut buf = [0u8; 8];
-        write_u64_le(&mut buf, value);
-        let decoded = read_u64_le(&buf);
+        write_u64_le(&mut buf, value).unwrap();
+        let decoded = read_u64_le(&buf).unwrap();
         prop_assert_eq!(value, decoded);
     }
 
@@ -154,8 +156,8 @@ proptest! {
     #[test]
     fn prop_u16_le_roundtrip(value: u16) {
         let mut buf = [0u8; 2];
-        write_u16_le(&mut buf, value);
-        let decoded = read_u16_le(&buf);
+        write_u16_le(&mut buf, value).unwrap();
+        let decoded = read_u16_le(&buf).unwrap();
         prop_assert_eq!(value, decoded);
     }
 }

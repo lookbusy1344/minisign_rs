@@ -94,7 +94,7 @@ impl SigStruct {
     /// let sig_struct = SigStruct::new(keynum, signature, false);
     /// ```
     #[must_use]
-    pub fn new(keynum: KeyNum, signature: Signature, prehashed: bool) -> Self {
+    pub const fn new(keynum: KeyNum, signature: Signature, prehashed: bool) -> Self {
         Self {
             prehashed,
             keynum,
@@ -104,13 +104,13 @@ impl SigStruct {
 
     /// Get whether this is a prehashed signature
     #[must_use]
-    pub fn is_prehashed(&self) -> bool {
+    pub const fn is_prehashed(&self) -> bool {
         self.prehashed
     }
 
     /// Get the signature algorithm
     #[must_use]
-    pub fn algorithm(&self) -> SignatureAlgorithm {
+    pub const fn algorithm(&self) -> SignatureAlgorithm {
         if self.prehashed {
             SignatureAlgorithm::Prehashed
         } else {
@@ -120,13 +120,13 @@ impl SigStruct {
 
     /// Get the key number
     #[must_use]
-    pub fn keynum(&self) -> &KeyNum {
+    pub const fn keynum(&self) -> &KeyNum {
         &self.keynum
     }
 
     /// Get the signature
     #[must_use]
-    pub fn signature(&self) -> &Signature {
+    pub const fn signature(&self) -> &Signature {
         &self.signature
     }
 
@@ -230,19 +230,44 @@ pub struct SignatureBox {
 
 impl SignatureBox {
     /// Create a new signature box
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Comments contain unprintable characters or embedded newlines
+    /// - Comments exceed maximum length limits
     pub fn new(
         untrusted_comment: String,
         sig_struct: SigStruct,
         trusted_comment: String,
         global_signature: Signature,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        // H1: Validate untrusted comment for printability and newlines
+        validate_comment(&untrusted_comment)?;
+
+        // H1 & H2: Validate untrusted comment length
+        if untrusted_comment.len() > COMMENTMAXBYTES {
+            return Err(Error::InvalidComment(format!(
+                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
+            )));
+        }
+
+        // H1: Validate trusted comment for printability and newlines
+        validate_comment(&trusted_comment)?;
+
+        // H1 & H2: Validate trusted comment length
+        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
+            return Err(Error::InvalidComment(format!(
+                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
+            )));
+        }
+
+        Ok(Self {
             untrusted_comment,
             sig_struct,
             trusted_comment,
             global_signature,
-        }
+        })
     }
 
     /// Get the untrusted comment
@@ -253,7 +278,7 @@ impl SignatureBox {
 
     /// Get the signature structure
     #[must_use]
-    pub fn sig_struct(&self) -> &SigStruct {
+    pub const fn sig_struct(&self) -> &SigStruct {
         &self.sig_struct
     }
 
@@ -265,7 +290,7 @@ impl SignatureBox {
 
     /// Get the global signature
     #[must_use]
-    pub fn global_signature(&self) -> &Signature {
+    pub const fn global_signature(&self) -> &Signature {
         &self.global_signature
     }
 
@@ -296,6 +321,13 @@ impl SignatureBox {
         // This prevents display-based attacks via control characters
         validate_comment(&untrusted_comment)?;
 
+        // H6: Validate untrusted comment length (DoS prevention)
+        if untrusted_comment.len() > COMMENTMAXBYTES {
+            return Err(Error::InvalidComment(format!(
+                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
+            )));
+        }
+
         // Line 2: base64-encoded SigStruct
         let sig_struct_bytes = decode_base64(lines[1])?;
         let sig_struct = SigStruct::from_bytes(&sig_struct_bytes)?;
@@ -313,6 +345,13 @@ impl SignatureBox {
         // Validate trusted comment for printability and embedded carriage returns
         // This matches C implementation's is_printable() check
         validate_comment(&trusted_comment)?;
+
+        // H6: Validate trusted comment length (DoS prevention)
+        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
+            return Err(Error::InvalidComment(format!(
+                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
+            )));
+        }
 
         // Line 4: base64-encoded global signature
         let global_sig_bytes = decode_base64(lines[3])?;
@@ -371,13 +410,36 @@ impl SignatureBox {
     ///
     /// # Errors
     ///
-    /// Returns an error if signing fails
+    /// Returns an error if:
+    /// - Comments contain unprintable characters or embedded newlines
+    /// - Comments exceed maximum length limits
+    /// - Signing fails
     pub fn with_global_signature(
         untrusted_comment: String,
         sig_struct: SigStruct,
         trusted_comment: String,
         secret_key: &SecretKey,
     ) -> Result<Self> {
+        // H2: Validate untrusted comment for printability and newlines
+        validate_comment(&untrusted_comment)?;
+
+        // H2: Validate untrusted comment length
+        if untrusted_comment.len() > COMMENTMAXBYTES {
+            return Err(Error::InvalidComment(format!(
+                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
+            )));
+        }
+
+        // H2: Validate trusted comment for printability and newlines
+        validate_comment(&trusted_comment)?;
+
+        // H2: Validate trusted comment length
+        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
+            return Err(Error::InvalidComment(format!(
+                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
+            )));
+        }
+
         // Build the data to sign: signature bytes + trusted comment
         let capacity = sig_struct.signature().as_bytes().len() + trusted_comment.len();
         let mut data = Vec::with_capacity(capacity);

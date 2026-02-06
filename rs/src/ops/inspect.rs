@@ -37,13 +37,13 @@ impl<'a> InspectOptions<'a> {
     ///
     /// * `key_file` - Path to the key file (can be secret or public key)
     #[must_use]
-    pub fn new(key_file: &'a std::path::Path) -> Self {
+    pub const fn new(key_file: &'a std::path::Path) -> Self {
         Self { key_file }
     }
 
     /// Get the key file path
     #[must_use]
-    pub fn key_file(&self) -> &std::path::Path {
+    pub const fn key_file(&self) -> &std::path::Path {
         self.key_file
     }
 }
@@ -62,13 +62,13 @@ impl<'a> InspectPrivateOptions<'a> {
     ///
     /// * `key_file` - Path to the secret key file
     #[must_use]
-    pub fn new(key_file: &'a std::path::Path) -> Self {
+    pub const fn new(key_file: &'a std::path::Path) -> Self {
         Self { key_file }
     }
 
     /// Get the key file path
     #[must_use]
-    pub fn key_file(&self) -> &std::path::Path {
+    pub const fn key_file(&self) -> &std::path::Path {
         self.key_file
     }
 }

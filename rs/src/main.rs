@@ -1,12 +1,16 @@
 use clap::Parser;
+use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
+use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
     ops::{
-        ChangeOptions, GenerateOptions, InspectOptions, PublicKeySource, RecreateOptions,
-        SignOptions, VerifyOptions, change, generate, inspect, recreate, sign, verify,
+        ChangeOptions, GenerateOptions, InspectOptions, InspectPrivateOptions, InspectResult,
+        KeyType, PublicKeySource, RecreateOptions, SecurityLevel, SignOptions,
+        SignatureInspectResult, VerifyOptions, change, generate, inspect, inspect_base64,
+        inspect_private, inspect_signature, recreate, sign, verify,
     },
 };
 use std::io::IsTerminal;
@@ -294,6 +298,16 @@ fn handle_verify(cli: &Cli) -> Result<()> {
 }
 
 fn handle_recreate(cli: &Cli) -> Result<()> {
+    // Reject -W flag for recreate operation
+    // -W is documented as "generate and change only" in cli.rs
+    if cli.no_password {
+        return Err(Error::Usage(
+            "-W (--no-password) is not supported for recreate operation. \
+             Use -K (--change-password) with -W to remove password first."
+                .into(),
+        ));
+    }
+
     // Get secret key path
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
@@ -302,11 +316,14 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let default_public_key = Cli::default_public_key_path();
     let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
-    // Prompt for password
-    let password = if cli.no_password {
-        None
-    } else {
+    // Load the key to check if it's encrypted
+    let seckey = load_secret_key(secret_key_file)?;
+
+    // Prompt for password only if the key is encrypted
+    let password = if seckey.is_encrypted() {
         Some(prompt_password("Password: ", cli.password_file.as_deref())?)
+    } else {
+        None
     };
 
     let options = RecreateOptions::new(
@@ -333,17 +350,23 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
-    // Prompt for current password (if the key is encrypted)
-    let current_password = if cli.no_password {
-        None
-    } else {
+    // Load the key to check if it's encrypted (without decrypting)
+    let seckey = load_secret_key(secret_key_file)?;
+
+    // Prompt for current password ONLY if the key is encrypted
+    // -W flag only affects the NEW password (desired end state)
+    // We MUST have the old password to decrypt an encrypted key
+    let current_password = if seckey.is_encrypted() {
         Some(prompt_password(
             "Current password: ",
             cli.password_file.as_deref(),
         )?)
+    } else {
+        None
     };
 
-    // Prompt for new password (if we want one)
+    // Prompt for new password based on -W flag
+    // -W means "don't use a new password" (remove encryption)
     let new_password = if cli.no_password {
         None
     } else {
@@ -381,7 +404,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
 }
 
 /// Display the signature inspection result
-fn display_signature_inspect_result(result: &minisign::ops::inspect::SignatureInspectResult) {
+fn display_signature_inspect_result(result: &SignatureInspectResult) {
     use minisign::signature::SignatureAlgorithm;
 
     println!("Signature Information:");
@@ -396,9 +419,7 @@ fn display_signature_inspect_result(result: &minisign::ops::inspect::SignatureIn
 }
 
 /// Display the inspection result
-fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
-    use minisign::ops::inspect::{KeyType, SecurityLevel};
-
+fn display_inspect_result(result: &InspectResult) {
     // Display security level prominently first (for secret keys)
     if let Some(security_level) = result.security_level {
         match security_level {
@@ -413,7 +434,8 @@ fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
     println!("Key Information:");
 
     // For encrypted secret keys, key ID is not available without decryption
-    if result.key_type == KeyType::SecretEncrypted && result.key_id == "0000000000000000" {
+    if result.key_type == KeyType::SecretEncrypted && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
+    {
         println!("├─ Key ID: [encrypted - password required to view]");
         println!("├─ Key ID (words): [decrypt key to view]");
     } else {
@@ -471,10 +493,6 @@ fn display_inspect_result(result: &minisign::ops::inspect::InspectResult) {
 }
 
 fn handle_inspect(cli: &Cli) -> Result<()> {
-    use minisign::ops::inspect::{
-        InspectPrivateOptions, KeyType, inspect_base64, inspect_private, inspect_signature,
-    };
-
     // Check if we're inspecting a signature file
     if let Some(ref sig_file) = cli.signature_file {
         let result = inspect_signature(sig_file)?;
@@ -522,7 +540,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     // Smart decryption: If key is encrypted and --no-decrypt is not set, prompt for password
     let mut decrypted = false;
     if result.key_type == KeyType::SecretEncrypted
-        && result.key_id == "0000000000000000"
+        && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
         && !cli.no_decrypt
         && let Some(path) = key_file_path
     {
