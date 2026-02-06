@@ -185,3 +185,161 @@ pub fn validate_comment_with_length(
 
     Ok(())
 }
+
+/// Validate that a path doesn't use Windows reserved names
+///
+/// Windows reserves certain device names that cannot be used as filenames,
+/// even with extensions. This function checks if the filename (without directory path)
+/// matches any of these reserved names.
+///
+/// Reserved names (case-insensitive):
+/// - CON, PRN, AUX, NUL
+/// - COM1-COM9, LPT1-LPT9
+///
+/// These names are reserved both with and without extensions:
+/// - "NUL", "NUL.txt", "nul", "nul.minisig" are all reserved
+///
+/// # Arguments
+///
+/// * `path` - Path to validate
+///
+/// # Errors
+///
+/// Returns `Error::InvalidPath` if the filename is a Windows reserved name.
+///
+/// # Examples
+///
+/// ```
+/// use minisign::validation::validate_windows_path;
+/// use std::path::Path;
+///
+/// # #[cfg(windows)]
+/// # {
+/// // These should fail on Windows
+/// assert!(validate_windows_path(Path::new("NUL")).is_err());
+/// assert!(validate_windows_path(Path::new("CON.txt")).is_err());
+/// assert!(validate_windows_path(Path::new("COM1.minisig")).is_err());
+///
+/// // These should succeed
+/// assert!(validate_windows_path(Path::new("file.txt")).is_ok());
+/// assert!(validate_windows_path(Path::new("nuclear.txt")).is_ok());
+/// # }
+/// ```
+#[cfg(windows)]
+pub fn validate_windows_path(path: &std::path::Path) -> Result<()> {
+    use std::path::Path;
+
+    // Extract just the filename (not the full path)
+    let filename = path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .ok_or_else(|| Error::InvalidPath(path.to_path_buf()))?;
+
+    // Strip extension if present to check the base name
+    let base_name = Path::new(filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(filename);
+
+    // Convert to uppercase for case-insensitive comparison
+    let base_upper = base_name.to_uppercase();
+
+    // Check simple reserved names
+    const SIMPLE_RESERVED: &[&str] = &["CON", "PRN", "AUX", "NUL"];
+    if SIMPLE_RESERVED.contains(&base_upper.as_str()) {
+        return Err(Error::InvalidPath(path.to_path_buf()));
+    }
+
+    // Check COM1-COM9
+    if base_upper.starts_with("COM")
+        && base_upper.len() == 4
+        && base_upper
+            .chars()
+            .nth(3)
+            .is_some_and(|c| c.is_ascii_digit())
+    {
+        return Err(Error::InvalidPath(path.to_path_buf()));
+    }
+
+    // Check LPT1-LPT9
+    if base_upper.starts_with("LPT")
+        && base_upper.len() == 4
+        && base_upper
+            .chars()
+            .nth(3)
+            .is_some_and(|c| c.is_ascii_digit())
+    {
+        return Err(Error::InvalidPath(path.to_path_buf()));
+    }
+
+    Ok(())
+}
+
+/// No-op validation for non-Windows platforms
+///
+/// This function always succeeds on non-Windows platforms since
+/// Windows reserved names are not an issue on Unix-like systems.
+///
+/// # Errors
+///
+/// This function never returns an error on non-Windows platforms.
+#[cfg(not(windows))]
+#[inline]
+pub fn validate_windows_path(_path: &std::path::Path) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    #[cfg(windows)]
+    fn test_validate_windows_reserved_names() {
+        // Simple reserved names
+        assert!(validate_windows_path(Path::new("CON")).is_err());
+        assert!(validate_windows_path(Path::new("PRN")).is_err());
+        assert!(validate_windows_path(Path::new("AUX")).is_err());
+        assert!(validate_windows_path(Path::new("NUL")).is_err());
+
+        // Case insensitive
+        assert!(validate_windows_path(Path::new("con")).is_err());
+        assert!(validate_windows_path(Path::new("nul")).is_err());
+        assert!(validate_windows_path(Path::new("Aux")).is_err());
+
+        // With extensions
+        assert!(validate_windows_path(Path::new("NUL.txt")).is_err());
+        assert!(validate_windows_path(Path::new("CON.minisig")).is_err());
+        assert!(validate_windows_path(Path::new("PRN.key")).is_err());
+
+        // COM and LPT ports
+        assert!(validate_windows_path(Path::new("COM1")).is_err());
+        assert!(validate_windows_path(Path::new("COM9")).is_err());
+        assert!(validate_windows_path(Path::new("LPT1")).is_err());
+        assert!(validate_windows_path(Path::new("LPT9")).is_err());
+
+        // With extensions
+        assert!(validate_windows_path(Path::new("COM1.txt")).is_err());
+        assert!(validate_windows_path(Path::new("LPT5.minisig")).is_err());
+
+        // Valid names (should succeed)
+        assert!(validate_windows_path(Path::new("file.txt")).is_ok());
+        assert!(validate_windows_path(Path::new("nuclear.txt")).is_ok());
+        assert!(validate_windows_path(Path::new("CONTROL.txt")).is_ok());
+        assert!(validate_windows_path(Path::new("COM.txt")).is_ok());
+        assert!(validate_windows_path(Path::new("COM10.txt")).is_ok()); // COM10 is not reserved
+        assert!(validate_windows_path(Path::new("LPT.txt")).is_ok());
+        assert!(validate_windows_path(Path::new("LPTT.txt")).is_ok());
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_validate_windows_path_no_op_on_unix() {
+        // On Unix, all paths should be valid (no-op function)
+        assert!(validate_windows_path(Path::new("CON")).is_ok());
+        assert!(validate_windows_path(Path::new("NUL")).is_ok());
+        assert!(validate_windows_path(Path::new("COM1")).is_ok());
+        assert!(validate_windows_path(Path::new("LPT1")).is_ok());
+    }
+}

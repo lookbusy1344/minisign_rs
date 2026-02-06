@@ -1,6 +1,9 @@
 //! Common file operation utilities for key and signature file handling
 
-use crate::{Error, Result, constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct};
+use crate::{
+    Error, Result, constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct,
+    validation::validate_windows_path,
+};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
@@ -44,6 +47,10 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
 /// TOCTOU (Time-of-Check-Time-of-Use) race conditions.
 pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
     let path = path.as_ref();
+
+    // Validate path doesn't use Windows reserved names
+    validate_windows_path(path)?;
+
     let mut options = OpenOptions::new();
     options.write(true);
 
@@ -98,6 +105,10 @@ pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool
 /// - File cannot be created or written
 pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
     let path = path.as_ref();
+
+    // Validate path doesn't use Windows reserved names
+    validate_windows_path(path)?;
+
     let mut options = OpenOptions::new();
     options.write(true);
 

@@ -11,7 +11,7 @@ use crate::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
     },
-    validation::validate_comment_with_length,
+    validation::{validate_comment_with_length, validate_windows_path},
 };
 use rayon::prelude::*;
 use std::{
@@ -537,6 +537,9 @@ pub fn generate_default_trusted_comment() -> String {
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
 pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<()> {
+    // Validate path doesn't use Windows reserved names
+    validate_windows_path(path)?;
+
     let mut options = OpenOptions::new();
     options.write(true);
 
