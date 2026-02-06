@@ -264,8 +264,11 @@ pub fn verify_message_signature(
     message_file: &Path,
     force_prehashed: bool,
 ) -> Result<()> {
-    // First, verify that the keynum matches
-    if pubkey.keynum() != sig_box.sig_struct().keynum() {
+    // H5: Use constant-time comparison for keynum to prevent timing side-channels
+    // during signature verification (matches constant-time comparison used for
+    // checksum validation in keys.rs)
+    use subtle::ConstantTimeEq;
+    if !bool::from(pubkey.keynum().ct_eq(sig_box.sig_struct().keynum())) {
         return Err(Error::KeyMismatch {
             sig_keynum: sig_box.sig_struct().keynum().to_key_id(),
             pub_keynum: pubkey.keynum().to_key_id(),

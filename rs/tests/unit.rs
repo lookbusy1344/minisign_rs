@@ -9,6 +9,8 @@ mod unit {
     pub mod formats;
     pub mod keys;
     pub mod phase1_security_tests;
+    pub mod phase2_h5_only;
+    // pub mod phase2_security_tests;  // Temporarily disabled - M1/M6 not yet implemented
     pub mod signature;
     pub mod validation;
     pub mod wordlist;

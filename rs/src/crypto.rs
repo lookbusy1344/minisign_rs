@@ -10,6 +10,7 @@ use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, Verifier, V
 use rand_core::OsRng;
 use scrypt::{Params as ScryptParams, scrypt};
 use std::io::Read;
+use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 // Constants from the minisign specification
@@ -115,8 +116,24 @@ impl std::fmt::Debug for Signature {
 }
 
 /// Key number / identifier (8 bytes)
+///
+/// # Security Note
+///
+/// `KeyNum` implements both `PartialEq` (standard comparison) and `ConstantTimeEq`
+/// (constant-time comparison via the `subtle` crate). While keynums appear in
+/// plaintext in signature files and are not secret, the verification path uses
+/// constant-time comparison to prevent potential timing side-channels during
+/// signature validation.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct KeyNum([u8; KEYNUM_BYTES]);
+
+// H5: Implement ConstantTimeEq for KeyNum to enable constant-time comparison
+// in the verification path, preventing timing side-channels
+impl ConstantTimeEq for KeyNum {
+    fn ct_eq(&self, other: &Self) -> subtle::Choice {
+        self.0.ct_eq(&other.0)
+    }
+}
 
 impl KeyNum {
     /// Create a new key number from bytes
