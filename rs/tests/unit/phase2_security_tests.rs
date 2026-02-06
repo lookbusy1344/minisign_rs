@@ -3,10 +3,10 @@
 // Tests for findings H5, M1, M6 from 2026-02-06 code review
 
 use minisign::{
-    crypto::{calculate_kdf_params, KeyNum, KEYNUM_BYTES},
+    Error,
+    crypto::{KEYNUM_BYTES, KeyNum, calculate_kdf_params},
     ops::sign::create_signature,
     signature::TRUSTEDCOMMENTMAXBYTES,
-    Error,
 };
 use std::path::PathBuf;
 use subtle::ConstantTimeEq;
