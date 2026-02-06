@@ -177,7 +177,8 @@ impl KeyNum {
     #[must_use]
     pub fn to_key_id(&self) -> String {
         use crate::formats::read_u64_le;
-        let value = read_u64_le(&self.0);
+        // KeyNum is always 8 bytes, so this should never fail
+        let value = read_u64_le(&self.0).expect("KeyNum is always 8 bytes");
         format!("{value:016X}")
     }
 }

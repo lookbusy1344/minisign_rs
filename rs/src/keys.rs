@@ -667,11 +667,13 @@ impl SeckeyStruct {
         write_u64_le(
             &mut bytes[SECKEY_KDF_OPSLIMIT_OFFSET..opslimit_end],
             self.kdf_opslimit,
-        );
+        )
+        .expect("opslimit range is exactly 8 bytes");
         write_u64_le(
             &mut bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end],
             self.kdf_memlimit,
-        );
+        )
+        .expect("memlimit range is exactly 8 bytes");
 
         // For encrypted keys, write encrypted_keynum; for unencrypted, write plaintext keynum
         if self.encrypted {
@@ -740,8 +742,10 @@ impl SeckeyStruct {
         let mut kdf_salt = [0u8; KDF_SALT_BYTES];
         kdf_salt.copy_from_slice(&bytes[SECKEY_KDF_SALT_OFFSET..salt_end]);
 
-        let kdf_opslimit = read_u64_le(&bytes[SECKEY_KDF_OPSLIMIT_OFFSET..opslimit_end]);
-        let kdf_memlimit = read_u64_le(&bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end]);
+        let kdf_opslimit = read_u64_le(&bytes[SECKEY_KDF_OPSLIMIT_OFFSET..opslimit_end])
+            .map_err(|e| Error::InvalidKeyFormat(format!("Invalid KDF opslimit: {e}")))?;
+        let kdf_memlimit = read_u64_le(&bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end])
+            .map_err(|e| Error::InvalidKeyFormat(format!("Invalid KDF memlimit: {e}")))?;
 
         let mut keynum_bytes = [0u8; KEYNUM_BYTES];
         keynum_bytes.copy_from_slice(&bytes[SECKEY_KEYNUM_OFFSET..keynum_end]);
