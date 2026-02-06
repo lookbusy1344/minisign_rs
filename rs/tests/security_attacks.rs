@@ -4,8 +4,7 @@
 //! These tests verify that the implementation properly rejects various attack vectors.
 
 use minisign::{
-    crypto::{generate_keypair, sign, verify, KeyNum, PublicKey, SecretKey, Signature, SIGNATURE_BYTES},
-    keys::PubkeyStruct,
+    crypto::{KeyNum, SIGNATURE_BYTES, Signature, generate_keypair, sign, verify},
     signature::{SigStruct, SignatureBox},
 };
 
@@ -15,12 +14,11 @@ use minisign::{
 
 #[test]
 fn t1_reject_forged_signature_bytes() {
-    let (secret_key, public_key, keynum) = generate_keypair().unwrap();
+    let (secret_key, public_key, _keynum) = generate_keypair().unwrap();
     let message = b"original message";
 
     // Create valid signature
     let signature = sign(&secret_key, message).unwrap();
-    let sig_struct = SigStruct::new(keynum, signature, false);
 
     // Forge the signature bytes (flip all bits)
     let forged_sig_bytes: [u8; SIGNATURE_BYTES] = signature
@@ -35,10 +33,7 @@ fn t1_reject_forged_signature_bytes() {
 
     // Verification with forged signature should fail
     let result = verify(&public_key, message, &forged_signature);
-    assert!(
-        result.is_err(),
-        "Forged signature should be rejected"
-    );
+    assert!(result.is_err(), "Forged signature should be rejected");
 }
 
 // ============================================================================
@@ -208,7 +203,7 @@ fn t1_reject_invalid_signature_structure() {
     let bytes = sig_struct.to_bytes();
 
     // Tamper with algorithm marker (first two bytes should be "Ed" or "ED")
-    let mut tampered_bytes = bytes.clone();
+    let mut tampered_bytes = bytes;
     tampered_bytes[0] = b'X';
     tampered_bytes[1] = b'X'; // Completely invalid marker
 
@@ -234,8 +229,5 @@ fn t1_reject_zero_signature() {
 
     // Verification should fail
     let result = verify(&public_key, message, &zero_signature);
-    assert!(
-        result.is_err(),
-        "All-zero signature should be rejected"
-    );
+    assert!(result.is_err(), "All-zero signature should be rejected");
 }
