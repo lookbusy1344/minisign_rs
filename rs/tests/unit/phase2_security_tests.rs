@@ -2,7 +2,13 @@
 //
 // Tests for findings H5, M1, M6 from 2026-02-06 code review
 
-use minisign::crypto::{calculate_kdf_params, KeyNum, KEYNUM_BYTES};
+use minisign::{
+    crypto::{calculate_kdf_params, KeyNum, KEYNUM_BYTES},
+    ops::sign::create_signature,
+    signature::TRUSTEDCOMMENTMAXBYTES,
+    Error,
+};
+use std::path::PathBuf;
 use subtle::ConstantTimeEq;
 
 // ============================================================================
@@ -113,86 +119,118 @@ fn m1_calculate_kdf_params_valid_range() {
 // M6: Validation should happen before crypto operations in create_signature()
 // ============================================================================
 
-// TODO: Implement M6 tests after understanding create_signature API
-/*
 #[test]
 fn m6_create_signature_validates_before_crypto() {
-    // This test verifies that comment validation happens before signing
-    // We'll test with invalid comments that should be rejected before any crypto work
+    // This test verifies that comment validation happens before file I/O or crypto
+    // We use a nonexistent file - if validation happens first, we'll get InvalidComment
+    // instead of a file error
 
-    use minisign::signature::COMMENTMAXBYTES;
-    use std::path::PathBuf;
+    let (secret_key, _, keynum) = minisign::crypto::generate_keypair().unwrap();
 
-    let (secret_key, _, _) = minisign::crypto::generate_keypair().unwrap();
+    // Use invalid characters (newline) which always causes error
+    // (oversized untrusted comment only warns, per C compatibility)
+    let invalid_comment = "comment\nwith\nnewlines";
 
-    // Create an oversized untrusted comment (should fail validation)
-    let oversized_comment = "x".repeat(COMMENTMAXBYTES + 1);
-    let message_path = PathBuf::from("/tmp/nonexistent.txt");
+    // Use nonexistent file path - if validation happens first, we won't reach file I/O
+    let nonexistent_path = PathBuf::from("/nonexistent/path/file.txt");
 
     let result = create_signature(
         &secret_key,
-        &message_path,
-        Some(oversized_comment),
-        None,
+        keynum,
+        &nonexistent_path,
         false,
+        None,
+        Some(invalid_comment),
     );
 
-    // Should fail with InvalidComment, not a crypto or file error
-    assert!(result.is_err(), "Should reject oversized comment");
-    assert!(
-        matches!(result.unwrap_err(), Error::InvalidComment(_)),
-        "Should fail with InvalidComment before attempting crypto"
-    );
+    // Should fail with InvalidComment (from validation), NOT FileRead (from I/O)
+    assert!(result.is_err(), "Should reject invalid comment");
+    match result.unwrap_err() {
+        Error::InvalidComment(_) => {
+            // Good! Validation happened before file I/O
+        }
+        e => panic!("Expected InvalidComment, got: {e}"),
+    }
 }
 
 #[test]
-#[ignore = "M6 not yet implemented"]
 fn m6_create_signature_rejects_invalid_chars_early() {
-    // Verify that comment character validation happens before crypto
-    use std::path::PathBuf;
+    // Verify that comment character validation happens before file I/O or crypto
+    let (secret_key, _, keynum) = minisign::crypto::generate_keypair().unwrap();
 
-    let (secret_key, _, _) = minisign::crypto::generate_keypair().unwrap();
-    let message_path = PathBuf::from("/tmp/test.txt");
+    // Use nonexistent file - if validation is first, we won't reach file I/O
+    let nonexistent_path = PathBuf::from("/nonexistent/invalid.txt");
 
     // Comment with newline should be rejected before any file I/O or crypto
     let result = create_signature(
         &secret_key,
-        &message_path,
-        Some("invalid\ncomment".to_string()),
-        None,
+        keynum,
+        &nonexistent_path,
         false,
+        None,
+        Some("invalid\ncomment"),
     );
 
     assert!(result.is_err(), "Should reject invalid comment");
-    assert!(
-        matches!(result.unwrap_err(), Error::InvalidComment(_)),
-        "Should fail with InvalidComment"
-    );
+    match result.unwrap_err() {
+        Error::InvalidComment(_) => {
+            // Good! Validation happened before file I/O
+        }
+        e => panic!("Expected InvalidComment, got: {e}"),
+    }
 }
 
 #[test]
 fn m6_trusted_comment_validation_before_crypto() {
-    use minisign::signature::TRUSTEDCOMMENTMAXBYTES;
-    use std::path::PathBuf;
+    let (secret_key, _, keynum) = minisign::crypto::generate_keypair().unwrap();
 
-    let (secret_key, _, _) = minisign::crypto::generate_keypair().unwrap();
-    let message_path = PathBuf::from("/tmp/test.txt");
+    // Use nonexistent file
+    let nonexistent_path = PathBuf::from("/nonexistent/test.txt");
 
     // Oversized trusted comment
     let oversized_trusted = "x".repeat(TRUSTEDCOMMENTMAXBYTES + 1);
 
     let result = create_signature(
         &secret_key,
-        &message_path,
-        None,
-        Some(oversized_trusted),
+        keynum,
+        &nonexistent_path,
         false,
+        Some(&oversized_trusted),
+        None,
     );
 
     assert!(result.is_err(), "Should reject oversized trusted comment");
-    assert!(
-        matches!(result.unwrap_err(), Error::InvalidComment(_)),
-        "Should fail with InvalidComment before crypto"
-    );
+    match result.unwrap_err() {
+        Error::InvalidComment(_) => {
+            // Good! Validation happened before file I/O
+        }
+        e => panic!("Expected InvalidComment, got: {e}"),
+    }
 }
-*/
+
+#[test]
+fn m6_validation_with_valid_comments_proceeds_to_file_io() {
+    // This test verifies that with valid comments, we DO proceed to file I/O
+    // (and get a file error for nonexistent file)
+    let (secret_key, _, keynum) = minisign::crypto::generate_keypair().unwrap();
+
+    let nonexistent_path = PathBuf::from("/nonexistent/file.txt");
+
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &nonexistent_path,
+        false,
+        Some("valid trusted"),
+        Some("valid untrusted"),
+    );
+
+    // With valid comments, we should reach file I/O and get FileRead error
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        Error::FileRead { .. } => {
+            // Good! Validation passed, and we reached file I/O
+        }
+        e => panic!("Expected FileRead error after validation, got: {e}"),
+    }
+}

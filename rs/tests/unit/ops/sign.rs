@@ -352,7 +352,8 @@ fn test_trusted_comment_too_long() {
     );
 
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), Error::Other(_)));
+    // M5/M6: Now correctly returns InvalidComment instead of Other
+    assert!(matches!(result.unwrap_err(), Error::InvalidComment(_)));
 }
 
 #[test]

@@ -408,6 +408,34 @@ pub fn create_signature(
     trusted_comment: Option<&str>,
     untrusted_comment: Option<&str>,
 ) -> Result<SignatureBox> {
+    // M6: Validate comments BEFORE any file I/O or crypto operations
+    // This ensures we fail fast on invalid input without wasting resources
+
+    // Generate trusted comment if not provided
+    let trusted_comment =
+        trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
+
+    // Generate untrusted comment if not provided
+    let untrusted_comment =
+        untrusted_comment.map_or_else(|| DEFAULT_UNTRUSTED_COMMENT.to_string(), String::from);
+
+    // Validate comment lengths (matches C implementation behavior)
+    if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
+        eprintln!("Warning: comment too long. This breaks compatibility with signify.");
+    }
+
+    if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
+        return Err(Error::InvalidComment(
+            "trusted comment exceeds maximum length".to_string(),
+        ));
+    }
+
+    // Validate comments for printability and carriage returns (matches C implementation)
+    validate_comment(&untrusted_comment)?;
+    validate_comment(&trusted_comment)?;
+
+    // Now that validation is complete, proceed with file I/O and crypto operations
+
     // Determine what data to sign
     let data_to_sign = if prehashed {
         // Open file and stream hash
@@ -428,27 +456,6 @@ pub fn create_signature(
 
     // Create the SigStruct
     let sig_struct = SigStruct::new(keynum, signature, prehashed);
-
-    // Generate trusted comment if not provided
-    let trusted_comment =
-        trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
-
-    // Generate untrusted comment if not provided
-    let untrusted_comment =
-        untrusted_comment.map_or_else(|| DEFAULT_UNTRUSTED_COMMENT.to_string(), String::from);
-
-    // Validate comment lengths (matches C implementation behavior)
-    if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
-        eprintln!("Warning: comment too long. This breaks compatibility with signify.");
-    }
-
-    if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
-        return Err(Error::Other("Trusted comment too long".to_string()));
-    }
-
-    // Validate comments for printability and carriage returns (matches C implementation)
-    validate_comment(&untrusted_comment)?;
-    validate_comment(&trusted_comment)?;
 
     // Create global signature (signs: signature_bytes || trusted_comment)
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
