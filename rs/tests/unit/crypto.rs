@@ -327,3 +327,52 @@ fn test_keypair_uniqueness() {
     );
     assert_eq!(keynums.len(), NUM_KEYS, "Not all keynums are unique");
 }
+
+#[test]
+fn test_debug_implementations() {
+    // Test L2: Verify Debug implementations are consistent and appropriate
+    let (secret_key, public_key, _keynum) =
+        generate_keypair().expect("key generation should succeed");
+
+    // SecretKey should redact sensitive data
+    let secret_debug = format!("{secret_key:?}");
+    assert!(
+        secret_debug.contains("[REDACTED]"),
+        "SecretKey Debug should redact sensitive data"
+    );
+    assert!(
+        !secret_debug.contains(&format!("{:02x}", secret_key.as_bytes()[0])),
+        "SecretKey Debug should not show any key bytes"
+    );
+
+    // PublicKey should show partial data (not sensitive)
+    let public_debug = format!("{public_key:?}");
+    assert!(
+        public_debug.contains("PublicKey"),
+        "PublicKey Debug should include type name"
+    );
+    // Should show at least the first byte
+    assert!(
+        public_debug.contains(&format!("{:02x}", public_key.as_bytes()[0])),
+        "PublicKey Debug should show some key data for debugging"
+    );
+
+    // Test Signature Debug format
+    let message = b"test message";
+    let signature = sign(&secret_key, message).expect("signing should succeed");
+    let sig_debug = format!("{signature:?}");
+    assert!(
+        sig_debug.contains("Signature"),
+        "Signature Debug should include type name"
+    );
+    assert!(
+        sig_debug.contains(&format!("{:02x}", signature.as_bytes()[0])),
+        "Signature Debug should show some data for debugging"
+    );
+
+    // Verify PublicKey and Signature have consistent format (both show data)
+    assert!(
+        public_debug.contains("..") && sig_debug.contains(".."),
+        "PublicKey and Signature should have consistent truncation markers"
+    );
+}

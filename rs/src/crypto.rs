@@ -87,7 +87,12 @@ impl PublicKey {
 
 impl std::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PublicKey({:02x}..)", self.0[0])
+        // Show first 4 bytes for better debugging (public keys are not sensitive)
+        write!(
+            f,
+            "PublicKey({:02x}{:02x}{:02x}{:02x}..)",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
     }
 }
 
@@ -111,7 +116,12 @@ impl Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Signature({:02x}..)", self.0[0])
+        // Show first 4 bytes for better debugging (signatures are not sensitive)
+        write!(
+            f,
+            "Signature({:02x}{:02x}{:02x}{:02x}..)",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
     }
 }
 
