@@ -405,6 +405,8 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 
     if expected_opslimit != opslimit {
         // Non-standard parameters: derive r from opslimit
+        // H3: Explicit error instead of silent fallback to prevent processing
+        // corrupted/malicious keys with weaker-than-intended KDF parameters
         let derived_r = opslimit
             .checked_div(
                 LIBSODIUM_OPSLIMIT_MULTIPLIER
@@ -414,7 +416,11 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
                     })?,
             )
             .and_then(|v| u32::try_from(v).ok())
-            .unwrap_or(r);
+            .ok_or_else(|| {
+                Error::ScryptParamError(
+                    "failed to derive r from opslimit: overflow or invalid value".into(),
+                )
+            })?;
         return Ok((log_n, derived_r, p));
     }
 

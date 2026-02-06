@@ -454,12 +454,12 @@ pub fn create_signature(
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
     let global_signature = crypto_sign(secret_key, &global_sig_data)?;
 
-    Ok(SignatureBox::new(
+    SignatureBox::new(
         untrusted_comment,
         sig_struct,
         trusted_comment,
         global_signature,
-    ))
+    )
 }
 
 /// Create the data that the global signature signs
@@ -530,6 +530,10 @@ pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<
 
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
+
+    // H4: Ensure durability - sync to disk before returning success
+    // Matches behavior of write_secret_key_file() and write_public_key_file()
+    file.sync_all().map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
 }

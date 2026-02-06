@@ -8,6 +8,7 @@ mod unit {
     pub mod errors;
     pub mod formats;
     pub mod keys;
+    pub mod phase1_security_tests;
     pub mod signature;
     pub mod validation;
     pub mod wordlist;
