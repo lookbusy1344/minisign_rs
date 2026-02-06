@@ -94,7 +94,7 @@ impl SigStruct {
     /// let sig_struct = SigStruct::new(keynum, signature, false);
     /// ```
     #[must_use]
-    pub fn new(keynum: KeyNum, signature: Signature, prehashed: bool) -> Self {
+    pub const fn new(keynum: KeyNum, signature: Signature, prehashed: bool) -> Self {
         Self {
             prehashed,
             keynum,
@@ -104,13 +104,13 @@ impl SigStruct {
 
     /// Get whether this is a prehashed signature
     #[must_use]
-    pub fn is_prehashed(&self) -> bool {
+    pub const fn is_prehashed(&self) -> bool {
         self.prehashed
     }
 
     /// Get the signature algorithm
     #[must_use]
-    pub fn algorithm(&self) -> SignatureAlgorithm {
+    pub const fn algorithm(&self) -> SignatureAlgorithm {
         if self.prehashed {
             SignatureAlgorithm::Prehashed
         } else {
@@ -120,13 +120,13 @@ impl SigStruct {
 
     /// Get the key number
     #[must_use]
-    pub fn keynum(&self) -> &KeyNum {
+    pub const fn keynum(&self) -> &KeyNum {
         &self.keynum
     }
 
     /// Get the signature
     #[must_use]
-    pub fn signature(&self) -> &Signature {
+    pub const fn signature(&self) -> &Signature {
         &self.signature
     }
 
@@ -278,7 +278,7 @@ impl SignatureBox {
 
     /// Get the signature structure
     #[must_use]
-    pub fn sig_struct(&self) -> &SigStruct {
+    pub const fn sig_struct(&self) -> &SigStruct {
         &self.sig_struct
     }
 
@@ -290,7 +290,7 @@ impl SignatureBox {
 
     /// Get the global signature
     #[must_use]
-    pub fn global_signature(&self) -> &Signature {
+    pub const fn global_signature(&self) -> &Signature {
         &self.global_signature
     }
 

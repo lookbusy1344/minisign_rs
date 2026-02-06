@@ -152,7 +152,7 @@ pub enum Action {
 impl Cli {
     /// Get the selected action, or None if no action was specified
     #[must_use]
-    pub fn action(&self) -> Option<Action> {
+    pub const fn action(&self) -> Option<Action> {
         if self.generate {
             Some(Action::Generate)
         } else if self.sign {

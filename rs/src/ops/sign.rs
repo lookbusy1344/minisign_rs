@@ -61,7 +61,7 @@ impl<'a> SignOptions<'a> {
     #[allow(clippy::fn_params_excessive_bools)]
     #[allow(clippy::too_many_arguments)]
     #[must_use]
-    pub fn new(
+    pub const fn new(
         secret_key_file: &'a Path,
         message_file: &'a Path,
         signature_file: Option<&'a Path>,
@@ -85,25 +85,25 @@ impl<'a> SignOptions<'a> {
 
     /// Get the secret key file path
     #[must_use]
-    pub fn secret_key_file(&self) -> &Path {
+    pub const fn secret_key_file(&self) -> &Path {
         self.secret_key_file
     }
 
     /// Get the message file path
     #[must_use]
-    pub fn message_file(&self) -> &Path {
+    pub const fn message_file(&self) -> &Path {
         self.message_file
     }
 
     /// Get the signature file path
     #[must_use]
-    pub fn signature_file(&self) -> Option<&Path> {
+    pub const fn signature_file(&self) -> Option<&Path> {
         self.signature_file
     }
 
     /// Get the prehashed flag
     #[must_use]
-    pub fn prehashed(&self) -> bool {
+    pub const fn prehashed(&self) -> bool {
         self.prehashed
     }
 
@@ -121,13 +121,13 @@ impl<'a> SignOptions<'a> {
 
     /// Get the force flag
     #[must_use]
-    pub fn force(&self) -> bool {
+    pub const fn force(&self) -> bool {
         self.force
     }
 
     /// Get the quiet flag
     #[must_use]
-    pub fn quiet(&self) -> bool {
+    pub const fn quiet(&self) -> bool {
         self.quiet
     }
 }

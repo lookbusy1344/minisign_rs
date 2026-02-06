@@ -29,7 +29,7 @@ impl<'a> RecreateOptions<'a> {
     /// * `comment` - Optional comment for the public key file
     /// * `force` - Force overwrite existing public key file
     #[must_use]
-    pub fn new(
+    pub const fn new(
         secret_key_file: &'a Path,
         public_key_file: &'a Path,
         comment: Option<String>,
@@ -45,13 +45,13 @@ impl<'a> RecreateOptions<'a> {
 
     /// Get the secret key file path
     #[must_use]
-    pub fn secret_key_file(&self) -> &Path {
+    pub const fn secret_key_file(&self) -> &Path {
         self.secret_key_file
     }
 
     /// Get the public key file path
     #[must_use]
-    pub fn public_key_file(&self) -> &Path {
+    pub const fn public_key_file(&self) -> &Path {
         self.public_key_file
     }
 
@@ -63,7 +63,7 @@ impl<'a> RecreateOptions<'a> {
 
     /// Get the force flag
     #[must_use]
-    pub fn force(&self) -> bool {
+    pub const fn force(&self) -> bool {
         self.force
     }
 }

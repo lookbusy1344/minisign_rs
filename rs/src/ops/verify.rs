@@ -42,7 +42,7 @@ impl<'a> VerifyOptions<'a> {
     /// * `quiet` - Quiet mode (no output)
     /// * `force_prehashed` - Require prehashed signatures (reject legacy)
     #[must_use]
-    pub fn new(
+    pub const fn new(
         public_key: PublicKeySource<'a>,
         signature_file: &'a Path,
         message_file: &'a Path,
@@ -62,37 +62,37 @@ impl<'a> VerifyOptions<'a> {
 
     /// Get the public key source
     #[must_use]
-    pub fn public_key(&self) -> &PublicKeySource<'a> {
+    pub const fn public_key(&self) -> &PublicKeySource<'a> {
         &self.public_key
     }
 
     /// Get the signature file path
     #[must_use]
-    pub fn signature_file(&self) -> &Path {
+    pub const fn signature_file(&self) -> &Path {
         self.signature_file
     }
 
     /// Get the message file path
     #[must_use]
-    pub fn message_file(&self) -> &Path {
+    pub const fn message_file(&self) -> &Path {
         self.message_file
     }
 
     /// Get the output flag
     #[must_use]
-    pub fn output(&self) -> bool {
+    pub const fn output(&self) -> bool {
         self.output
     }
 
     /// Get the quiet flag
     #[must_use]
-    pub fn quiet(&self) -> bool {
+    pub const fn quiet(&self) -> bool {
         self.quiet
     }
 
     /// Get the `force_prehashed` flag
     #[must_use]
-    pub fn force_prehashed(&self) -> bool {
+    pub const fn force_prehashed(&self) -> bool {
         self.force_prehashed
     }
 }

@@ -48,7 +48,7 @@ impl<'a> GenerateOptions<'a> {
     /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
     #[allow(clippy::fn_params_excessive_bools)]
     #[must_use]
-    pub fn new(
+    pub const fn new(
         secret_key_file: &'a Path,
         public_key_file: &'a Path,
         comment: Option<String>,

@@ -105,19 +105,19 @@ pub struct PubkeyStruct {
 impl PubkeyStruct {
     /// Create a new public key structure
     #[must_use]
-    pub fn new(keynum: KeyNum, public_key: PublicKey) -> Self {
+    pub const fn new(keynum: KeyNum, public_key: PublicKey) -> Self {
         Self { keynum, public_key }
     }
 
     /// Get the key number
     #[must_use]
-    pub fn keynum(&self) -> &KeyNum {
+    pub const fn keynum(&self) -> &KeyNum {
         &self.keynum
     }
 
     /// Get the public key
     #[must_use]
-    pub fn public_key(&self) -> &PublicKey {
+    pub const fn public_key(&self) -> &PublicKey {
         &self.public_key
     }
 
@@ -308,7 +308,7 @@ impl SeckeyStruct {
     /// assert!(!seckey_struct.is_encrypted());
     /// ```
     #[must_use]
-    pub fn new_unencrypted(keynum: KeyNum, secret_key: &SecretKey) -> Self {
+    pub const fn new_unencrypted(keynum: KeyNum, secret_key: &SecretKey) -> Self {
         let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
         secret_key_encrypted.copy_from_slice(secret_key.as_bytes());
 
@@ -517,7 +517,7 @@ impl SeckeyStruct {
     /// # Errors
     ///
     /// Returns an error if key is encrypted (use decrypt instead)
-    pub fn get_unencrypted_secret_key(&self) -> Result<SecretKey> {
+    pub const fn get_unencrypted_secret_key(&self) -> Result<SecretKey> {
         if self.encrypted {
             return Err(Error::PasswordRequired);
         }
@@ -555,7 +555,7 @@ impl SeckeyStruct {
     ///
     /// See `rs/docs/kdf-fallback-security-analysis.md` for details.
     #[must_use]
-    pub fn is_weak_kdf(&self) -> bool {
+    pub const fn is_weak_kdf(&self) -> bool {
         // Unencrypted keys have kdf_opslimit and kdf_memlimit set to 0
         // They should not be considered weak (they have no KDF at all)
         if !self.encrypted {
@@ -596,37 +596,37 @@ impl SeckeyStruct {
 
     /// Get the key number
     #[must_use]
-    pub fn keynum(&self) -> &KeyNum {
+    pub const fn keynum(&self) -> &KeyNum {
         &self.keynum
     }
 
     /// Check if the key is encrypted
     #[must_use]
-    pub fn is_encrypted(&self) -> bool {
+    pub const fn is_encrypted(&self) -> bool {
         self.encrypted
     }
 
     /// Get the encrypted secret key bytes
     #[must_use]
-    pub fn encrypted_secret_key(&self) -> &[u8; SECRET_KEY_BYTES] {
+    pub const fn encrypted_secret_key(&self) -> &[u8; SECRET_KEY_BYTES] {
         &self.secret_key_encrypted
     }
 
     /// Get the KDF salt (only meaningful if encrypted)
     #[must_use]
-    pub fn kdf_salt(&self) -> &[u8; KDF_SALT_BYTES] {
+    pub const fn kdf_salt(&self) -> &[u8; KDF_SALT_BYTES] {
         &self.kdf_salt
     }
 
     /// Get the KDF operations limit (only meaningful if encrypted)
     #[must_use]
-    pub fn kdf_opslimit(&self) -> u64 {
+    pub const fn kdf_opslimit(&self) -> u64 {
         self.kdf_opslimit
     }
 
     /// Get the KDF memory limit (only meaningful if encrypted)
     #[must_use]
-    pub fn kdf_memlimit(&self) -> u64 {
+    pub const fn kdf_memlimit(&self) -> u64 {
         self.kdf_memlimit
     }
 
@@ -635,7 +635,7 @@ impl SeckeyStruct {
     /// For encrypted keys, this returns the encrypted checksum.
     /// For unencrypted keys, this returns all zeros (matching C minisign behavior).
     #[must_use]
-    pub fn checksum(&self) -> &[u8; CHECKSUM_BYTES] {
+    pub const fn checksum(&self) -> &[u8; CHECKSUM_BYTES] {
         &self.checksum
     }
 

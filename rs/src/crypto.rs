@@ -50,13 +50,13 @@ pub struct SecretKey([u8; SECRET_KEY_BYTES]);
 impl SecretKey {
     /// Create a new secret key from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; SECRET_KEY_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; SECRET_KEY_BYTES]) -> Self {
         Self(bytes)
     }
 
     /// Get a reference to the secret key bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; SECRET_KEY_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; SECRET_KEY_BYTES] {
         &self.0
     }
 }
@@ -74,13 +74,13 @@ pub struct PublicKey([u8; PUBLIC_KEY_BYTES]);
 impl PublicKey {
     /// Create a new public key from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; PUBLIC_KEY_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; PUBLIC_KEY_BYTES]) -> Self {
         Self(bytes)
     }
 
     /// Get a reference to the public key bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; PUBLIC_KEY_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; PUBLIC_KEY_BYTES] {
         &self.0
     }
 }
@@ -98,13 +98,13 @@ pub struct Signature([u8; SIGNATURE_BYTES]);
 impl Signature {
     /// Create a new signature from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; SIGNATURE_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; SIGNATURE_BYTES]) -> Self {
         Self(bytes)
     }
 
     /// Get a reference to the signature bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; SIGNATURE_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; SIGNATURE_BYTES] {
         &self.0
     }
 }
@@ -138,7 +138,7 @@ impl ConstantTimeEq for KeyNum {
 impl KeyNum {
     /// Create a new key number from bytes
     #[must_use]
-    pub fn from_bytes(bytes: [u8; KEYNUM_BYTES]) -> Self {
+    pub const fn from_bytes(bytes: [u8; KEYNUM_BYTES]) -> Self {
         Self(bytes)
     }
 
@@ -155,7 +155,7 @@ impl KeyNum {
 
     /// Get a reference to the key number bytes
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; KEYNUM_BYTES] {
+    pub const fn as_bytes(&self) -> &[u8; KEYNUM_BYTES] {
         &self.0
     }
 
@@ -475,6 +475,12 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
     Ok((log_n, r, p))
 }
 
+/// Maximum output length for KDF operations (1 KB)
+///
+/// This prevents resource exhaustion from excessively large KDF output requests.
+/// Current legitimate uses require at most 104 bytes (`ENCRYPTED_BLOB_SIZE`).
+const MAX_KDF_OUTPUT_LEN: usize = 1024;
+
 /// Derive a key from a password using Scrypt with custom parameters
 ///
 /// # Arguments
@@ -484,7 +490,7 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 /// * `log_n` - The log2 of the work factor N (e.g., 20 for N=1,048,576)
 /// * `r` - Block size parameter
 /// * `p` - Parallelization parameter
-/// * `output_len` - The desired output length in bytes
+/// * `output_len` - The desired output length in bytes (max 1024)
 ///
 /// # Returns
 ///
@@ -492,7 +498,8 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 ///
 /// # Errors
 ///
-/// Returns `Error::KdfError` if key derivation fails
+/// Returns `Error::KdfError` if key derivation fails or if `output_len`
+/// exceeds `MAX_KDF_OUTPUT_LEN` (1024 bytes).
 pub fn derive_key_with_params(
     password: &[u8],
     salt: &[u8],
@@ -501,6 +508,12 @@ pub fn derive_key_with_params(
     p: u32,
     output_len: usize,
 ) -> Result<Zeroizing<Vec<u8>>> {
+    if output_len > MAX_KDF_OUTPUT_LEN {
+        return Err(Error::KdfError(format!(
+            "output length {output_len} exceeds maximum {MAX_KDF_OUTPUT_LEN} bytes"
+        )));
+    }
+
     let mut output = Zeroizing::new(vec![0u8; output_len]);
 
     // The scrypt Params::new() has a max len of 64 bytes, but the low-level scrypt()
