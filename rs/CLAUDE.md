@@ -3,6 +3,11 @@
 ## What This Is
 Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. Must be 100% compatible with C version.
 
+## Git Workflow
+- **Main branch**: `lb_rust` (not master)
+- Create feature branches from `lb_rust`
+- Merge completed work back to `lb_rust`
+
 ## Non-Negotiable Rules
 - **ZERO unsafe code**
 - **ZERO clippy warnings** (pedantic mode)
