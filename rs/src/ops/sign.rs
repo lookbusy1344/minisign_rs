@@ -180,7 +180,12 @@ fn sign_file_with_key(
     options: &SignOptions<'_>,
 ) -> Result<SignResult> {
     let sig_file_path = options.signature_file().map_or_else(
-        || PathBuf::from(format!("{}.minisig", message_file.display())),
+        || {
+            // Append .minisig extension using OsString to handle non-UTF8 paths correctly
+            let mut path = message_file.as_os_str().to_os_string();
+            path.push(".minisig");
+            PathBuf::from(path)
+        },
         Path::to_path_buf,
     );
 

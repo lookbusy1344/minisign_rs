@@ -307,7 +307,10 @@ fn verify_file_with_key(
     pubkey: &PubkeyStruct,
     options: &VerifyOptions<'_>,
 ) -> Result<VerifyResult> {
-    let sig_file_path = PathBuf::from(format!("{}.minisig", message_file.display()));
+    // Append .minisig extension using OsString to handle non-UTF8 paths correctly
+    let mut sig_path = message_file.as_os_str().to_os_string();
+    sig_path.push(".minisig");
+    let sig_file_path = PathBuf::from(sig_path);
 
     let sig_box = load_signature(&sig_file_path)?;
 
