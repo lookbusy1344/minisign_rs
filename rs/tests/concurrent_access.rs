@@ -478,6 +478,7 @@ fn test_multiprocess_signing_same_key() {
 /// rather than returning corrupted data.
 #[test]
 fn test_read_during_write() {
+    use std::sync::mpsc;
     use std::time::Duration;
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -487,6 +488,9 @@ fn test_read_during_write() {
     let secret_key_reader = Arc::clone(&secret_key);
     let read_attempts = Arc::new(std::sync::Mutex::new(vec![]));
     let read_attempts_clone = Arc::clone(&read_attempts);
+
+    // Channel for synchronization: writer signals when reader can start
+    let (tx, rx) = mpsc::channel();
 
     // Spawn writer thread
     let secret_key_writer = Arc::clone(&secret_key);
@@ -502,13 +506,16 @@ fn test_read_during_write() {
             false,
         );
 
-        // Add small delay to let reader start first
-        thread::sleep(Duration::from_millis(5));
+        // Signal reader that writer is ready to start
+        tx.send(()).expect("Failed to send signal");
         generate(&opts, None).expect("Generate should succeed");
     });
 
     // Spawn reader thread that attempts to read during write
     let reader = thread::spawn(move || {
+        // Wait for writer to be ready before starting read attempts
+        rx.recv().expect("Failed to receive signal");
+
         for _ in 0..50 {
             match fs::read(&*secret_key_reader) {
                 Ok(data) => {
