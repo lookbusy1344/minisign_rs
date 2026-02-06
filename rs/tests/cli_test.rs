@@ -68,7 +68,11 @@ fn test_help_shows_correct_app_name() {
 
 #[test]
 fn test_generate_missing_arguments() {
-    minisign_cmd().arg("-G").assert().failure();
+    minisign_cmd()
+        .arg("-G")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("password"));
 }
 
 #[test]
@@ -213,7 +217,8 @@ fn test_verify_wrong_message_fails() {
         .arg("-x")
         .arg(&sig_file)
         .assert()
-        .failure();
+        .failure()
+        .stderr(predicate::str::contains("verification failed"));
 }
 
 #[test]
@@ -447,7 +452,8 @@ fn test_force_flag_allows_overwrite() {
         .arg("-p")
         .arg(&public_key)
         .assert()
-        .failure();
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
 
     // Generate with -f should succeed
     minisign_cmd()
@@ -682,7 +688,8 @@ fn test_inspect_invalid_file() {
         .arg("-s")
         .arg("/nonexistent/key.file")
         .assert()
-        .failure();
+        .failure()
+        .stderr(predicate::str::contains("Failed to read"));
 }
 
 #[test]
@@ -1303,7 +1310,8 @@ fn test_force_long_option() {
         .arg("-p")
         .arg(&public_key)
         .assert()
-        .failure();
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
 
     // Generate with --force (long option) should succeed
     minisign_cmd()
@@ -1647,7 +1655,8 @@ fn cli_sign_multiple_files_partial_failure_exit_code() {
         ])
         .assert()
         .failure()
-        .code(1);
+        .code(1)
+        .stderr(predicate::str::contains("failed to read"));
 
     // Valid file should still be signed despite the other failing
     assert!(file1.with_extension("txt.minisig").exists());
