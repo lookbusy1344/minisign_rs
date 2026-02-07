@@ -89,10 +89,6 @@ tests/
 Do not add other crypto libs.
 
 ## Dependency Management
-**All dependencies use tilde requirements** (`~x.y.z`) to allow only patch updates.
-This prevents unexpected breaking changes while still receiving critical security patches.
-
-Example: `~2.2.0` allows `2.2.x` but blocks `2.3.0`
 
 When updating dependencies:
 1. Review changelogs for breaking changes
