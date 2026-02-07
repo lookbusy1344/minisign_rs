@@ -373,17 +373,9 @@ minisign_rs -S -m small-file.txt --legacy
 
 ### When to Use Each Mode
 
-**Use prehashed mode (default) when:**
-- Working with files larger than a few hundred MB
-- Memory is constrained
-- Standard security is sufficient (virtually all use cases)
+**Use prehashed mode (default) for all use cases.** It provides strong cryptographic security with efficient memory usage and no file size limits.
 
-**Use legacy mode when:**
-- Maximum theoretical security is required
-- Files are small (< 100 MB)
-- Resilience to pre-hash collisions is desired (theoretical concern only)
-
-**Note:** Both modes use Ed25519 signatures and provide strong cryptographic security. The prehashed mode's security reduction is purely theoretical - Blake2b-512 is cryptographically secure and no practical attacks exist.
+**Legacy mode** is maintained for compatibility with older signatures only. Both modes use Ed25519 signatures and provide equivalent practical security - Blake2b-512 is cryptographically secure and no practical attacks exist.
 
 ### Enforcing Prehashed Signatures
 
