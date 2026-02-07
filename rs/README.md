@@ -11,7 +11,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ## Project Status
 
-**Version 1.1.1 Release** - Production-ready Rust implementation with complete C minisign compatibility.
+**Version 1.2.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
@@ -31,7 +31,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **425 total tests** covering all operations and CLI behavior
+- **466 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Compatibility tests verifying interoperability with C minisign
@@ -40,16 +40,16 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (414 tests) using optimized scrypt parameters (~10 seconds)
+- **Fast test suite** (455 tests) using optimized scrypt parameters (~10 seconds)
 - **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **3,439 lines** of production code in `src/` (5,651 total with comments)
-- **8,626 lines** of test code in `tests/` (11,582 total with comments)
-- **Test-to-code ratio**: 2.5:1 demonstrating thorough test coverage
+- **3,623 lines** of production code in `src/` (6,174 total with comments)
+- **9,584 lines** of test code in `tests/` (13,062 total with comments)
+- **Test-to-code ratio**: 2.65:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
@@ -80,13 +80,13 @@ Release binaries are available for:
 # Build the project
 cargo build --release
 
-# Run tests (fast - 414 tests, ~10 seconds)
+# Run tests (fast - 455 tests, ~10 seconds)
 cargo test
 
 # Run slow security tests (11 tests, ~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (425 tests, ~21 seconds)
+# Run all tests (466 tests, ~21 seconds)
 cargo test && cargo test -- --ignored
 
 # Check code quality
@@ -414,10 +414,10 @@ minisign_rs -V -H -m file.txt -p key.pub
 
 **Optional (for full test suite):**
 - **C minisign** (for compatibility and cross-binary tests): `brew install minisign`
-  - Without C minisign: ~396 tests run (skips 18 cross-binary tests)
-  - With C minisign: All 414 tests run
+  - Without C minisign: ~437 tests run (skips 18 cross-binary tests)
+  - With C minisign: All 455 tests run
 
-**Fast vs slow tests:** 390 fast tests (N=2^14, ~10s) for development, 11 slow tests (N=2^20, ~11s) for production parameter verification.
+**Fast vs slow tests:** 444 fast tests (N=2^14, ~10s) for development, 11 slow tests (N=2^20, ~11s) for production parameter verification.
 
 ```bash
 # Run only fast tests (default, ~10 seconds)
