@@ -36,16 +36,10 @@ fn test_empty_file_signing() {
     fs::write(&message_file, b"").expect("Failed to create empty file");
 
     // Sign empty file (prehashed mode)
-    let sign_opts = SignOptions::new(
-        secret_key.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        true,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .build();
     sign(&sign_opts, None).expect("Should sign empty file");
 
     // Verify signature on empty file
@@ -85,16 +79,11 @@ fn test_empty_file_legacy_mode() {
     fs::write(&message_file, b"").expect("Failed to create empty file");
 
     // Sign empty file (legacy mode - non-prehashed)
-    let sign_opts = SignOptions::new(
-        secret_key.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        false,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .prehashed(false)
+        .force(true)
+        .build();
     sign(&sign_opts, None).expect("Should sign empty file in legacy mode");
 
     // Verify signature on empty file
@@ -357,16 +346,10 @@ fn test_generate_key_with_empty_password() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
-    let sign_opts = SignOptions::new(
-        secret_key.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        true,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .build();
 
     // Should be able to sign with empty password
     sign(&sign_opts, Some(b"")).expect("Should sign with empty password");
@@ -418,16 +401,10 @@ fn test_change_password_to_empty() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
-    let sign_opts = SignOptions::new(
-        secret_key.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        true,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .build();
 
     sign(&sign_opts, Some(b"")).expect("Should sign with new empty password");
 }
@@ -452,11 +429,8 @@ fn test_change_password_from_empty() {
     generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
-    let change_opts = ChangeOptions::new(
-        secret_key.as_path(),
-        false,
-        false,
-        cfg!(debug_assertions), // Use weak KDF in debug builds for faster test
+    let change_opts = ChangeOptions::builder(secret_key.as_path()).force_weak_kdf(
+        cfg!(debug_assertions).build(), // Use weak KDF in debug builds for faster test
     );
 
     change(&change_opts, Some(b""), Some(b"new_password"))
@@ -467,16 +441,10 @@ fn test_change_password_from_empty() {
     let sig_file = temp_dir.path().join("message.txt.minisig");
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
-    let sign_opts = SignOptions::new(
-        secret_key.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        true,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .build();
 
     sign(&sign_opts, Some(b"new_password")).expect("Should sign with new non-empty password");
 }
@@ -938,16 +906,10 @@ fn test_parent_directory_symlink_no_escape() {
     fs::write(&message_file, b"Test").expect("Failed to write message");
 
     let sig_file = link_dir.join("message.txt.minisig");
-    let sign_opts = SignOptions::new(
-        secret_key.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        true,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .build();
 
     sign(&sign_opts, None).expect("Should sign using symlinked directory path");
 

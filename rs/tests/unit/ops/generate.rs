@@ -153,7 +153,9 @@ fn test_generate_file_exists_without_force() {
     fs::write(&sk_path, "existing").unwrap();
     fs::write(&pk_path, "existing").unwrap();
 
-    let options = GenerateOptions::new(&sk_path, &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(&sk_path, &pk_path)
+        .no_password(true)
+        .build();
 
     let result = generate(&options, None);
     assert!(result.is_err());
@@ -220,8 +222,9 @@ fn test_secret_key_permissions() {
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
 
-    let options =
-        GenerateOptions::new(sk_path.as_path(), &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(sk_path.as_path(), &pk_path)
+        .no_password(true)
+        .build();
 
     generate(&options, None).expect("generation should succeed");
 
@@ -287,8 +290,9 @@ fn test_atomic_file_creation_prevents_race() {
     // Create existing secret key file
     fs::write(&sk_path, "existing secret key").unwrap();
 
-    let options =
-        GenerateOptions::new(sk_path.as_path(), &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(sk_path.as_path(), &pk_path)
+        .no_password(true)
+        .build();
 
     // Should fail due to existing file (atomic check)
     let result = generate(&options, None);
@@ -309,8 +313,9 @@ fn test_atomic_file_creation_pubkey_prevents_race() {
     // Create existing public key file
     fs::write(&pk_path, "existing public key").unwrap();
 
-    let options =
-        GenerateOptions::new(&sk_path, pk_path.as_path(), None, false, true, false, false);
+    let options = GenerateOptions::builder(&sk_path, pk_path.as_path())
+        .no_password(true)
+        .build();
 
     // Should fail due to existing file (atomic check)
     let result = generate(&options, None);
@@ -332,7 +337,9 @@ fn test_atomic_file_creation_both_files_check() {
     fs::write(&sk_path, "existing sk").unwrap();
     fs::write(&pk_path, "existing pk").unwrap();
 
-    let options = GenerateOptions::new(&sk_path, &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(&sk_path, &pk_path)
+        .no_password(true)
+        .build();
 
     // Should fail (doesn't matter which file is checked first)
     let result = generate(&options, None);
