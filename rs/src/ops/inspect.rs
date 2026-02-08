@@ -23,6 +23,29 @@ pub enum SecurityLevel {
     None,
 }
 
+impl SecurityLevel {
+    /// Classify security level from KDF parameters
+    ///
+    /// # Arguments
+    ///
+    /// * `memlimit` - Memory limit for the KDF
+    /// * `is_fallback` - Whether the parameters indicate a fallback from production strength
+    ///
+    /// # Returns
+    ///
+    /// The appropriate security level based on the parameters
+    #[must_use]
+    pub fn from_kdf_params(memlimit: u64, is_fallback: bool) -> Self {
+        if !is_fallback {
+            Self::High
+        } else if memlimit >= 256_000_000 {
+            Self::Medium
+        } else {
+            Self::Low
+        }
+    }
+}
+
 /// Options for inspecting a key file
 #[derive(Debug, Clone)]
 pub struct InspectOptions<'a> {
@@ -188,13 +211,7 @@ pub fn inspect_private(
             None
         };
 
-        let security_level = if !is_fallback {
-            SecurityLevel::High
-        } else if memlimit >= 256_000_000 {
-            SecurityLevel::Medium
-        } else {
-            SecurityLevel::Low
-        };
+        let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
         return Ok(InspectResult {
             key_id: decrypted_keynum.to_key_id(),
@@ -258,15 +275,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
     };
 
     // Classify security level
-    let security_level = if !is_fallback {
-        SecurityLevel::High
-    } else if memlimit >= 256_000_000 {
-        // >=256 MB: 1-2 fallbacks (2-4x weaker)
-        SecurityLevel::Medium
-    } else {
-        // <256 MB: 3+ fallbacks (8x+ weaker)
-        SecurityLevel::Low
-    };
+    let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
     Ok(InspectResult {
         key_id,
