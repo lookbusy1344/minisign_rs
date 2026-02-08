@@ -409,12 +409,19 @@ fn handle_change(cli: &Cli) -> Result<()> {
         false
     };
 
-    let options = ChangeOptions::new(
-        secret_key_file,
-        cli.no_password && new_password.is_none(),
-        cli.allow_kdf_fallback,
-        force_weak_kdf,
-    );
+    let mut builder = ChangeOptions::builder(secret_key_file);
+
+    if cli.no_password && new_password.is_none() {
+        builder = builder.remove_password(true);
+    }
+    if cli.allow_kdf_fallback {
+        builder = builder.allow_kdf_fallback(true);
+    }
+    if force_weak_kdf {
+        builder = builder.force_weak_kdf(true);
+    }
+
+    let options = builder.build();
 
     let result = change(
         &options,
