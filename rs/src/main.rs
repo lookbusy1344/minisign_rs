@@ -229,7 +229,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
         PublicKeySource::File(pk_file.as_path())
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
-        PublicKeySource::Base64(pk_base64.clone())
+        PublicKeySource::Base64(pk_base64)
     } else {
         // Try default public key file
         default_pk = Cli::default_public_key_path();

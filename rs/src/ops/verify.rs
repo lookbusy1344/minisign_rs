@@ -103,7 +103,7 @@ pub enum PublicKeySource<'a> {
     /// Read from a file
     File(&'a Path),
     /// Provided as base64-encoded string
-    Base64(String),
+    Base64(&'a str),
 }
 
 /// Result of signature verification
