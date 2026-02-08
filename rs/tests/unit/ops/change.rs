@@ -288,12 +288,9 @@ fn test_change_password_with_force_weak_kdf() {
 
     // Change password with force_weak_kdf
     let new_password = b"newpassword";
-    let options = ChangeOptions::new(
-        sk_path.as_path(),
-        false,
-        false,
-        true, // Force weak parameters
-    );
+    let options = ChangeOptions::builder(sk_path.as_path())
+        .force_weak_kdf(true) // Force weak parameters
+        .build();
 
     let result = change_with_log_n(&options, Some(old_password), Some(new_password), 20)
         .expect("password change should succeed");
