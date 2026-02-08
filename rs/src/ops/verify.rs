@@ -343,11 +343,13 @@ fn verify_file_with_key(
 ///
 /// # Returns
 ///
-/// `Ok(())` if all files verified successfully, `Err(PartialFailure)` if any failed
+/// * `Ok(())` if all files verified successfully
+/// * `Err(PartialFailure)` if some (but not all) files failed
+/// * `Err(TotalFailure)` if all files failed
 ///
 /// # Errors
 ///
-/// Returns `PartialFailure` error if any files could not be verified.
+/// Returns `PartialFailure` if some files failed, or `TotalFailure` if all files failed.
 /// Individual file errors are reported to stderr during execution.
 pub fn verify_multiple_files(
     files: Vec<PathBuf>,
@@ -447,13 +449,12 @@ fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> R
             for file in &failures {
                 eprintln!("  - {}", file.display());
             }
-            if success_count == 0 {
-                eprintln!("Total failure: all files failed");
-            } else {
-                eprintln!("Partial failure: some files could not be verified");
-            }
         }
-        return Err(Error::PartialFailure);
+        return if success_count == 0 {
+            Err(Error::TotalFailure)
+        } else {
+            Err(Error::PartialFailure)
+        };
     }
 
     Ok(())

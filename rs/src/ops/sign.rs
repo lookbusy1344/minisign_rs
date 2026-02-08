@@ -433,11 +433,13 @@ pub fn sign(options: &SignOptions<'_>, password: Option<&[u8]>) -> Result<SignRe
 ///
 /// # Returns
 ///
-/// `Ok(())` if all files signed successfully, `Err(PartialFailure)` if any failed
+/// * `Ok(())` if all files signed successfully
+/// * `Err(PartialFailure)` if some (but not all) files failed
+/// * `Err(TotalFailure)` if all files failed
 ///
 /// # Errors
 ///
-/// Returns `PartialFailure` error if any files could not be signed.
+/// Returns `PartialFailure` if some files failed, or `TotalFailure` if all files failed.
 /// Individual file errors are reported to stderr during execution.
 pub fn sign_multiple_files(
     files: Vec<PathBuf>,
@@ -537,7 +539,11 @@ fn print_summary(results: &[FileSignResult]) -> Result<()> {
         for file in &failures {
             eprintln!("  - {}", file.display());
         }
-        return Err(Error::PartialFailure);
+        return if success_count == 0 {
+            Err(Error::TotalFailure)
+        } else {
+            Err(Error::PartialFailure)
+        };
     }
 
     Ok(())

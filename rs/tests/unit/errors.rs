@@ -41,6 +41,12 @@ fn partial_failure_error_displays_correctly() {
 }
 
 #[test]
+fn total_failure_error_displays_correctly() {
+    let err = Error::TotalFailure;
+    assert_eq!(err.to_string(), "all files in batch operation failed");
+}
+
+#[test]
 fn test_base64_error_conversion() {
     use base64::{Engine, engine::general_purpose::STANDARD};
 

@@ -619,7 +619,7 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_err());
-    assert!(matches!(result, Err(Error::PartialFailure)));
+    assert!(matches!(result, Err(Error::TotalFailure)));
 
     // The actual output verification would need stderr capture.
     // For now, this test documents expected behavior and will pass after the fix.

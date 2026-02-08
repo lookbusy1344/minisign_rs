@@ -121,6 +121,9 @@ pub enum Error {
     #[error("some files in batch operation failed")]
     PartialFailure,
 
+    #[error("all files in batch operation failed")]
+    TotalFailure,
+
     // Generic errors
     #[error("{0}")]
     Other(String),
