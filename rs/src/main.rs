@@ -63,7 +63,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
     // Get comment
-    let comment = cli.untrusted_comment.clone();
+    let comment = cli.untrusted_comment.as_deref();
 
     // Get password with confirmation (unless -W was specified)
     let password = if cli.no_password {
@@ -169,8 +169,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             Some(signature_file),
             !cli.legacy, // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
             // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
-            cli.trusted_comment.clone(),
-            cli.untrusted_comment.clone(),
+            cli.trusted_comment.as_deref(),
+            cli.untrusted_comment.as_deref(),
             cli.force,
             cli.quiet,
         );
@@ -197,8 +197,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             std::path::Path::new(""),
             None,
             !cli.legacy,
-            cli.trusted_comment.clone(),
-            cli.untrusted_comment.clone(),
+            cli.trusted_comment.as_deref(),
+            cli.untrusted_comment.as_deref(),
             cli.force,
             cli.quiet,
         );
@@ -329,7 +329,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let options = RecreateOptions::new(
         secret_key_file,
         public_key_file,
-        cli.untrusted_comment.clone(),
+        cli.untrusted_comment.as_deref(),
         cli.force,
     );
 

@@ -14,7 +14,7 @@ pub struct RecreateOptions<'a> {
     /// Path to write the public key file
     public_key_file: &'a Path,
     /// Comment for the public key file
-    comment: Option<String>,
+    comment: Option<&'a str>,
     /// Force overwrite existing public key file
     force: bool,
 }
@@ -32,7 +32,7 @@ impl<'a> RecreateOptions<'a> {
     pub const fn new(
         secret_key_file: &'a Path,
         public_key_file: &'a Path,
-        comment: Option<String>,
+        comment: Option<&'a str>,
         force: bool,
     ) -> Self {
         Self {
@@ -57,8 +57,8 @@ impl<'a> RecreateOptions<'a> {
 
     /// Get the comment
     #[must_use]
-    pub fn comment(&self) -> Option<&str> {
-        self.comment.as_deref()
+    pub const fn comment(&self) -> Option<&str> {
+        self.comment
     }
 
     /// Get the force flag

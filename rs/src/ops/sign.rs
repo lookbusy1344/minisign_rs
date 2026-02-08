@@ -36,9 +36,9 @@ pub struct SignOptions<'a> {
     /// Use prehashed mode (hash the message with Blake2b-512 before signing)
     prehashed: bool,
     /// Trusted comment to include in the signature
-    trusted_comment: Option<String>,
+    trusted_comment: Option<&'a str>,
     /// Untrusted comment to include in the signature
-    untrusted_comment: Option<String>,
+    untrusted_comment: Option<&'a str>,
     /// Force overwrite existing signature file
     force: bool,
     /// Suppress informational output
@@ -66,8 +66,8 @@ impl<'a> SignOptions<'a> {
         message_file: &'a Path,
         signature_file: Option<&'a Path>,
         prehashed: bool,
-        trusted_comment: Option<String>,
-        untrusted_comment: Option<String>,
+        trusted_comment: Option<&'a str>,
+        untrusted_comment: Option<&'a str>,
         force: bool,
         quiet: bool,
     ) -> Self {
@@ -109,14 +109,14 @@ impl<'a> SignOptions<'a> {
 
     /// Get the trusted comment
     #[must_use]
-    pub fn trusted_comment(&self) -> Option<&str> {
-        self.trusted_comment.as_deref()
+    pub const fn trusted_comment(&self) -> Option<&str> {
+        self.trusted_comment
     }
 
     /// Get the untrusted comment
     #[must_use]
-    pub fn untrusted_comment(&self) -> Option<&str> {
-        self.untrusted_comment.as_deref()
+    pub const fn untrusted_comment(&self) -> Option<&str> {
+        self.untrusted_comment
     }
 
     /// Get the force flag

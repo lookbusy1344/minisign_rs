@@ -19,7 +19,7 @@ fn test_generate_encrypted_key() {
     let options = GenerateOptions::new(
         sk_path.as_path(),
         pk_path.as_path(),
-        Some("Test key".to_string()),
+        Some("Test key"),
         false,
         false,
         false,
@@ -60,7 +60,7 @@ fn test_generate_encrypted_key_fast() {
     let options = GenerateOptions::new(
         sk_path.as_path(),
         pk_path.as_path(),
-        Some("Fast test key".to_string()),
+        Some("Fast test key"),
         false,
         false,
         false,
@@ -257,7 +257,7 @@ fn test_roundtrip_generated_keys() {
     let options = GenerateOptions::new(
         sk_path.as_path(),
         pk_path.as_path(),
-        Some("Roundtrip test".to_string()),
+        Some("Roundtrip test"),
         false,
         true,
         false,
@@ -350,7 +350,7 @@ fn test_encrypted_keypair_has_matching_key_ids() {
     let options = GenerateOptions::new(
         sk_path.as_path(),
         pk_path.as_path(),
-        Some("Encrypted key ID test".to_string()),
+        Some("Encrypted key ID test"),
         false,
         false,
         false,

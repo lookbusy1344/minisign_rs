@@ -22,7 +22,7 @@ pub struct GenerateOptions<'a> {
     /// Path to write the public key file
     public_key_file: &'a Path,
     /// Comment for the key files
-    comment: Option<String>,
+    comment: Option<&'a str>,
     /// Force overwrite existing files
     force: bool,
     /// Create unencrypted key (no password)
@@ -51,7 +51,7 @@ impl<'a> GenerateOptions<'a> {
     pub const fn new(
         secret_key_file: &'a Path,
         public_key_file: &'a Path,
-        comment: Option<String>,
+        comment: Option<&'a str>,
         force: bool,
         no_password: bool,
         allow_kdf_fallback: bool,
@@ -228,7 +228,7 @@ pub fn generate_with_log_n(
     // Generate comments
     let keynum_hex = keynum.to_key_id();
     let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = options.comment.as_deref().unwrap_or(&default_comment);
+    let comment = options.comment.unwrap_or(&default_comment);
 
     // Ensure parent directories exist
     ensure_parent_directory(options.secret_key_file)?;

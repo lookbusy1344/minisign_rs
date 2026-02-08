@@ -23,7 +23,7 @@ fn test_recreate_from_unencrypted_key() {
     let options = RecreateOptions::new(
         sk_path.as_path(),
         pk_path.as_path(),
-        Some("Recreated key".to_string()),
+        Some("Recreated key"),
         false,
     );
 
@@ -197,12 +197,8 @@ fn test_recreate_force_overwrite() {
     let pk_path = temp_dir.path().join("test.pub");
     fs::write(&pk_path, "existing content").unwrap();
 
-    let options = RecreateOptions::new(
-        &sk_path,
-        pk_path.as_path(),
-        Some("Forced recreation".to_string()),
-        true,
-    );
+    let options =
+        RecreateOptions::new(&sk_path, pk_path.as_path(), Some("Forced recreation"), true);
 
     recreate(&options, None).expect("should overwrite with force=true");
 
@@ -233,8 +229,7 @@ fn test_recreate_matches_original_public_key() {
 
     // Recreate public key
     let pk_path = temp_dir.path().join("recreated.pub");
-    let options =
-        RecreateOptions::new(&sk_path, pk_path.as_path(), Some("test".to_string()), false);
+    let options = RecreateOptions::new(&sk_path, pk_path.as_path(), Some("test"), false);
 
     recreate(&options, None).expect("recreation should succeed");
 
