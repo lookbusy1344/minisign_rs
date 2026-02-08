@@ -163,17 +163,26 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         let default_signature = Cli::default_signature_path(message_file)?;
         let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-        let options = SignOptions::new(
-            secret_key_file,
-            message_file,
-            Some(signature_file),
-            !cli.legacy, // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
+        let mut builder = SignOptions::builder(secret_key_file, message_file)
+            .signature_file(signature_file)
+            // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
             // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
-            cli.trusted_comment.as_deref(),
-            cli.untrusted_comment.as_deref(),
-            cli.force,
-            cli.quiet,
-        );
+            .prehashed(!cli.legacy);
+
+        if let Some(comment) = cli.trusted_comment.as_deref() {
+            builder = builder.trusted_comment(comment);
+        }
+        if let Some(comment) = cli.untrusted_comment.as_deref() {
+            builder = builder.untrusted_comment(comment);
+        }
+        if cli.force {
+            builder = builder.force(true);
+        }
+        if cli.quiet {
+            builder = builder.quiet(true);
+        }
+
+        let options = builder.build();
 
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
@@ -192,16 +201,23 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             ));
         }
 
-        let options = SignOptions::new(
-            secret_key_file,
-            std::path::Path::new(""),
-            None,
-            !cli.legacy,
-            cli.trusted_comment.as_deref(),
-            cli.untrusted_comment.as_deref(),
-            cli.force,
-            cli.quiet,
-        );
+        let mut builder =
+            SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(!cli.legacy);
+
+        if let Some(comment) = cli.trusted_comment.as_deref() {
+            builder = builder.trusted_comment(comment);
+        }
+        if let Some(comment) = cli.untrusted_comment.as_deref() {
+            builder = builder.untrusted_comment(comment);
+        }
+        if cli.force {
+            builder = builder.force(true);
+        }
+        if cli.quiet {
+            builder = builder.quiet(true);
+        }
+
+        let options = builder.build();
 
         sign_multiple_files(
             message_files.into_owned(),
