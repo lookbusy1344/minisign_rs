@@ -118,10 +118,10 @@ pub enum Error {
 
     // Multi-file batch operation errors
     // Error message provides high-level context; detailed per-file errors are printed by the caller
-    #[error("some files in batch operation failed")]
+    #[error("Some files in batch operation failed")]
     PartialFailure,
 
-    #[error("all files in batch operation failed")]
+    #[error("All files in batch operation failed")]
     TotalFailure,
 
     // Generic errors
