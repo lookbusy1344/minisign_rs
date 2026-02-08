@@ -151,16 +151,11 @@ fn test_verify_with_wrong_keynum() {
         .expect("write failed");
 
     // Sign with key 1
-    let sign_opts = SignOptions::new(
-        secret_key_file.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        true,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key_file.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .quiet(true)
+        .build();
     sign(&sign_opts, None).expect("sign should succeed");
 
     // Try to verify with key 2 (different keynum) - should fail
@@ -216,16 +211,9 @@ fn test_verify_file_too_large_fails() {
     std::fs::write(&message_path, b"small message").unwrap();
 
     let sig_path = temp_dir.path().join("message.txt.minisig");
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        message_path.as_path(),
-        Some(sig_path.as_path()),
-        false,
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), message_path.as_path())
+        .signature_file(sig_path.as_path())
+        .build();
 
     sign(&sign_opts, None).expect("signing should succeed");
 
@@ -265,16 +253,10 @@ fn test_verify_prehashed_mode_no_size_limit() {
     std::fs::write(&message_path, vec![42u8; 10 * 1024 * 1024]).unwrap();
 
     let sig_path = temp_dir.path().join("large.bin.minisig");
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        message_path.as_path(),
-        Some(sig_path.as_path()),
-        true,
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), message_path.as_path())
+        .signature_file(sig_path.as_path())
+        .force(true)
+        .build();
 
     sign(&sign_opts, None).expect("signing large file in prehashed mode should succeed");
 
@@ -317,16 +299,10 @@ fn test_verify_multiple_files_sequential() {
     fs::write(&file3, b"Message 3").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        Path::new(""),
-        None,
-        true,
-        Some("Batch verification test".to_string()),
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .trusted_comment("Batch verification test")
+        .build();
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
@@ -374,16 +350,10 @@ fn test_verify_multiple_files_parallel() {
         paths.push(file);
     }
 
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        Path::new(""),
-        None,
-        true,
-        Some("Parallel verification test".to_string()),
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .trusted_comment("Parallel verification test")
+        .build();
 
     sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
 
@@ -436,16 +406,9 @@ fn test_verify_multiple_files_partial_failure() {
     fs::write(&file3, b"Message 3").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        Path::new(""),
-        None,
-        true,
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .build();
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
@@ -505,16 +468,9 @@ fn test_verify_multiple_files_all_attempted() {
 
     // Sign file1, file3, file4, file5 (skip file2 - it doesn't exist)
     let sign_paths = vec![file1.clone(), file3.clone(), file4.clone(), file5.clone()];
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        Path::new(""),
-        None,
-        true,
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .build();
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
@@ -576,16 +532,9 @@ fn test_verify_multiple_files_quiet_mode() {
     fs::write(&file2, b"M2").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone()];
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        Path::new(""),
-        None,
-        true,
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .build();
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
@@ -651,16 +600,9 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
     fs::write(&file3, b"M3").unwrap();
 
     let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        Path::new(""),
-        None,
-        true,
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .build();
 
     sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
@@ -677,7 +619,7 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_err());
-    assert!(matches!(result, Err(Error::PartialFailure)));
+    assert!(matches!(result, Err(Error::TotalFailure)));
 
     // The actual output verification would need stderr capture.
     // For now, this test documents expected behavior and will pass after the fix.
@@ -702,16 +644,10 @@ fn test_verify_rejects_legacy_with_force_prehashed() {
     std::fs::write(&message_path, b"Test message").unwrap();
 
     let sig_path = temp_dir.path().join("message.txt.minisig");
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        message_path.as_path(),
-        Some(sig_path.as_path()),
-        false, // prehashed=false means LEGACY mode
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), message_path.as_path())
+        .signature_file(sig_path.as_path())
+        .prehashed(false) // LEGACY mode (non-prehashed, "Ed")
+        .build();
 
     sign(&sign_opts, None).expect("signing should succeed");
 
@@ -759,16 +695,10 @@ fn test_verify_accepts_legacy_without_force_prehashed() {
     std::fs::write(&message_path, b"Test message").unwrap();
 
     let sig_path = temp_dir.path().join("message.txt.minisig");
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        message_path.as_path(),
-        Some(sig_path.as_path()),
-        false, // prehashed=false means LEGACY mode
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), message_path.as_path())
+        .signature_file(sig_path.as_path())
+        .prehashed(false) // LEGACY mode (non-prehashed, "Ed")
+        .build();
 
     sign(&sign_opts, None).expect("signing should succeed");
 
@@ -808,16 +738,10 @@ fn test_verify_accepts_prehashed_with_force_prehashed() {
     std::fs::write(&message_path, b"Test message").unwrap();
 
     let sig_path = temp_dir.path().join("message.txt.minisig");
-    let sign_opts = SignOptions::new(
-        sk_path.as_path(),
-        message_path.as_path(),
-        Some(sig_path.as_path()),
-        true, // prehashed=true means PREHASHED mode
-        None,
-        None,
-        false,
-        false,
-    );
+    let sign_opts = SignOptions::builder(sk_path.as_path(), message_path.as_path())
+        .signature_file(sig_path.as_path())
+        .force(true) // prehashed=true means PREHASHED mode
+        .build();
 
     sign(&sign_opts, None).expect("signing should succeed");
 

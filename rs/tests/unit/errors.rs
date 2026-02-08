@@ -36,8 +36,14 @@ fn test_error_constructors() {
 #[test]
 fn partial_failure_error_displays_correctly() {
     let err = Error::PartialFailure;
-    // Error message should be empty since context is printed by the caller
-    assert_eq!(err.to_string(), "");
+    // Error message provides high-level context; detailed per-file errors are printed by the caller
+    assert_eq!(err.to_string(), "Some files in batch operation failed");
+}
+
+#[test]
+fn total_failure_error_displays_correctly() {
+    let err = Error::TotalFailure;
+    assert_eq!(err.to_string(), "All files in batch operation failed");
 }
 
 #[test]

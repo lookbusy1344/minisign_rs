@@ -16,15 +16,9 @@ fn test_generate_encrypted_key() {
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        Some("Test key".to_string()),
-        false,
-        false,
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .comment("Test key")
+        .build();
 
     let password = b"testpassword";
     let result = generate(&options, Some(password)).expect("generation should succeed");
@@ -57,15 +51,9 @@ fn test_generate_encrypted_key_fast() {
     let sk_path = temp_dir.path().join("test_fast.key");
     let pk_path = temp_dir.path().join("test_fast.pub");
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        Some("Fast test key".to_string()),
-        false,
-        false,
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .comment("Fast test key")
+        .build();
 
     let password = b"testpassword";
     let result =
@@ -97,15 +85,9 @@ fn test_generate_unencrypted_key() {
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        None,
-        false,
-        true,
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .no_password(true)
+        .build();
 
     let result = generate(&options, None).expect("generation should succeed");
 
@@ -128,15 +110,7 @@ fn test_generate_without_password_fails() {
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        None,
-        false,
-        false, // Password required
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path()).build(); // Password required
 
     let result = generate(&options, None);
     assert!(result.is_err());
@@ -153,7 +127,9 @@ fn test_generate_file_exists_without_force() {
     fs::write(&sk_path, "existing").unwrap();
     fs::write(&pk_path, "existing").unwrap();
 
-    let options = GenerateOptions::new(&sk_path, &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(&sk_path, &pk_path)
+        .no_password(true)
+        .build();
 
     let result = generate(&options, None);
     assert!(result.is_err());
@@ -170,15 +146,10 @@ fn test_generate_force_overwrite() {
     fs::write(&sk_path, "existing").unwrap();
     fs::write(&pk_path, "existing").unwrap();
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        None,
-        true,
-        true,
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .force(true)
+        .no_password(true)
+        .build();
 
     generate(&options, None).expect("should overwrite with force=true");
 
@@ -194,15 +165,9 @@ fn test_generate_creates_parent_directories() {
     let sk_path = nested_dir.join("test.key");
     let pk_path = nested_dir.join("test.pub");
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        None,
-        false,
-        true,
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .no_password(true)
+        .build();
 
     generate(&options, None).expect("should create parent directories");
 
@@ -220,8 +185,9 @@ fn test_secret_key_permissions() {
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
 
-    let options =
-        GenerateOptions::new(sk_path.as_path(), &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(sk_path.as_path(), &pk_path)
+        .no_password(true)
+        .build();
 
     generate(&options, None).expect("generation should succeed");
 
@@ -254,15 +220,10 @@ fn test_roundtrip_generated_keys() {
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        Some("Roundtrip test".to_string()),
-        false,
-        true,
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .comment("Roundtrip test")
+        .no_password(true)
+        .build();
 
     let result = generate(&options, None).expect("generation should succeed");
 
@@ -287,8 +248,9 @@ fn test_atomic_file_creation_prevents_race() {
     // Create existing secret key file
     fs::write(&sk_path, "existing secret key").unwrap();
 
-    let options =
-        GenerateOptions::new(sk_path.as_path(), &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(sk_path.as_path(), &pk_path)
+        .no_password(true)
+        .build();
 
     // Should fail due to existing file (atomic check)
     let result = generate(&options, None);
@@ -309,8 +271,9 @@ fn test_atomic_file_creation_pubkey_prevents_race() {
     // Create existing public key file
     fs::write(&pk_path, "existing public key").unwrap();
 
-    let options =
-        GenerateOptions::new(&sk_path, pk_path.as_path(), None, false, true, false, false);
+    let options = GenerateOptions::builder(&sk_path, pk_path.as_path())
+        .no_password(true)
+        .build();
 
     // Should fail due to existing file (atomic check)
     let result = generate(&options, None);
@@ -332,7 +295,9 @@ fn test_atomic_file_creation_both_files_check() {
     fs::write(&sk_path, "existing sk").unwrap();
     fs::write(&pk_path, "existing pk").unwrap();
 
-    let options = GenerateOptions::new(&sk_path, &pk_path, None, false, true, false, false);
+    let options = GenerateOptions::builder(&sk_path, &pk_path)
+        .no_password(true)
+        .build();
 
     // Should fail (doesn't matter which file is checked first)
     let result = generate(&options, None);
@@ -347,15 +312,9 @@ fn test_encrypted_keypair_has_matching_key_ids() {
     let sk_path = temp_dir.path().join("encrypted.key");
     let pk_path = temp_dir.path().join("encrypted.pub");
 
-    let options = GenerateOptions::new(
-        sk_path.as_path(),
-        pk_path.as_path(),
-        Some("Encrypted key ID test".to_string()),
-        false,
-        false,
-        false,
-        false,
-    );
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .comment("Encrypted key ID test")
+        .build();
 
     let password = b"testpassword";
     let result =

@@ -39,7 +39,7 @@ fn test_change_password_fast() {
 
     // Change to new password
     let new_password = b"newpassword";
-    let options = ChangeOptions::new(sk_path.as_path(), false, false, false);
+    let options = ChangeOptions::builder(sk_path.as_path()).build();
 
     let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
         .expect("password change should succeed");
@@ -90,7 +90,9 @@ fn test_remove_password_from_encrypted_key() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Remove password
-    let options = ChangeOptions::new(sk_path.as_path(), true, false, false);
+    let options = ChangeOptions::builder(sk_path.as_path())
+        .remove_password(true)
+        .build();
 
     let result = change_with_log_n(&options, Some(password), None, 14)
         .expect("password removal should succeed");
@@ -120,7 +122,7 @@ fn test_add_password_to_unencrypted_key() {
 
     // Add password
     let new_password = b"newpassword";
-    let options = ChangeOptions::new(sk_path.as_path(), false, false, false);
+    let options = ChangeOptions::builder(sk_path.as_path()).build();
 
     let result = change_with_log_n(&options, None, Some(new_password), 14)
         .expect("adding password should succeed");
@@ -166,7 +168,7 @@ fn test_change_without_old_password_fails() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Try to change without old password
-    let options = ChangeOptions::new(&sk_path, false, false, false);
+    let options = ChangeOptions::builder(&sk_path).build();
 
     let result = change_with_log_n(&options, None, Some(b"newpass"), 14);
     assert!(result.is_err());
@@ -202,7 +204,7 @@ fn test_change_with_wrong_old_password_fails() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Try with wrong old password
-    let options = ChangeOptions::new(&sk_path, false, false, false);
+    let options = ChangeOptions::builder(&sk_path).build();
 
     let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
     assert!(result.is_err());
@@ -219,7 +221,7 @@ fn test_encrypt_without_new_password_fails() {
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
     // Try to encrypt without providing new password
-    let options = ChangeOptions::new(&sk_path, false, false, false);
+    let options = ChangeOptions::builder(&sk_path).build();
 
     let result = change_with_log_n(&options, None, None, 14);
     assert!(result.is_err());
@@ -246,7 +248,7 @@ fn test_change_preserves_file_permissions() {
     fs::set_permissions(&sk_path, permissions).unwrap();
 
     // Add password
-    let options = ChangeOptions::new(sk_path.as_path(), false, false, false);
+    let options = ChangeOptions::builder(sk_path.as_path()).build();
 
     change_with_log_n(&options, None, Some(b"password"), 14)
         .expect("adding password should succeed");
@@ -286,12 +288,9 @@ fn test_change_password_with_force_weak_kdf() {
 
     // Change password with force_weak_kdf
     let new_password = b"newpassword";
-    let options = ChangeOptions::new(
-        sk_path.as_path(),
-        false,
-        false,
-        true, // Force weak parameters
-    );
+    let options = ChangeOptions::builder(sk_path.as_path())
+        .force_weak_kdf(true) // Force weak parameters
+        .build();
 
     let result = change_with_log_n(&options, Some(old_password), Some(new_password), 20)
         .expect("password change should succeed");

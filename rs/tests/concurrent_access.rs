@@ -41,15 +41,9 @@ fn test_concurrent_key_generation_same_path() {
             barrier.wait();
 
             // All threads attempt to create keys at the same time
-            let opts = GenerateOptions::new(
-                secret_key.as_ref(),
-                public_key.as_ref(),
-                None,
-                false, // Important: no force, should fail if exists
-                true,
-                false,
-                false,
-            );
+            let opts = GenerateOptions::builder(secret_key.as_ref(), public_key.as_ref())
+                .no_password(true)
+                .build();
 
             match generate(&opts, None) {
                 Ok(_) => {
@@ -98,15 +92,10 @@ fn test_concurrent_signature_creation() {
     let secret_key = temp_dir.path().join("sign.key");
     let public_key = temp_dir.path().join("sign.pub");
 
-    let gen_opts = GenerateOptions::new(
-        secret_key.as_path(),
-        public_key.as_path(),
-        None,
-        true,
-        true,
-        false,
-        false,
-    );
+    let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
+        .force(true)
+        .no_password(true)
+        .build();
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create a test message
@@ -137,16 +126,9 @@ fn test_concurrent_signature_creation() {
             barrier.wait();
 
             // All threads attempt to sign at the same time
-            let opts = SignOptions::new(
-                &secret_key,
-                &message_file,
-                Some(&sig_file),
-                true,
-                None,
-                None,
-                false,
-                false,
-            );
+            let opts = SignOptions::builder(&secret_key, &message_file)
+                .signature_file(&sig_file)
+                .build();
 
             match sign(&opts, None) {
                 Ok(_) => {
@@ -207,15 +189,10 @@ fn test_concurrent_key_generation_with_force() {
         let handle = thread::spawn(move || {
             barrier.wait();
 
-            let opts = GenerateOptions::new(
-                secret_key.as_ref(),
-                public_key.as_ref(),
-                None,
-                true, // Force mode should allow overwrites
-                true,
-                false,
-                false,
-            );
+            let opts = GenerateOptions::builder(secret_key.as_ref(), public_key.as_ref())
+                .force(true)
+                .no_password(true)
+                .build();
 
             // All operations should succeed (or fail for other reasons, not file exists)
             generate(&opts, None).expect("Generate should succeed with force=true");
@@ -246,15 +223,9 @@ fn test_sequential_key_generation() {
     let secret_key = temp_dir.path().join("seq1.key");
     let public_key = temp_dir.path().join("seq1.pub");
 
-    let opts = GenerateOptions::new(
-        secret_key.as_path(),
-        public_key.as_path(),
-        None,
-        false,
-        true,
-        false,
-        false,
-    );
+    let opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
+        .no_password(true)
+        .build();
 
     generate(&opts, None).expect("First generation should succeed");
     assert!(secret_key.exists());
@@ -268,15 +239,10 @@ fn test_sequential_key_generation() {
     );
 
     // With force, should succeed
-    let opts_force = GenerateOptions::new(
-        secret_key.as_path(),
-        public_key.as_path(),
-        None,
-        true,
-        true,
-        false,
-        false,
-    );
+    let opts_force = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
+        .force(true)
+        .no_password(true)
+        .build();
 
     generate(&opts_force, None).expect("Generation with force should succeed");
 }
@@ -313,15 +279,9 @@ fn test_toctou_prevention_with_existence_check() {
                 let _secret_key = PathBuf::from(format!("{}.{}", test_file.display(), i));
                 let public_key = PathBuf::from(format!("{}.{}.pub", test_file.display(), i));
 
-                let opts = GenerateOptions::new(
-                    test_file.as_ref(),
-                    public_key.as_path(),
-                    None,
-                    false,
-                    true,
-                    false,
-                    false,
-                );
+                let opts = GenerateOptions::builder(test_file.as_ref(), public_key.as_path())
+                    .no_password(true)
+                    .build();
 
                 if generate(&opts, None).is_ok() {
                     *success.lock().unwrap() += 1;
@@ -361,15 +321,9 @@ fn test_concurrent_different_files() {
             let secret_key = temp_dir.join(format!("key_{i}.key"));
             let public_key = temp_dir.join(format!("key_{i}.pub"));
 
-            let opts = GenerateOptions::new(
-                secret_key.as_path(),
-                public_key.as_path(),
-                None,
-                false,
-                true,
-                false,
-                false,
-            );
+            let opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
+                .no_password(true)
+                .build();
 
             generate(&opts, None).expect("Should succeed for different files");
 
@@ -406,15 +360,10 @@ fn test_multiprocess_signing_same_key() {
     let secret_key = temp_dir.path().join("multi.key");
     let public_key = temp_dir.path().join("multi.pub");
 
-    let gen_opts = GenerateOptions::new(
-        secret_key.as_path(),
-        public_key.as_path(),
-        None,
-        true,
-        true,
-        false,
-        false,
-    );
+    let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
+        .force(true)
+        .no_password(true)
+        .build();
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create multiple message files
@@ -436,16 +385,9 @@ fn test_multiprocess_signing_same_key() {
 
         let handle = thread::spawn(move || {
             // Call sign operation directly (simulates separate process behavior)
-            let opts = SignOptions::new(
-                secret_key_str.as_ref(),
-                msg_file_str.as_ref(),
-                Some(sig_file_str.as_ref()),
-                true,
-                None,
-                None,
-                false,
-                false,
-            );
+            let opts = SignOptions::builder(secret_key_str.as_ref(), msg_file_str.as_ref())
+                .signature_file(sig_file_str.as_ref())
+                .build();
 
             sign(&opts, None)
         });
@@ -496,15 +438,10 @@ fn test_read_during_write() {
     let secret_key_writer = Arc::clone(&secret_key);
     let public_key_writer = Arc::clone(&public_key);
     let writer = thread::spawn(move || {
-        let opts = GenerateOptions::new(
-            secret_key_writer.as_ref(),
-            public_key_writer.as_ref(),
-            None,
-            true,
-            true,
-            false,
-            false,
-        );
+        let opts = GenerateOptions::builder(secret_key_writer.as_ref(), public_key_writer.as_ref())
+            .force(true)
+            .no_password(true)
+            .build();
 
         // Signal reader that writer is ready to start
         tx.send(()).expect("Failed to send signal");
@@ -577,15 +514,9 @@ fn test_atomic_file_creation_stress() {
             // Minimal delay to maximize contention
             thread::sleep(std::time::Duration::from_nanos(100));
 
-            let opts = GenerateOptions::new(
-                target_file.as_ref(),
-                &public_key,
-                None,
-                false,
-                true,
-                false,
-                false,
-            );
+            let opts = GenerateOptions::builder(target_file.as_ref(), &public_key)
+                .no_password(true)
+                .build();
 
             if generate(&opts, None).is_ok() {
                 *success.lock().unwrap() += 1;

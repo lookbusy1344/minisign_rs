@@ -28,5 +28,4 @@ pub mod validation;
 pub mod wordlist;
 
 // Re-export commonly used types
-pub use errors::Error;
-pub type Result<T> = std::result::Result<T, Error>;
+pub use errors::{Error, Result};

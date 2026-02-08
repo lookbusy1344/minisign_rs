@@ -238,28 +238,17 @@ fn test_c_verify_rust_legacy_signature() {
     fs::write(&message_file, b"Rust legacy mode test").expect("Failed to write message");
 
     // Generate key with Rust
-    let gen_opts = GenerateOptions::new(
-        secret_key.as_path(),
-        public_key.as_path(),
-        None,
-        true,  // force
-        true,  // no_password
-        false, // allow_kdf_fallback
-        false, // force_weak_kdf
-    );
+    let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
+        .force(true) // force
+        .no_password(true) // no_password
+        .build();
     generate(&gen_opts, None).expect("Failed to generate key");
 
     // Sign with Rust in legacy mode (non-prehashed)
-    let sign_opts = SignOptions::new(
-        secret_key.as_path(),
-        message_file.as_path(),
-        Some(sig_file.as_path()),
-        false,
-        None,
-        None,
-        true,
-        false,
-    );
+    let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .quiet(true)
+        .build();
     sign(&sign_opts, None).expect("Failed to sign");
 
     // Verify with C minisign

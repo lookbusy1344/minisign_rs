@@ -21,6 +21,8 @@ const VERSION: &str = git_version!(
 #[command(version = VERSION)]
 #[command(disable_help_flag = true)]
 #[command(disable_version_flag = true)]
+// clap derive requires boolean fields for CLI flags - builder pattern is not applicable here
+// This is an intentional exception to CLAUDE.md policy against excessive booleans
 #[allow(clippy::struct_excessive_bools)]
 pub struct Cli {
     /// Generate a new keypair

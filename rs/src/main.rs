@@ -63,7 +63,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
     // Get comment
-    let comment = cli.untrusted_comment.clone();
+    let comment = cli.untrusted_comment.as_deref();
 
     // Get password with confirmation (unless -W was specified)
     let password = if cli.no_password {
@@ -81,15 +81,25 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         false
     };
 
-    let options = GenerateOptions::new(
-        secret_key_file,
-        public_key_file,
-        comment,
-        cli.force,
-        cli.no_password,
-        cli.allow_kdf_fallback,
-        force_weak_kdf,
-    );
+    let mut builder = GenerateOptions::builder(secret_key_file, public_key_file);
+
+    if let Some(comment) = comment {
+        builder = builder.comment(comment);
+    }
+    if cli.force {
+        builder = builder.force(true);
+    }
+    if cli.no_password {
+        builder = builder.no_password(true);
+    }
+    if cli.allow_kdf_fallback {
+        builder = builder.allow_kdf_fallback(true);
+    }
+    if force_weak_kdf {
+        builder = builder.force_weak_kdf(true);
+    }
+
+    let options = builder.build();
 
     // Display working message for slow key generation
     if !cli.quiet {
@@ -163,17 +173,26 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         let default_signature = Cli::default_signature_path(message_file)?;
         let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-        let options = SignOptions::new(
-            secret_key_file,
-            message_file,
-            Some(signature_file),
-            !cli.legacy, // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
+        let mut builder = SignOptions::builder(secret_key_file, message_file)
+            .signature_file(signature_file)
+            // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
             // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
-            cli.trusted_comment.clone(),
-            cli.untrusted_comment.clone(),
-            cli.force,
-            cli.quiet,
-        );
+            .prehashed(!cli.legacy);
+
+        if let Some(comment) = cli.trusted_comment.as_deref() {
+            builder = builder.trusted_comment(comment);
+        }
+        if let Some(comment) = cli.untrusted_comment.as_deref() {
+            builder = builder.untrusted_comment(comment);
+        }
+        if cli.force {
+            builder = builder.force(true);
+        }
+        if cli.quiet {
+            builder = builder.quiet(true);
+        }
+
+        let options = builder.build();
 
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
@@ -192,16 +211,23 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             ));
         }
 
-        let options = SignOptions::new(
-            secret_key_file,
-            std::path::Path::new(""),
-            None,
-            !cli.legacy,
-            cli.trusted_comment.clone(),
-            cli.untrusted_comment.clone(),
-            cli.force,
-            cli.quiet,
-        );
+        let mut builder =
+            SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(!cli.legacy);
+
+        if let Some(comment) = cli.trusted_comment.as_deref() {
+            builder = builder.trusted_comment(comment);
+        }
+        if let Some(comment) = cli.untrusted_comment.as_deref() {
+            builder = builder.untrusted_comment(comment);
+        }
+        if cli.force {
+            builder = builder.force(true);
+        }
+        if cli.quiet {
+            builder = builder.quiet(true);
+        }
+
+        let options = builder.build();
 
         sign_multiple_files(
             message_files.into_owned(),
@@ -229,7 +255,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
         PublicKeySource::File(pk_file.as_path())
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
-        PublicKeySource::Base64(pk_base64.clone())
+        PublicKeySource::Base64(pk_base64)
     } else {
         // Try default public key file
         default_pk = Cli::default_public_key_path();
@@ -329,7 +355,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let options = RecreateOptions::new(
         secret_key_file,
         public_key_file,
-        cli.untrusted_comment.clone(),
+        cli.untrusted_comment.as_deref(),
         cli.force,
     );
 
@@ -383,12 +409,19 @@ fn handle_change(cli: &Cli) -> Result<()> {
         false
     };
 
-    let options = ChangeOptions::new(
-        secret_key_file,
-        cli.no_password && new_password.is_none(),
-        cli.allow_kdf_fallback,
-        force_weak_kdf,
-    );
+    let mut builder = ChangeOptions::builder(secret_key_file);
+
+    if cli.no_password && new_password.is_none() {
+        builder = builder.remove_password(true);
+    }
+    if cli.allow_kdf_fallback {
+        builder = builder.allow_kdf_fallback(true);
+    }
+    if force_weak_kdf {
+        builder = builder.force_weak_kdf(true);
+    }
+
+    let options = builder.build();
 
     let result = change(
         &options,

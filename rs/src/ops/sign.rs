@@ -25,7 +25,6 @@ const DEFAULT_UNTRUSTED_COMMENT: &str = "signature from minisign secret key";
 
 /// Options for signing files
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct SignOptions<'a> {
     /// Path to the secret key file
     secret_key_file: &'a Path,
@@ -36,29 +35,164 @@ pub struct SignOptions<'a> {
     /// Use prehashed mode (hash the message with Blake2b-512 before signing)
     prehashed: bool,
     /// Trusted comment to include in the signature
-    trusted_comment: Option<String>,
+    trusted_comment: Option<&'a str>,
     /// Untrusted comment to include in the signature
-    untrusted_comment: Option<String>,
+    untrusted_comment: Option<&'a str>,
     /// Force overwrite existing signature file
     force: bool,
     /// Suppress informational output
     quiet: bool,
 }
 
-impl<'a> SignOptions<'a> {
-    /// Create new sign options
+/// Builder for `SignOptions`
+#[derive(Debug, Clone)]
+pub struct SignOptionsBuilder<'a> {
+    secret_key_file: &'a Path,
+    message_file: &'a Path,
+    signature_file: Option<&'a Path>,
+    prehashed: bool,
+    trusted_comment: Option<&'a str>,
+    untrusted_comment: Option<&'a str>,
+    force: bool,
+    quiet: bool,
+}
+
+impl<'a> SignOptionsBuilder<'a> {
+    /// Create a new builder with required fields
     ///
     /// # Arguments
     ///
     /// * `secret_key_file` - Path to the secret key file
     /// * `message_file` - Path to the message file
-    /// * `signature_file` - Optional path to output signature file (defaults to `message_file.minisig`)
-    /// * `prehashed` - Use prehashed mode (hash the message with Blake2b-512 before signing)
-    /// * `trusted_comment` - Optional trusted comment to include in the signature
-    /// * `untrusted_comment` - Optional untrusted comment to include in the signature
-    /// * `force` - Force overwrite existing signature file
-    /// * `quiet` - Suppress informational output
-    #[allow(clippy::fn_params_excessive_bools)]
+    #[must_use]
+    pub const fn new(secret_key_file: &'a Path, message_file: &'a Path) -> Self {
+        Self {
+            secret_key_file,
+            message_file,
+            signature_file: None,
+            prehashed: true, // Default matches C minisign: prehashed mode
+            trusted_comment: None,
+            untrusted_comment: None,
+            force: false,
+            quiet: false,
+        }
+    }
+
+    /// Set the signature file path
+    #[must_use]
+    pub const fn signature_file(mut self, path: &'a Path) -> Self {
+        self.signature_file = Some(path);
+        self
+    }
+
+    /// Set prehashed mode
+    ///
+    /// Default: true (matches C minisign behavior)
+    #[must_use]
+    pub const fn prehashed(mut self, prehashed: bool) -> Self {
+        self.prehashed = prehashed;
+        self
+    }
+
+    /// Set the trusted comment
+    #[must_use]
+    pub const fn trusted_comment(mut self, comment: &'a str) -> Self {
+        self.trusted_comment = Some(comment);
+        self
+    }
+
+    /// Set the untrusted comment
+    #[must_use]
+    pub const fn untrusted_comment(mut self, comment: &'a str) -> Self {
+        self.untrusted_comment = Some(comment);
+        self
+    }
+
+    /// Enable force mode (overwrite existing files)
+    #[must_use]
+    pub const fn force(mut self, force: bool) -> Self {
+        self.force = force;
+        self
+    }
+
+    /// Enable quiet mode (suppress output)
+    #[must_use]
+    pub const fn quiet(mut self, quiet: bool) -> Self {
+        self.quiet = quiet;
+        self
+    }
+
+    /// Build the `SignOptions`
+    #[must_use]
+    pub const fn build(self) -> SignOptions<'a> {
+        SignOptions {
+            secret_key_file: self.secret_key_file,
+            message_file: self.message_file,
+            signature_file: self.signature_file,
+            prehashed: self.prehashed,
+            trusted_comment: self.trusted_comment,
+            untrusted_comment: self.untrusted_comment,
+            force: self.force,
+            quiet: self.quiet,
+        }
+    }
+}
+
+impl<'a> SignOptions<'a> {
+    /// Create a builder for `SignOptions`
+    ///
+    /// # Arguments
+    ///
+    /// * `secret_key_file` - Path to the secret key file
+    /// * `message_file` - Path to the message file
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use minisign::ops::sign::SignOptions;
+    /// # use std::path::Path;
+    /// let options = SignOptions::builder(
+    ///     Path::new("secret.key"),
+    ///     Path::new("message.txt")
+    /// )
+    /// .prehashed(true)
+    /// .trusted_comment("timestamp:12345")
+    /// .force(true)
+    /// .build();
+    /// ```
+    #[must_use]
+    pub const fn builder(
+        secret_key_file: &'a Path,
+        message_file: &'a Path,
+    ) -> SignOptionsBuilder<'a> {
+        SignOptionsBuilder::new(secret_key_file, message_file)
+    }
+
+    /// Create new sign options (deprecated, use `builder()` instead)
+    ///
+    /// This method is deprecated to avoid excessive boolean parameters.
+    /// Use the builder pattern instead for better API clarity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use minisign::ops::sign::SignOptions;
+    /// # use std::path::Path;
+    /// // Old way (deprecated)
+    /// // let options = SignOptions::new(..., true, None, None, false, false);
+    ///
+    /// // New way (recommended)
+    /// let options = SignOptions::builder(
+    ///     Path::new("secret.key"),
+    ///     Path::new("message.txt")
+    /// )
+    /// .prehashed(true)
+    /// .build();
+    /// ```
+    #[deprecated(
+        since = "1.3.0",
+        note = "use `builder()` instead to avoid excessive booleans"
+    )]
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub const fn new(
@@ -66,8 +200,8 @@ impl<'a> SignOptions<'a> {
         message_file: &'a Path,
         signature_file: Option<&'a Path>,
         prehashed: bool,
-        trusted_comment: Option<String>,
-        untrusted_comment: Option<String>,
+        trusted_comment: Option<&'a str>,
+        untrusted_comment: Option<&'a str>,
         force: bool,
         quiet: bool,
     ) -> Self {
@@ -109,14 +243,14 @@ impl<'a> SignOptions<'a> {
 
     /// Get the trusted comment
     #[must_use]
-    pub fn trusted_comment(&self) -> Option<&str> {
-        self.trusted_comment.as_deref()
+    pub const fn trusted_comment(&self) -> Option<&str> {
+        self.trusted_comment
     }
 
     /// Get the untrusted comment
     #[must_use]
-    pub fn untrusted_comment(&self) -> Option<&str> {
-        self.untrusted_comment.as_deref()
+    pub const fn untrusted_comment(&self) -> Option<&str> {
+        self.untrusted_comment
     }
 
     /// Get the force flag
@@ -299,11 +433,13 @@ pub fn sign(options: &SignOptions<'_>, password: Option<&[u8]>) -> Result<SignRe
 ///
 /// # Returns
 ///
-/// `Ok(())` if all files signed successfully, `Err(PartialFailure)` if any failed
+/// * `Ok(())` if all files signed successfully
+/// * `Err(PartialFailure)` if some (but not all) files failed
+/// * `Err(TotalFailure)` if all files failed
 ///
 /// # Errors
 ///
-/// Returns `PartialFailure` error if any files could not be signed.
+/// Returns `PartialFailure` if some files failed, or `TotalFailure` if all files failed.
 /// Individual file errors are reported to stderr during execution.
 pub fn sign_multiple_files(
     files: Vec<PathBuf>,
@@ -403,7 +539,11 @@ fn print_summary(results: &[FileSignResult]) -> Result<()> {
         for file in &failures {
             eprintln!("  - {}", file.display());
         }
-        return Err(Error::PartialFailure);
+        return if success_count == 0 {
+            Err(Error::TotalFailure)
+        } else {
+            Err(Error::PartialFailure)
+        };
     }
 
     Ok(())
