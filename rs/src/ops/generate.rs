@@ -34,8 +34,102 @@ pub struct GenerateOptions<'a> {
     force_weak_kdf: bool,
 }
 
+/// Builder for `GenerateOptions`
+#[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct GenerateOptionsBuilder<'a> {
+    secret_key_file: &'a Path,
+    public_key_file: &'a Path,
+    comment: Option<&'a str>,
+    force: bool,
+    no_password: bool,
+    allow_kdf_fallback: bool,
+    force_weak_kdf: bool,
+}
+
+impl<'a> GenerateOptionsBuilder<'a> {
+    /// Create a new builder with required fields
+    #[must_use]
+    pub const fn new(secret_key_file: &'a Path, public_key_file: &'a Path) -> Self {
+        Self {
+            secret_key_file,
+            public_key_file,
+            comment: None,
+            force: false,
+            no_password: false,
+            allow_kdf_fallback: false,
+            force_weak_kdf: false,
+        }
+    }
+
+    /// Set the comment for the key files
+    #[must_use]
+    pub const fn comment(mut self, comment: &'a str) -> Self {
+        self.comment = Some(comment);
+        self
+    }
+
+    /// Enable force mode (overwrite existing files)
+    #[must_use]
+    pub const fn force(mut self, force: bool) -> Self {
+        self.force = force;
+        self
+    }
+
+    /// Create unencrypted key (no password)
+    #[must_use]
+    pub const fn no_password(mut self, no_password: bool) -> Self {
+        self.no_password = no_password;
+        self
+    }
+
+    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    #[must_use]
+    pub const fn allow_kdf_fallback(mut self, allow: bool) -> Self {
+        self.allow_kdf_fallback = allow;
+        self
+    }
+
+    /// Force weak KDF parameters for testing (DEBUG ONLY)
+    #[must_use]
+    pub const fn force_weak_kdf(mut self, force: bool) -> Self {
+        self.force_weak_kdf = force;
+        self
+    }
+
+    /// Build the `GenerateOptions`
+    #[must_use]
+    pub const fn build(self) -> GenerateOptions<'a> {
+        // In release builds, force_weak_kdf must always be false
+        #[cfg(not(debug_assertions))]
+        assert!(
+            !self.force_weak_kdf,
+            "force_weak_kdf must be false in release builds"
+        );
+
+        GenerateOptions {
+            secret_key_file: self.secret_key_file,
+            public_key_file: self.public_key_file,
+            comment: self.comment,
+            force: self.force,
+            no_password: self.no_password,
+            allow_kdf_fallback: self.allow_kdf_fallback,
+            force_weak_kdf: self.force_weak_kdf,
+        }
+    }
+}
+
 impl<'a> GenerateOptions<'a> {
-    /// Create new generate options
+    /// Create a builder for `GenerateOptions`
+    #[must_use]
+    pub const fn builder(
+        secret_key_file: &'a Path,
+        public_key_file: &'a Path,
+    ) -> GenerateOptionsBuilder<'a> {
+        GenerateOptionsBuilder::new(secret_key_file, public_key_file)
+    }
+
+    /// Create new generate options (deprecated, use `builder()` instead)
     ///
     /// # Arguments
     ///
@@ -46,7 +140,12 @@ impl<'a> GenerateOptions<'a> {
     /// * `no_password` - Create unencrypted key (no password)
     /// * `allow_kdf_fallback` - Allow KDF parameter fallback (LESS SECURE, opt-in only)
     /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
+    #[deprecated(
+        since = "1.3.0",
+        note = "use `builder()` instead to avoid excessive booleans"
+    )]
     #[allow(clippy::fn_params_excessive_bools)]
+    #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub const fn new(
         secret_key_file: &'a Path,

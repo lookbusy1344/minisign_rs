@@ -81,15 +81,25 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         false
     };
 
-    let options = GenerateOptions::new(
-        secret_key_file,
-        public_key_file,
-        comment,
-        cli.force,
-        cli.no_password,
-        cli.allow_kdf_fallback,
-        force_weak_kdf,
-    );
+    let mut builder = GenerateOptions::builder(secret_key_file, public_key_file);
+
+    if let Some(comment) = comment {
+        builder = builder.comment(comment);
+    }
+    if cli.force {
+        builder = builder.force(true);
+    }
+    if cli.no_password {
+        builder = builder.no_password(true);
+    }
+    if cli.allow_kdf_fallback {
+        builder = builder.allow_kdf_fallback(true);
+    }
+    if force_weak_kdf {
+        builder = builder.force_weak_kdf(true);
+    }
+
+    let options = builder.build();
 
     // Display working message for slow key generation
     if !cli.quiet {
