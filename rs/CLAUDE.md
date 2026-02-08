@@ -57,6 +57,13 @@ Install with: `cargo install cargo-audit`
 
 After dependency updates, always run full test suite and audit.
 
+## Refactoring Tools
+**Available tools for code refactoring:**
+- `rust-analyzer` - Installed via `rustup component add rust-analyzer`
+- `ast-grep` - Installed via `cargo install ast-grep`
+
+These tools support structural search and replace, rename operations, and other automated refactoring tasks.
+
 ## Key Locations
 ```
 src/
