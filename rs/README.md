@@ -47,9 +47,9 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **3,623 lines** of production code in `src/` (6,174 total with comments)
-- **9,584 lines** of test code in `tests/` (13,062 total with comments)
-- **Test-to-code ratio**: 2.65:1 demonstrating thorough test coverage
+- **3,862 lines** of production code in `src/` (6,530 total with comments)
+- **9,034 lines** of test code in `tests/` (12,513 total with comments)
+- **Test-to-code ratio**: 2.34:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit

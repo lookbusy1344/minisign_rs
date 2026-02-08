@@ -35,8 +35,8 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
   - Return references (`&Path`, `&str`, `&[T]`) not owned types (`&PathBuf`, `&String`)
   - Use `#[must_use]` attribute
   - Avoid `get_` prefix (Rust convention)
-- For structs with many parameters, prefer builder pattern over constructors with excessive booleans
-- Avoid `#[allow(clippy::fn_params_excessive_bools)]` - use builder pattern instead
+- **Prefer builder pattern** for structs with 3+ params or multiple booleans (saved 452 lines in commit 17c648d)
+- Never use `#[allow(clippy::fn_params_excessive_bools)]` - use builder instead
 
 ## Pre-Commit Checklist
 **ALWAYS run in this exact order before committing:**
