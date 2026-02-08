@@ -117,8 +117,8 @@ pub enum Error {
     Io(String),
 
     // Multi-file batch operation errors
-    // Error message is empty because detailed context is printed by the caller
-    #[error("")]
+    // Error message provides high-level context; detailed per-file errors are printed by the caller
+    #[error("some files in batch operation failed")]
     PartialFailure,
 
     // Generic errors
