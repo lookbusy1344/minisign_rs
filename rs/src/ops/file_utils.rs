@@ -77,6 +77,15 @@ pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool
         }
     })?;
 
+    // When forcing overwrite, explicitly set permissions to ensure existing files
+    // with lax permissions are secured (mode() only affects newly created files)
+    #[cfg(unix)]
+    if force {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(SECRET_KEY_FILE_PERMISSIONS);
+        std::fs::set_permissions(path, perms).map_err(|e| Error::file_write(path, e))?;
+    }
+
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
 
@@ -153,7 +162,7 @@ pub fn check_file_size_limit(path: &Path) -> Result<()> {
     let file_size = metadata.len();
     if file_size > MAX_MESSAGE_SIZE_BYTES {
         return Err(Error::Other(format!(
-            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-p) for files larger than 1 GB."
+            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-H) for files larger than 1 GB."
         )));
     }
 
