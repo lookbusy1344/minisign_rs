@@ -147,6 +147,19 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         ));
     }
 
+    // Check for conflicting flags: -H (prehashed) and -l (legacy) are mutually exclusive
+    if cli.prehashed && cli.legacy {
+        return Err(Error::Usage(
+            "Cannot use both --prehashed (-H) and --legacy (-l) flags together".into(),
+        ));
+    }
+
+    // Determine prehashed mode:
+    // - Default: true (prehashed mode, matches C minisign)
+    // - With -H: true (explicit prehashed)
+    // - With -l: false (legacy mode)
+    let prehashed = cli.prehashed || !cli.legacy;
+
     // Get secret key path
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
@@ -175,9 +188,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let mut builder = SignOptions::builder(secret_key_file, message_file)
             .signature_file(signature_file)
-            // Default behavior matches C minisign: prehashed=true (SIGALG_HASHED="ED")
-            // Only use legacy mode (prehashed=false, SIGALG="Ed") when explicitly requested with -l
-            .prehashed(!cli.legacy);
+            .prehashed(prehashed);
 
         if let Some(comment) = cli.trusted_comment.as_deref() {
             builder = builder.trusted_comment(comment);
@@ -212,7 +223,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         }
 
         let mut builder =
-            SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(!cli.legacy);
+            SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(prehashed);
 
         if let Some(comment) = cli.trusted_comment.as_deref() {
             builder = builder.trusted_comment(comment);
