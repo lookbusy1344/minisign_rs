@@ -491,7 +491,7 @@ pub fn sign_multiple_files(
             .into_iter()
             .map(|file| {
                 let result = sign_file_with_key(&file, &secret_key, keynum, options);
-                report_file_result(&file, &result);
+                report_file_result(&file, &result, options);
                 FileSignResult { file, result }
             })
             .collect()
@@ -500,7 +500,7 @@ pub fn sign_multiple_files(
             .par_iter()
             .map(|file| {
                 let result = sign_file_with_key(file, &secret_key, keynum, options);
-                report_file_result(file, &result);
+                report_file_result(file, &result, options);
                 FileSignResult {
                     file: file.clone(),
                     result,
@@ -509,19 +509,26 @@ pub fn sign_multiple_files(
             .collect()
     };
 
-    print_summary(&results)
+    print_summary(&results, options)
 }
 
 /// Report the result of signing a single file (called for each file)
-fn report_file_result(file: &Path, result: &Result<SignResult>) {
+fn report_file_result(file: &Path, result: &Result<SignResult>, options: &SignOptions<'_>) {
     match result {
-        Ok(_) => println!("Signed: {} → {}.minisig", file.display(), file.display()),
-        Err(e) => eprintln!("Failed: {} ({})", file.display(), e),
+        Ok(_) => {
+            if !options.quiet() {
+                println!("Signed: {} → {}.minisig", file.display(), file.display());
+            }
+        }
+        Err(e) => {
+            // Always show errors, even in quiet mode
+            eprintln!("Failed: {} ({})", file.display(), e);
+        }
     }
 }
 
 /// Print summary of batch signing operation
-fn print_summary(results: &[FileSignResult]) -> Result<()> {
+fn print_summary(results: &[FileSignResult], options: &SignOptions<'_>) -> Result<()> {
     let failures: Vec<_> = results
         .iter()
         .filter_map(|r| r.result.as_ref().err().map(|_| &r.file))
@@ -530,14 +537,18 @@ fn print_summary(results: &[FileSignResult]) -> Result<()> {
     let success_count = results.len() - failures.len();
 
     if !failures.is_empty() {
-        eprintln!(
-            "\nSummary: {} signed, {} failed",
-            success_count,
-            failures.len()
-        );
-        eprintln!("Failed files:");
-        for file in &failures {
-            eprintln!("  - {}", file.display());
+        // Only print summary in non-quiet mode
+        // Individual errors are already reported by report_file_result
+        if !options.quiet() {
+            eprintln!(
+                "\nSummary: {} signed, {} failed",
+                success_count,
+                failures.len()
+            );
+            eprintln!("Failed files:");
+            for file in &failures {
+                eprintln!("  - {}", file.display());
+            }
         }
         return if success_count == 0 {
             Err(Error::TotalFailure)
