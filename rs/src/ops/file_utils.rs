@@ -162,7 +162,7 @@ pub fn check_file_size_limit(path: &Path) -> Result<()> {
     let file_size = metadata.len();
     if file_size > MAX_MESSAGE_SIZE_BYTES {
         return Err(Error::Other(format!(
-            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-p) for files larger than 1 GB."
+            "File too large for non-prehashed mode: {file_size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-H) for files larger than 1 GB."
         )));
     }
 
