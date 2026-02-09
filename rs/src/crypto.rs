@@ -463,8 +463,8 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 
     if expected_opslimit != opslimit {
         // Non-standard parameters: derive r from opslimit
-        // H3: Explicit error instead of silent fallback to prevent processing
-        // corrupted/malicious keys with weaker-than-intended KDF parameters
+        // This handles keys created with non-standard KDF parameters by computing
+        // r from the stored opslimit. Fails explicitly if parameters are invalid.
         let derived_r = opslimit
             .checked_div(
                 LIBSODIUM_OPSLIMIT_MULTIPLIER
