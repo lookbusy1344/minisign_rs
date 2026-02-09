@@ -288,7 +288,14 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         let result = verify(&options)?;
 
         // Handle output modes
-        if cli.pretty_quiet {
+        if cli.output {
+            // -o: Output file content to stdout after verification
+            let content =
+                std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
+            std::io::stdout()
+                .write_all(&content)
+                .map_err(|e| Error::Io(format!("failed to write to stdout: {e}")))?;
+        } else if cli.pretty_quiet {
             // -Q: Only show trusted comment
             println!("{}", result.trusted_comment);
         } else if !cli.quiet {
@@ -305,6 +312,12 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         if cli.signature_file.is_some() {
             return Err(Error::Usage(
                 "Custom signature file (-x) not supported with multiple message files".into(),
+            ));
+        }
+
+        if cli.output {
+            return Err(Error::Usage(
+                "Output flag (-o) not supported with multiple message files".into(),
             ));
         }
 
