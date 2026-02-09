@@ -77,6 +77,15 @@ pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool
         }
     })?;
 
+    // When forcing overwrite, explicitly set permissions to ensure existing files
+    // with lax permissions are secured (mode() only affects newly created files)
+    #[cfg(unix)]
+    if force {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(SECRET_KEY_FILE_PERMISSIONS);
+        std::fs::set_permissions(path, perms).map_err(|e| Error::file_write(path, e))?;
+    }
+
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
 
