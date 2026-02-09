@@ -1,4 +1,4 @@
-# Minisign_rs
+# minisign_rs
 
 A pure Rust implementation of the classic C project [minisign](https://jedisct1.github.io/minisign/), a dead simple tool to sign files and verify signatures.
 
