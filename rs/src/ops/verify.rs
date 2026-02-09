@@ -422,9 +422,8 @@ fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &Veri
             }
         }
         Err(e) => {
-            if !options.quiet() {
-                eprintln!("Failed: {} ({})", file.display(), e);
-            }
+            // Always show errors, even in quiet mode (matches sign behavior and Unix conventions)
+            eprintln!("Failed: {} ({})", file.display(), e);
         }
     }
 }
