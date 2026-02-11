@@ -109,7 +109,8 @@ fn handle_generate(cli: &Cli) -> Result<()> {
             .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
     }
 
-    let result = generate(&options, password.as_ref().map(|p| p.as_bytes()))?;
+    // TODO: Pass hardware key store when --hardware-key flag is implemented
+    let result = generate(&options, password.as_ref().map(|p| p.as_bytes()), None)?;
 
     // Clear working message
     if !cli.quiet {

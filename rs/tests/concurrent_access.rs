@@ -45,7 +45,7 @@ fn test_concurrent_key_generation_same_path() {
                 .no_password(true)
                 .build();
 
-            match generate(&opts, None) {
+            match generate(&opts, None, None) {
                 Ok(_) => {
                     *success.lock().unwrap() += 1;
                 }
@@ -96,7 +96,7 @@ fn test_concurrent_signature_creation() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create a test message
     let message_file = temp_dir.path().join("message.txt");
@@ -195,7 +195,7 @@ fn test_concurrent_key_generation_with_force() {
                 .build();
 
             // All operations should succeed (or fail for other reasons, not file exists)
-            generate(&opts, None).expect("Generate should succeed with force=true");
+            generate(&opts, None, None).expect("Generate should succeed with force=true");
         });
 
         handles.push(handle);
@@ -227,12 +227,12 @@ fn test_sequential_key_generation() {
         .no_password(true)
         .build();
 
-    generate(&opts, None).expect("First generation should succeed");
+    generate(&opts, None, None).expect("First generation should succeed");
     assert!(secret_key.exists());
     assert!(public_key.exists());
 
     // Second generation to same path should fail without force
-    let result = generate(&opts, None);
+    let result = generate(&opts, None, None);
     assert!(
         result.is_err(),
         "Second generation should fail without force"
@@ -244,7 +244,7 @@ fn test_sequential_key_generation() {
         .no_password(true)
         .build();
 
-    generate(&opts_force, None).expect("Generation with force should succeed");
+    generate(&opts_force, None, None).expect("Generation with force should succeed");
 }
 
 /// Test that `create_new` prevents TOCTOU even with a deliberate timing window
@@ -283,7 +283,7 @@ fn test_toctou_prevention_with_existence_check() {
                     .no_password(true)
                     .build();
 
-                if generate(&opts, None).is_ok() {
+                if generate(&opts, None, None).is_ok() {
                     *success.lock().unwrap() += 1;
                 }
             }
@@ -325,7 +325,7 @@ fn test_concurrent_different_files() {
                 .no_password(true)
                 .build();
 
-            generate(&opts, None).expect("Should succeed for different files");
+            generate(&opts, None, None).expect("Should succeed for different files");
 
             (secret_key, public_key)
         });
@@ -364,7 +364,7 @@ fn test_multiprocess_signing_same_key() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create multiple message files
     let num_processes = 5;
@@ -445,7 +445,7 @@ fn test_read_during_write() {
 
         // Signal reader that writer is ready to start
         tx.send(()).expect("Failed to send signal");
-        generate(&opts, None).expect("Generate should succeed");
+        generate(&opts, None, None).expect("Generate should succeed");
     });
 
     // Spawn reader thread that attempts to read during write
@@ -518,7 +518,7 @@ fn test_atomic_file_creation_stress() {
                 .no_password(true)
                 .build();
 
-            if generate(&opts, None).is_ok() {
+            if generate(&opts, None, None).is_ok() {
                 *success.lock().unwrap() += 1;
             }
         });

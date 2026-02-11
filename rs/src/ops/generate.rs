@@ -7,8 +7,10 @@ use crate::{
     Result,
     constants::SCRYPT_LOG_N,
     crypto::{calculate_kdf_params, generate_keypair},
+    ecies_wrap::ecies_wrap,
     errors::Error,
     formats::encode_base64,
+    hw_keystore::HardwareKeyStore,
     keys::{PubkeyStruct, SeckeyStruct},
 };
 use std::path::{Path, PathBuf};
@@ -32,6 +34,8 @@ pub struct GenerateOptions<'a> {
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
     #[cfg_attr(not(debug_assertions), allow(dead_code))]
     force_weak_kdf: bool,
+    /// Enroll hardware key protection during generation
+    hardware_key: bool,
 }
 
 /// Builder for `GenerateOptions`
@@ -45,6 +49,7 @@ pub struct GenerateOptionsBuilder<'a> {
     no_password: bool,
     allow_kdf_fallback: bool,
     force_weak_kdf: bool,
+    hardware_key: bool,
 }
 
 impl<'a> GenerateOptionsBuilder<'a> {
@@ -59,6 +64,7 @@ impl<'a> GenerateOptionsBuilder<'a> {
             no_password: false,
             allow_kdf_fallback: false,
             force_weak_kdf: false,
+            hardware_key: false,
         }
     }
 
@@ -97,6 +103,13 @@ impl<'a> GenerateOptionsBuilder<'a> {
         self
     }
 
+    /// Enroll hardware key protection during generation
+    #[must_use]
+    pub const fn hardware_key(mut self, enable: bool) -> Self {
+        self.hardware_key = enable;
+        self
+    }
+
     /// Build the `GenerateOptions`
     #[must_use]
     pub const fn build(self) -> GenerateOptions<'a> {
@@ -115,6 +128,7 @@ impl<'a> GenerateOptionsBuilder<'a> {
             no_password: self.no_password,
             allow_kdf_fallback: self.allow_kdf_fallback,
             force_weak_kdf: self.force_weak_kdf,
+            hardware_key: self.hardware_key,
         }
     }
 }
@@ -171,6 +185,7 @@ impl<'a> GenerateOptions<'a> {
             no_password,
             allow_kdf_fallback,
             force_weak_kdf,
+            hardware_key: false, // Old API doesn't support HW keys
         }
     }
 }
@@ -220,6 +235,7 @@ impl GenerateResult {
 ///
 /// * `options` - Generation options including file paths and encryption settings
 /// * `password` - Password to encrypt the secret key (required unless `no_password` is true)
+/// * `hw` - Optional hardware key store for hardware-backed key protection
 ///
 /// # Returns
 ///
@@ -245,7 +261,7 @@ impl GenerateResult {
 ///     false,  // force_weak_kdf
 /// );
 ///
-/// let result = generate(&options, password)?;
+/// let result = generate(&options, password, None)?;
 /// println!("Key pair generated successfully");
 /// println!("Secret key: {}", result.secret_key_file().display());
 /// println!("Public key: {}", result.public_key_file().display());
@@ -263,8 +279,12 @@ impl GenerateResult {
 /// # Panics
 ///
 /// Will not panic. The function uses `?` operator for all fallible operations.
-pub fn generate(options: &GenerateOptions<'_>, password: Option<&[u8]>) -> Result<GenerateResult> {
-    generate_with_log_n(options, password, SCRYPT_LOG_N)
+pub fn generate(
+    options: &GenerateOptions<'_>,
+    password: Option<&[u8]>,
+    hw: Option<&dyn HardwareKeyStore>,
+) -> Result<GenerateResult> {
+    generate_with_log_n(options, password, hw, SCRYPT_LOG_N)
 }
 
 /// Internal implementation of generate with custom scrypt `log_n` parameter
@@ -287,6 +307,7 @@ pub fn generate(options: &GenerateOptions<'_>, password: Option<&[u8]>) -> Resul
 pub fn generate_with_log_n(
     options: &GenerateOptions,
     password: Option<&[u8]>,
+    hw: Option<&dyn HardwareKeyStore>,
     log_n: u8,
 ) -> Result<GenerateResult> {
     // Ensure password is provided if encryption is requested
@@ -329,6 +350,39 @@ pub fn generate_with_log_n(
     let default_comment = format!("minisign public key {keynum_hex}");
     let comment = options.comment.unwrap_or(&default_comment);
 
+    // Hardware key enrollment (if requested)
+    let hw_slot = if options.hardware_key {
+        // HW keys always require a password for the recovery slot
+        if options.no_password {
+            return Err(Error::other(
+                "Hardware key protection requires a password for recovery slot",
+            ));
+        }
+
+        let hw_store = hw.ok_or(Error::HardwareKeyStoreUnavailable)?;
+
+        // Check if hardware is available
+        if !hw_store.is_available() {
+            return Err(Error::HardwareKeyStoreUnavailable);
+        }
+
+        // Generate HW key label: minisign:<keynum_hex>
+        let hw_key_label = format!("minisign:{keynum_hex}");
+
+        // Generate hardware P-256 key
+        let _hw_pubkey = hw_store.generate_key(&hw_key_label)?;
+
+        // Get plaintext blob for encryption
+        let plaintext_blob = seckey.to_plaintext_blob()?;
+
+        // ECIES-wrap the plaintext blob using hardware key
+        let slot = ecies_wrap(hw_store, &hw_key_label, &plaintext_blob)?;
+
+        Some(slot)
+    } else {
+        None
+    };
+
     // Ensure parent directories exist
     ensure_parent_directory(options.secret_key_file)?;
     ensure_parent_directory(options.public_key_file)?;
@@ -339,7 +393,7 @@ pub fn generate_with_log_n(
     } else {
         "minisign encrypted secret key"
     };
-    let seckey_contents = seckey.to_file_contents(seckey_comment);
+    let seckey_contents = seckey.to_file_contents_with_hw_slot(seckey_comment, hw_slot.as_ref());
     write_secret_key_file(options.secret_key_file, &seckey_contents, options.force)?;
 
     // Write the public key file

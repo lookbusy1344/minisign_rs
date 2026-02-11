@@ -25,7 +25,7 @@ fn test_empty_file_signing() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create empty file
     fs::write(&message_file, b"").expect("Failed to create empty file");
@@ -63,7 +63,7 @@ fn test_empty_file_legacy_mode() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create empty file
     fs::write(&message_file, b"").expect("Failed to create empty file");
@@ -102,7 +102,7 @@ fn test_unicode_in_trusted_comment() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create message
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -146,7 +146,7 @@ fn test_unicode_in_untrusted_comment() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create message
     fs::write(&message_file, b"Test").expect("Failed to write message");
@@ -187,7 +187,7 @@ fn test_large_file_prehashed() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create a 100MB file (not 4GB to keep tests fast)
     // This tests that large files work with prehashed mode
@@ -233,7 +233,7 @@ fn test_symlink_handling() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create message file and symlink to it
     fs::write(&message_file, b"Real file content").expect("Failed to write message");
@@ -284,7 +284,7 @@ fn test_generate_key_with_empty_password() {
         .build();
 
     // Empty password should work
-    generate(&gen_opts, Some(b"")).expect("Should generate key with empty password");
+    generate(&gen_opts, Some(b""), None).expect("Should generate key with empty password");
 
     // Verify the key was created
     assert!(secret_key.exists(), "Secret key should be created");
@@ -326,7 +326,7 @@ fn test_change_password_to_empty() {
     let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
         .force(true)
         .build();
-    generate(&gen_opts, Some(b"original_password")).expect("Failed to generate key");
+    generate(&gen_opts, Some(b"original_password"), None).expect("Failed to generate key");
 
     // Change password to empty
     let change_opts = ChangeOptions::builder(secret_key.as_path())
@@ -360,7 +360,7 @@ fn test_change_password_from_empty() {
     let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
         .force(true)
         .build();
-    generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
+    generate(&gen_opts, Some(b""), None).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
     let change_opts = ChangeOptions::builder(secret_key.as_path())
@@ -399,7 +399,7 @@ fn test_untrusted_comment_max_valid_length() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -445,7 +445,7 @@ fn test_untrusted_comment_error_threshold() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -485,7 +485,7 @@ fn test_untrusted_comment_just_under_threshold() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -531,7 +531,7 @@ fn test_trusted_comment_max_valid_length() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -578,7 +578,7 @@ fn test_trusted_comment_error_threshold() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -637,7 +637,7 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -689,7 +689,7 @@ fn test_symlink_outside_working_directory() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Sign using the symlink - should follow it and sign the real file
     let sig_file = work_dir.join("message_link.txt.minisig");
@@ -742,7 +742,7 @@ fn test_parent_directory_symlink_no_escape() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Verify files were created in the real directory
     let real_secret_key = real_dir.join("test.key");
@@ -806,7 +806,7 @@ fn test_circular_symlink_handling() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Attempt to sign the circular symlink
     let sig_file = temp_dir.path().join("link1.txt.minisig");
@@ -841,7 +841,7 @@ fn test_unicode_zero_width_joiners() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -877,7 +877,7 @@ fn test_unicode_rtl_override() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -923,7 +923,7 @@ fn test_unicode_homoglyphs() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -965,7 +965,7 @@ fn test_unicode_multibyte_at_byte_limit() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -1012,7 +1012,7 @@ fn test_unicode_multibyte_exceeds_limit() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -1060,7 +1060,7 @@ fn test_path_traversal_attack() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Attempt to sign with path traversal
     let malicious_path = temp_dir.path().join("../../../etc/passwd");
@@ -1092,7 +1092,7 @@ fn test_null_byte_in_path() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // On Unix, null bytes in paths are rejected by the OS
     // On Windows, they're also invalid
@@ -1130,7 +1130,7 @@ fn test_overlong_path() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Create an extremely long path (most filesystems have limits around 255 bytes for filename)
     let long_name = "a".repeat(300);
@@ -1163,7 +1163,7 @@ fn test_windows_reserved_names() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     let reserved_names = vec!["CON", "PRN", "AUX", "NUL", "COM1", "LPT1"];
 
@@ -1197,7 +1197,7 @@ fn test_relative_path_handling() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test content").expect("Failed to write message");
 

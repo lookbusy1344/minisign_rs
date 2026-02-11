@@ -242,7 +242,7 @@ fn test_c_verify_rust_legacy_signature() {
         .force(true) // force
         .no_password(true) // no_password
         .build();
-    generate(&gen_opts, None).expect("Failed to generate key");
+    generate(&gen_opts, None, None).expect("Failed to generate key");
 
     // Sign with Rust in legacy mode (non-prehashed)
     let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
