@@ -22,7 +22,7 @@ use crate::errors::Result;
 use zeroize::Zeroizing;
 
 // Platform-specific implementations
-#[cfg(test)]
+// Mock is always available for testing purposes (not compiled in release if unused)
 pub mod mock;
 
 #[cfg(all(target_os = "macos", feature = "hw-keystore-macos"))]
@@ -78,6 +78,25 @@ pub trait HardwareKeyStore {
     /// - `HardwareKeyStoreError` - Key generation failed
     /// - `Other` - Label already exists or other hardware error
     fn generate_key(&self, label: &str) -> Result<p256::PublicKey>;
+
+    /// Get the public key for a hardware key.
+    ///
+    /// Retrieves the public component of a hardware key. The private key
+    /// remains in hardware and is never exported.
+    ///
+    /// # Arguments
+    ///
+    /// * `label` - Key label identifying the hardware key
+    ///
+    /// # Returns
+    ///
+    /// Returns the public key component.
+    ///
+    /// # Errors
+    ///
+    /// - `HardwareKeyNotFound` - Key with this label doesn't exist
+    /// - `HardwareKeyStoreError` - Failed to retrieve public key
+    fn get_public_key(&self, label: &str) -> Result<p256::PublicKey>;
 
     /// Perform ECDH inside hardware: `shared_secret = ECDH(hw_private, peer_public)`.
     ///

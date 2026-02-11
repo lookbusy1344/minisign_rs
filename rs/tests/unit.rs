@@ -5,6 +5,7 @@ mod unit {
     pub mod cli;
     pub mod constants;
     pub mod crypto;
+    pub mod ecies_wrap;
     pub mod errors;
     pub mod formats;
     pub mod hw_slot;

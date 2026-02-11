@@ -22,6 +22,7 @@ pub mod cli;
 pub mod constants;
 pub mod crypto;
 pub mod ecies;
+pub mod ecies_wrap;
 pub mod errors;
 pub mod formats;
 pub mod hw_keystore;

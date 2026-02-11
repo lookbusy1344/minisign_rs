@@ -18,6 +18,10 @@ impl HardwareKeyStore for UnsupportedKeyStore {
         Err(Error::HardwareKeyStoreUnavailable)
     }
 
+    fn get_public_key(&self, _label: &str) -> Result<p256::PublicKey> {
+        Err(Error::HardwareKeyStoreUnavailable)
+    }
+
     fn ecdh(&self, _label: &str, _peer_public: &p256::PublicKey) -> Result<Zeroizing<[u8; 32]>> {
         Err(Error::HardwareKeyStoreUnavailable)
     }

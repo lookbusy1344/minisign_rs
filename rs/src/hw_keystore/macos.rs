@@ -96,6 +96,23 @@ impl HardwareKeyStore for MacOSKeyStore {
         })
     }
 
+    fn get_public_key(&self, _label: &str) -> Result<p256::PublicKey> {
+        if !self.is_available() {
+            return Err(Error::HardwareKeyStoreUnavailable);
+        }
+
+        // TODO: Implement public key retrieval from keychain
+        // This should:
+        // 1. Search keychain for key with label
+        // 2. Extract public key component
+        // 3. Convert to p256::PublicKey format
+        Err(Error::HardwareKeyStoreError {
+            detail:
+                "macOS Secure Enclave public key retrieval not yet implemented - use mock for testing"
+                    .to_string(),
+        })
+    }
+
     fn ecdh(&self, _label: &str, _peer_public: &p256::PublicKey) -> Result<Zeroizing<[u8; 32]>> {
         if !self.is_available() {
             return Err(Error::HardwareKeyStoreUnavailable);

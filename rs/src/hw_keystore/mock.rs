@@ -5,7 +5,6 @@
 
 use super::HardwareKeyStore;
 use crate::errors::{Error, Result};
-use p256::ecdh::EphemeralSecret;
 use p256::{PublicKey, SecretKey};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -138,6 +137,28 @@ impl HardwareKeyStore for MockKeyStore {
         Ok(public)
     }
 
+    fn get_public_key(&self, label: &str) -> Result<PublicKey> {
+        let config = self.config.lock().unwrap().clone();
+
+        if !config.available {
+            return Err(Error::HardwareKeyStoreUnavailable);
+        }
+
+        if config.simulate_error {
+            return Err(Error::HardwareKeyStoreError {
+                detail: "Mock hardware error".to_string(),
+            });
+        }
+
+        let keys = self.keys.lock().unwrap();
+
+        keys.get(label)
+            .map(|(_, public)| *public)
+            .ok_or_else(|| Error::HardwareKeyNotFound {
+                label: label.to_string(),
+            })
+    }
+
     fn ecdh(&self, label: &str, peer_public: &PublicKey) -> Result<Zeroizing<[u8; 32]>> {
         let config = self.config.lock().unwrap().clone();
 
@@ -214,6 +235,7 @@ impl HardwareKeyStore for MockKeyStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use p256::ecdh::EphemeralSecret;
 
     #[test]
     fn test_mock_default_available() {
