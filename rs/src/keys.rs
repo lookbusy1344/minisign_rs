@@ -803,12 +803,84 @@ impl SeckeyStruct {
         Self::from_bytes(&data)
     }
 
+    /// Parse from file contents with optional HW slot support
+    ///
+    /// # Arguments
+    ///
+    /// * `contents` - File contents (2 or 3 lines)
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(SeckeyStruct, Option<HwSlot>)`:
+    /// - The secret key structure (always present)
+    /// - The hardware slot (present only if file has 3 lines)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - File has fewer than 2 lines
+    /// - Base64 decoding fails
+    /// - Secret key structure is invalid
+    /// - HW slot structure is invalid (if present)
+    pub fn from_file_contents_with_hw_slot(contents: &str) -> Result<(Self, Option<HwSlot>)> {
+        let lines: Vec<&str> = contents.lines().collect();
+        if lines.len() < 2 {
+            return Err(Error::InvalidSecretKey(
+                "missing comment or data line".to_string(),
+            ));
+        }
+
+        // First line is the untrusted comment (ignored for parsing)
+        // Second line is base64-encoded SeckeyStruct
+        let data = decode_base64(lines[1])?;
+        let seckey = Self::from_bytes(&data)?;
+
+        // Third line (optional) is base64-encoded HwSlot
+        let hw_slot = if lines.len() >= 3 && !lines[2].trim().is_empty() {
+            let hw_data = decode_base64(lines[2])?;
+            Some(HwSlot::from_bytes(&hw_data)?)
+        } else {
+            None
+        };
+
+        Ok((seckey, hw_slot))
+    }
+
     /// Serialize to file format (comment + base64)
     #[must_use]
     pub fn to_file_contents(&self, comment: &str) -> String {
         let bytes = self.to_bytes();
         let base64 = encode_base64(bytes);
         format!("untrusted comment: {comment}\n{base64}\n")
+    }
+
+    /// Serialize to file format with optional HW slot (comment + base64 + optional HW slot)
+    ///
+    /// # Arguments
+    ///
+    /// * `comment` - The untrusted comment for the first line
+    /// * `hw_slot` - Optional hardware slot to append as a third line
+    ///
+    /// # Returns
+    ///
+    /// A string containing:
+    /// - Line 1: `untrusted comment: <comment>`
+    /// - Line 2: Base64-encoded `SeckeyStruct` (158 bytes)
+    /// - Line 3 (optional): Base64-encoded `HwSlot` (if provided)
+    ///
+    /// If no HW slot is provided, produces a standard 2-line file compatible with C minisign.
+    #[must_use]
+    pub fn to_file_contents_with_hw_slot(&self, comment: &str, hw_slot: Option<&HwSlot>) -> String {
+        let bytes = self.to_bytes();
+        let base64 = encode_base64(bytes);
+
+        if let Some(hw) = hw_slot {
+            let hw_bytes = hw.to_bytes();
+            let hw_base64 = encode_base64(hw_bytes);
+            format!("untrusted comment: {comment}\n{base64}\n{hw_base64}\n")
+        } else {
+            format!("untrusted comment: {comment}\n{base64}\n")
+        }
     }
 }
 
@@ -823,6 +895,159 @@ impl std::fmt::Debug for SeckeyStruct {
             .field("encrypted_keynum", &"[REDACTED]")
             .field("secret_key_encrypted", &"[REDACTED]")
             .field("checksum", &"[...]")
+            .finish()
+    }
+}
+
+/// Hardware key slot for ECIES-encrypted keys (Phase 3)
+///
+/// This structure represents the optional third line in a minisign key file,
+/// containing an Ed25519 secret key encrypted using ECIES with a hardware-backed
+/// P-256 key (e.g., in Secure Enclave or TPM).
+///
+/// Binary layout:
+/// - 0-1: `hw_version` (u16 LE) — format version (currently 1)
+/// - 2-34: `ephemeral_pubkey` (33 bytes) — compressed P-256 ephemeral public key
+/// - 35-46: `nonce` (12 bytes) — AES-256-GCM nonce
+/// - 47-150: `ciphertext` (104 bytes) — encrypted `keynum ‖ ed25519_sk ‖ checksum`
+/// - 151-166: `tag` (16 bytes) — AES-256-GCM authentication tag
+/// - 167+: `hw_key_label` (variable) — UTF-8 hardware key reference
+///
+/// The format is platform-agnostic; only the label identifies which hardware
+/// backend created the key (e.g., `"minisign:<keynum_hex>"`).
+#[derive(Clone, PartialEq, Eq)]
+pub struct HwSlot {
+    pub hw_version: u16,
+    pub ephemeral_pubkey: [u8; 33], // Compressed P-256 point
+    pub nonce: [u8; 12],            // AES-256-GCM nonce
+    pub ciphertext: [u8; 104],      // Encrypted blob (keynum + sk + checksum)
+    pub tag: [u8; 16],              // AES-256-GCM auth tag
+    pub hw_key_label: String,       // Hardware key reference (UTF-8)
+}
+
+impl HwSlot {
+    /// Serialize `HwSlot` to bytes
+    ///
+    /// # Panics
+    ///
+    /// Panics if the label exceeds `HW_KEY_LABEL_MAX_BYTES`. Use `to_bytes_checked()`
+    /// for validated serialization with proper error handling.
+    #[must_use]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(167 + self.hw_key_label.len());
+
+        // Write version (u16 LE)
+        bytes.extend_from_slice(&self.hw_version.to_le_bytes());
+
+        // Write ephemeral pubkey (33 bytes)
+        bytes.extend_from_slice(&self.ephemeral_pubkey);
+
+        // Write nonce (12 bytes)
+        bytes.extend_from_slice(&self.nonce);
+
+        // Write ciphertext (104 bytes)
+        bytes.extend_from_slice(&self.ciphertext);
+
+        // Write tag (16 bytes)
+        bytes.extend_from_slice(&self.tag);
+
+        // Write label (variable length)
+        bytes.extend_from_slice(self.hw_key_label.as_bytes());
+
+        bytes
+    }
+
+    /// Serialize `HwSlot` to bytes with validation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the label exceeds `HW_KEY_LABEL_MAX_BYTES`.
+    pub fn to_bytes_checked(&self) -> Result<Vec<u8>> {
+        use crate::constants::HW_KEY_LABEL_MAX_BYTES;
+
+        if self.hw_key_label.len() > HW_KEY_LABEL_MAX_BYTES {
+            return Err(Error::InvalidSecretKey(format!(
+                "HW slot label exceeds maximum size: {} bytes (max: {})",
+                self.hw_key_label.len(),
+                HW_KEY_LABEL_MAX_BYTES
+            )));
+        }
+
+        Ok(self.to_bytes())
+    }
+
+    /// Deserialize `HwSlot` from bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Input is shorter than `HW_SLOT_FIXED_SIZE` (167 bytes)
+    /// - Version is not supported (currently only version 1)
+    /// - Label is not valid UTF-8
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        use crate::constants::{HW_SLOT_FIXED_SIZE, HW_SLOT_VERSION};
+
+        if bytes.len() < HW_SLOT_FIXED_SIZE {
+            return Err(Error::InvalidSecretKey(format!(
+                "HW slot too short: expected at least {} bytes, got {}",
+                HW_SLOT_FIXED_SIZE,
+                bytes.len()
+            )));
+        }
+
+        // Parse version (u16 LE)
+        let hw_version = u16::from_le_bytes([bytes[0], bytes[1]]);
+
+        // Check version
+        if hw_version != HW_SLOT_VERSION {
+            return Err(Error::InvalidSecretKey(format!(
+                "unsupported HW slot version: {hw_version} (expected {HW_SLOT_VERSION})"
+            )));
+        }
+
+        // Parse ephemeral pubkey (33 bytes)
+        let mut ephemeral_pubkey = [0u8; 33];
+        ephemeral_pubkey.copy_from_slice(&bytes[2..35]);
+
+        // Parse nonce (12 bytes)
+        let mut nonce = [0u8; 12];
+        nonce.copy_from_slice(&bytes[35..47]);
+
+        // Parse ciphertext (104 bytes)
+        let mut ciphertext = [0u8; 104];
+        ciphertext.copy_from_slice(&bytes[47..151]);
+
+        // Parse tag (16 bytes)
+        let mut tag = [0u8; 16];
+        tag.copy_from_slice(&bytes[151..167]);
+
+        // Parse label (variable length, must be valid UTF-8)
+        let hw_key_label = std::str::from_utf8(&bytes[167..])
+            .map_err(|e| {
+                Error::InvalidSecretKey(format!("HW slot label contains invalid UTF-8: {e}"))
+            })?
+            .to_string();
+
+        Ok(Self {
+            hw_version,
+            ephemeral_pubkey,
+            nonce,
+            ciphertext,
+            tag,
+            hw_key_label,
+        })
+    }
+}
+
+impl std::fmt::Debug for HwSlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HwSlot")
+            .field("hw_version", &self.hw_version)
+            .field("ephemeral_pubkey", &"[...]")
+            .field("nonce", &"[...]")
+            .field("ciphertext", &"[REDACTED]")
+            .field("tag", &"[...]")
+            .field("hw_key_label", &self.hw_key_label)
             .finish()
     }
 }

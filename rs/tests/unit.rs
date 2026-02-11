@@ -7,6 +7,7 @@ mod unit {
     pub mod crypto;
     pub mod errors;
     pub mod formats;
+    pub mod hw_slot;
     pub mod keys;
     pub mod phase1_security_tests;
     pub mod phase2_h5_only;
