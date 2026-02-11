@@ -55,3 +55,20 @@ opt-level = 3
 
 [profile.release]
 strip = true
+
+# Feature flags for hardware key store backends
+[features]
+default = []
+hw-keystore-macos = ["dep:security-framework"]
+hw-keystore-windows = ["dep:windows"]
+hw-keystore-linux = ["dep:tss-esapi"]
+
+# Platform-conditional dependencies (Phase 2)
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "3", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tss-esapi = { version = "7.6", optional = true }

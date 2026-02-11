@@ -82,6 +82,22 @@ pub enum Error {
     #[error("unsupported checksum algorithm: {0}")]
     UnsupportedChkAlg(String),
 
+    // Hardware key store errors
+    #[error("hardware key store unavailable on this platform")]
+    HardwareKeyStoreUnavailable,
+
+    #[error("hardware key store authentication denied or cancelled")]
+    HardwareKeyStoreAuthDenied,
+
+    #[error("hardware key not found: {label}")]
+    HardwareKeyNotFound { label: String },
+
+    #[error("hardware key store operation failed: {detail}")]
+    HardwareKeyStoreError { detail: String },
+
+    #[error("hardware slot corrupted or invalid")]
+    HwSlotCorrupted,
+
     // Key derivation errors
     #[error("key derivation failed: {0}")]
     KdfError(String),
