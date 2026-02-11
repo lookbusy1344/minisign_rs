@@ -556,6 +556,39 @@ fn display_inspect_result(result: &InspectResult) {
             println!("└─ Type: Ed25519 Public Key");
         }
     }
+
+    // Display hardware key protection status if this is a secret key
+    if matches!(result.key_type, KeyType::SecretEncrypted | KeyType::SecretUnencrypted) {
+        println!();
+        if result.hw_enrolled {
+            println!("Hardware Key Protection:");
+            println!("├─ Status: Enrolled");
+            if let Some(label) = &result.hw_label {
+                println!("├─ Label: {label}");
+            }
+            if let Some(backend) = result.hw_backend_name {
+                println!("├─ Backend: {backend}");
+            }
+            if let Some(available) = result.hw_key_available {
+                if available {
+                    println!("└─ Key available: Yes");
+                } else {
+                    println!("└─ Key available: No (device changed?)");
+                }
+            } else {
+                println!("└─ Key available: Unknown (backend unavailable)");
+            }
+
+            // Show warning if HW enrolled but backend unavailable
+            if result.hw_unavailable_warning {
+                println!();
+                println!("*** WARNING: Hardware key protection enrolled but backend unavailable.");
+                println!("   You can still decrypt with the recovery password.");
+            }
+        } else {
+            println!("Hardware Key Protection: Not enrolled");
+        }
+    }
 }
 
 fn handle_inspect(cli: &Cli) -> Result<()> {

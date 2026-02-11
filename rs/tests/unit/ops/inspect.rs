@@ -598,3 +598,197 @@ fn test_inspect_signature_nonexistent_file() {
     let result = inspect_signature(Path::new("/nonexistent/signature.minisig"));
     assert!(result.is_err());
 }
+
+// Tests for hardware key inspection
+
+#[test]
+fn test_inspect_key_with_hw_slot_available_hardware() {
+    use minisign::hw_keystore::mock::MockKeyStore;
+    use minisign::hw_keystore::HardwareKeyStore;
+    use minisign::keys::HwSlot;
+    use minisign::ops::inspect::{InspectOptionsWithHw, inspect_with_hw};
+
+    // Create a production-strength encrypted key
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    let kdf_opslimit = 33_554_432;
+    let kdf_memlimit = 1_073_741_824;
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    // Create a mock HW slot
+    let hw_label = format!("minisign:{}", hex::encode(keynum.as_bytes()));
+    let hw_slot = HwSlot {
+        hw_version: 1,
+        ephemeral_pubkey: [0x02; 33],
+        nonce: [0x11; 12],
+        ciphertext: [0x22; 104],
+        tag: [0x33; 16],
+        hw_key_label: hw_label.clone(),
+    };
+
+    // Write key file with HW slot
+    let file_contents = seckey.to_file_contents_with_hw_slot("test key", Some(&hw_slot));
+    let temp_file = create_temp_key_file(&file_contents);
+
+    // Create mock hardware key store with the key available
+    let mock_hw = MockKeyStore::new();
+    mock_hw.generate_key(&hw_label).unwrap();
+
+    let options = InspectOptionsWithHw::new(temp_file.path(), &mock_hw);
+    let result = inspect_with_hw(&options).unwrap();
+
+    // Verify HW enrollment status
+    assert!(result.hw_enrolled);
+    assert_eq!(result.hw_label, Some(hw_label));
+    assert_eq!(result.hw_backend_name, Some("Mock Hardware Key Store"));
+    assert_eq!(result.hw_key_available, Some(true));
+    assert!(!result.hw_unavailable_warning);
+}
+
+#[test]
+fn test_inspect_key_with_hw_slot_unavailable_hardware() {
+    use minisign::hw_keystore::unsupported::UnsupportedKeyStore;
+    use minisign::keys::HwSlot;
+    use minisign::ops::inspect::{InspectOptionsWithHw, inspect_with_hw};
+
+    // Create encrypted key with HW slot
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        4_194_304,
+        134_217_728,
+        false,
+    )
+    .unwrap();
+
+    let hw_label = format!("minisign:{}", hex::encode(keynum.as_bytes()));
+    let hw_slot = HwSlot {
+        hw_version: 1,
+        ephemeral_pubkey: [0x02; 33],
+        nonce: [0x11; 12],
+        ciphertext: [0x22; 104],
+        tag: [0x33; 16],
+        hw_key_label: hw_label.clone(),
+    };
+
+    let file_contents = seckey.to_file_contents_with_hw_slot("test key", Some(&hw_slot));
+    let temp_file = create_temp_key_file(&file_contents);
+
+    // Use unsupported hardware key store
+    let hw = UnsupportedKeyStore;
+    let options = InspectOptionsWithHw::new(temp_file.path(), &hw);
+    let result = inspect_with_hw(&options).unwrap();
+
+    // Verify HW enrollment status with unavailable hardware
+    assert!(result.hw_enrolled);
+    assert_eq!(result.hw_label, Some(hw_label));
+    assert_eq!(result.hw_backend_name, Some("Unsupported"));
+    assert_eq!(result.hw_key_available, None); // Can't check if unavailable
+    assert!(result.hw_unavailable_warning); // Should show warning
+}
+
+#[test]
+fn test_inspect_key_without_hw_slot() {
+    use minisign::hw_keystore::mock::MockKeyStore;
+    use minisign::ops::inspect::{InspectOptionsWithHw, inspect_with_hw};
+
+    // Create standard encrypted key without HW slot
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        33_554_432,
+        1_073_741_824,
+        false,
+    )
+    .unwrap();
+
+    let file_contents = seckey.to_file_contents("test key");
+    let temp_file = create_temp_key_file(&file_contents);
+
+    let hw = MockKeyStore::new();
+    let options = InspectOptionsWithHw::new(temp_file.path(), &hw);
+    let result = inspect_with_hw(&options).unwrap();
+
+    // Verify no HW enrollment
+    assert!(!result.hw_enrolled);
+    assert_eq!(result.hw_label, None);
+    assert_eq!(result.hw_backend_name, None);
+    assert_eq!(result.hw_key_available, None);
+    assert!(!result.hw_unavailable_warning);
+}
+
+#[test]
+fn test_inspect_key_with_hw_slot_key_not_found() {
+    use minisign::hw_keystore::mock::MockKeyStore;
+    use minisign::keys::HwSlot;
+    use minisign::ops::inspect::{InspectOptionsWithHw, inspect_with_hw};
+
+    // Create encrypted key with HW slot
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        4_194_304,
+        134_217_728,
+        false,
+    )
+    .unwrap();
+
+    let hw_label = format!("minisign:{}", hex::encode(keynum.as_bytes()));
+    let hw_slot = HwSlot {
+        hw_version: 1,
+        ephemeral_pubkey: [0x02; 33],
+        nonce: [0x11; 12],
+        ciphertext: [0x22; 104],
+        tag: [0x33; 16],
+        hw_key_label: hw_label.clone(),
+    };
+
+    let file_contents = seckey.to_file_contents_with_hw_slot("test key", Some(&hw_slot));
+    let temp_file = create_temp_key_file(&file_contents);
+
+    // Mock hardware is available but key doesn't exist
+    let hw = MockKeyStore::new();
+    let options = InspectOptionsWithHw::new(temp_file.path(), &hw);
+    let result = inspect_with_hw(&options).unwrap();
+
+    // Verify HW enrollment but key not available
+    assert!(result.hw_enrolled);
+    assert_eq!(result.hw_label, Some(hw_label));
+    assert_eq!(result.hw_backend_name, Some("Mock Hardware Key Store"));
+    assert_eq!(result.hw_key_available, Some(false)); // Key not found
+    assert!(!result.hw_unavailable_warning);
+}
