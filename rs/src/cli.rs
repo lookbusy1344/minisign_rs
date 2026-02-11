@@ -131,6 +131,10 @@ pub struct Cli {
     #[cfg_attr(debug_assertions, arg(long = "force-weak-kdf", hide = true))]
     pub force_weak_kdf: bool,
 
+    /// Enroll hardware key protection during generate (--hardware-key or --hw)
+    #[arg(long = "hardware-key", visible_alias = "hw")]
+    pub hardware_key: bool,
+
     /// Show help
     #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]
     pub help: Option<bool>,
