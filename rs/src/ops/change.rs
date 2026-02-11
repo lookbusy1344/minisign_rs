@@ -184,8 +184,8 @@ pub fn change_with_log_n(
     new_password: Option<&[u8]>,
     log_n: u8,
 ) -> Result<ChangeResult> {
-    // Load the secret key
-    let seckey = load_secret_key(options.secret_key_file)?;
+    // Load the secret key (ignore HW slot for now - will be handled in Step 5.4)
+    let (seckey, _hw_slot) = load_secret_key(options.secret_key_file)?;
 
     // Decrypt the secret key with old password
     let (secret_key, keynum) = if seckey.is_encrypted() {

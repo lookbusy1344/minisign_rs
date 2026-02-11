@@ -1,7 +1,9 @@
 //! Common file operation utilities for key and signature file handling
 
 use crate::{
-    Error, Result, constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct,
+    Error, Result,
+    constants::MAX_MESSAGE_SIZE_BYTES,
+    keys::{HwSlot, SeckeyStruct},
     validation::validate_windows_path,
 };
 use std::fs::OpenOptions;
@@ -14,15 +16,18 @@ const SECRET_KEY_FILE_PERMISSIONS: u32 = 0o600;
 
 /// Load a secret key from a file
 ///
+/// Returns a tuple of (`SeckeyStruct`, `Option<HwSlot>`) where the `HwSlot`
+/// is present if the key file contains a hardware-encrypted slot.
+///
 /// # Errors
 ///
 /// Returns an error if:
 /// - The file cannot be read
 /// - The file contents cannot be parsed as a secret key
-pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
+pub fn load_secret_key(path: impl AsRef<Path>) -> Result<(SeckeyStruct, Option<HwSlot>)> {
     let path = path.as_ref();
     let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
-    SeckeyStruct::from_file_contents(&contents)
+    SeckeyStruct::from_file_contents_with_hw_slot(&contents)
 }
 
 /// Write a secret key file with appropriate permissions

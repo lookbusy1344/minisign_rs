@@ -96,8 +96,8 @@ pub struct RecreateResult {
 /// - The public key file already exists (unless force is true)
 /// - File I/O operations fail
 pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Result<RecreateResult> {
-    // Load the secret key
-    let seckey = load_secret_key(options.secret_key_file())?;
+    // Load the secret key (ignore HW slot for recreate operation)
+    let (seckey, _hw_slot) = load_secret_key(options.secret_key_file())?;
 
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = if seckey.is_encrypted() {

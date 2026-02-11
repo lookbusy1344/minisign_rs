@@ -206,7 +206,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = builder.build();
 
-        let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
+        // TODO: Pass hardware key store when implemented in Step 5.6
+        let result = sign(&options, password.as_ref().map(|p| p.as_bytes()), None)?;
 
         if !cli.quiet {
             println!(
@@ -241,10 +242,12 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = builder.build();
 
+        // TODO: Pass hardware key store when implemented in Step 5.6
         sign_multiple_files(
             message_files.into_owned(),
             &options,
             password.as_ref().map(|p| p.as_bytes()),
+            None, // hw
             cli.sequential,
         )?;
     }
@@ -368,7 +371,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
     // Load the key to check if it's encrypted
-    let seckey = load_secret_key(secret_key_file)?;
+    let (seckey, _hw_slot) = load_secret_key(secret_key_file)?;
 
     // Prompt for password only if the key is encrypted
     let password = if seckey.is_encrypted() {
@@ -402,7 +405,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Load the key to check if it's encrypted (without decrypting)
-    let seckey = load_secret_key(secret_key_file)?;
+    let (seckey, _hw_slot) = load_secret_key(secret_key_file)?;
 
     // Prompt for current password ONLY if the key is encrypted
     // -W flag only affects the NEW password (desired end state)

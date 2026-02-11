@@ -249,7 +249,7 @@ fn test_c_verify_rust_legacy_signature() {
         .signature_file(sig_file.as_path())
         .quiet(true)
         .build();
-    sign(&sign_opts, None).expect("Failed to sign");
+    sign(&sign_opts, None, None).expect("Failed to sign");
 
     // Verify with C minisign
     let status = Command::new("minisign")

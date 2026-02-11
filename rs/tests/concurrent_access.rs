@@ -130,7 +130,7 @@ fn test_concurrent_signature_creation() {
                 .signature_file(&sig_file)
                 .build();
 
-            match sign(&opts, None) {
+            match sign(&opts, None, None) {
                 Ok(_) => {
                     *success.lock().unwrap() += 1;
                 }
@@ -389,7 +389,7 @@ fn test_multiprocess_signing_same_key() {
                 .signature_file(sig_file_str.as_ref())
                 .build();
 
-            sign(&opts, None)
+            sign(&opts, None, None)
         });
 
         handles.push((handle, i));
