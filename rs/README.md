@@ -27,6 +27,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - ✅ Weak key detection with persistent warnings
 - ✅ Multi-file signing with parallel execution (Rayon)
 - ✅ Multi-file verification with parallel execution (Rayon)
+- ✅ Hardware-backed key protection (Secure Enclave, TPM 2.0)
 - ✅ Full compatibility with C minisign file formats
 
 ### Test Coverage
@@ -310,6 +311,82 @@ minisign_rs -IP RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 minisign_rs -Ix file.txt.minisig
 ```
 
+### Hardware-Backed Key Protection
+
+Minisign-rs supports optional hardware-backed key protection using platform security modules (Secure Enclave on macOS, TPM 2.0 on Windows/Linux). This provides defense-in-depth by requiring **both** the key file **and** physical device access with biometric/PIN authentication.
+
+#### Platform Support
+
+| Platform | Hardware         | Auth Mechanism                     | Availability          |
+|----------|------------------|------------------------------------|------------------------|
+| macOS    | Secure Enclave   | Touch ID / Face ID                 | All Apple Silicon Macs |
+| Windows  | TPM 2.0          | Windows Hello (fingerprint/face/PIN) | Most modern PCs      |
+| Linux    | TPM 2.0          | TPM PIN/password                   | Many laptops, servers |
+
+#### Generate key with hardware protection
+
+```bash
+# Generate with hardware enrollment
+minisign_rs -G --hardware-key
+
+# Shorter alias
+minisign_rs -G --hw
+
+# With custom paths
+minisign_rs -G --hw -s mykey.key -p mykey.pub
+```
+
+**Note**: A recovery password is always required, even with hardware enrollment. If your device is lost or the hardware key is unavailable, the recovery password provides fallback access.
+
+#### Sign with hardware-protected keys
+
+```bash
+# Sign normally (automatically uses hardware if enrolled)
+minisign_rs -S -m file.txt
+
+# No special flags needed - hardware enrollment is auto-detected
+minisign_rs -S -m file1.txt file2.txt file3.txt -t "v1.0.0"
+```
+
+**Behavior**:
+- If hardware is available: Biometric/PIN prompt, silent decryption
+- If hardware unavailable (device changed): Falls back to recovery password with explanation
+
+#### Manage hardware enrollment
+
+```bash
+# Add hardware protection to existing password-only key
+minisign_rs -K --add-hardware-key
+
+# Remove hardware protection (keep password only)
+minisign_rs -K --remove-hardware-key
+```
+
+#### Security model
+
+Hardware key protection defends against:
+- **Key file theft without device**: Cannot sign without physical device + biometric
+- **Malware reading files**: Hardware private key never leaves security module
+- **Memory forensics**: Ed25519 key only decrypted transiently in secure memory
+
+**Limitations**:
+- Device theft + key file: Attacker can attempt biometric/PIN
+- Weak recovery password: Undermines hardware protection
+- Hardware keys are device-bound: Use recovery password on different devices
+
+**When to use**:
+- Personal signing keys on laptops/desktops with biometric enrollment
+- Enhanced security for release signing keys
+- Defense-in-depth for high-value signing operations
+
+**When NOT to use**:
+- Headless servers (no biometric enrollment)
+- CI/CD pipelines (automated signing requires password-only)
+- Shared keys across multiple devices (hardware keys are device-bound)
+- Containers/VMs (hardware typically not available)
+
+See [Hardware Key Protection Documentation](docs/hardware-key-protection.md) for complete technical details, cryptographic design (ECIES), file format specification, and platform-specific implementation notes.
+
 ## Signature File Format
 
 Minisign creates `.minisig` files with 4 lines:
@@ -464,6 +541,16 @@ src/
 - `blake2` - Blake2b hashing
 - `scrypt` - Key derivation function
 - `zeroize` - Secure memory wiping
+
+### Hardware Key Support (Optional)
+
+- `p256` - P-256 ECDH and ephemeral key generation (RustCrypto)
+- `aes-gcm` - AES-256-GCM authenticated encryption (RustCrypto)
+- `hkdf` - HKDF-SHA256 key derivation (RustCrypto)
+- `sha2` - SHA-256 hash function (RustCrypto)
+- `security-framework` - macOS Secure Enclave (macOS only)
+- `windows` - Windows CNG/TPM APIs (Windows only)
+- `tss-esapi` - TPM 2.0 TSS bindings (Linux only)
 
 ### Utilities
 
@@ -680,6 +767,7 @@ All workflows use caching for faster builds.
 - [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed analysis of both implementations
 - [rsign2 Comparison](docs/rsign2-comparison.md) - Comprehensive comparison with rsign2 Rust implementation
 - [Multi-File Signing](docs/multi-file-signing.md) - Parallel and sequential multi-file signing
+- [Hardware Key Protection](docs/hardware-key-protection.md) - Hardware-backed key protection (ECIES, Secure Enclave, TPM 2.0)
 - [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) - Security implications of weak KDF parameters
 - [Development Guidelines](CLAUDE.md) - Essential development workflow
 - [Design Document](../docs/plans/2026-01-23-rust-rewrite-design.md) - Original implementation plan
