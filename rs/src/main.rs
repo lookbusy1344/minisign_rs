@@ -1,6 +1,6 @@
 use clap::Parser;
 use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
-use minisign::hw_keystore::unsupported::UnsupportedKeyStore;
+use minisign::hw_keystore;
 use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
@@ -8,10 +8,10 @@ use minisign::{
     Error, Result,
     cli::{Action, Cli},
     ops::{
-        ChangeOptions, GenerateOptions, InspectOptions, InspectPrivateOptions, InspectResult,
+        ChangeOptions, GenerateOptions, InspectOptionsWithHw, InspectPrivateOptions, InspectResult,
         KeyType, PublicKeySource, RecreateOptions, SecurityLevel, SignOptions,
-        SignatureInspectResult, VerifyOptions, change, generate, inspect, inspect_base64,
-        inspect_private, inspect_signature, recreate, sign, verify,
+        SignatureInspectResult, VerifyOptions, change, generate, inspect_base64, inspect_private,
+        inspect_signature, inspect_with_hw, recreate, sign, verify,
     },
 };
 use std::io::IsTerminal;
@@ -110,8 +110,13 @@ fn handle_generate(cli: &Cli) -> Result<()> {
             .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
     }
 
-    // TODO: Pass hardware key store when --hardware-key flag is implemented
-    let result = generate(&options, password.as_ref().map(|p| p.as_bytes()), None)?;
+    // Get platform-specific hardware key store
+    let hw_keystore = hw_keystore::get_default_keystore();
+    let result = generate(
+        &options,
+        password.as_ref().map(|p| p.as_bytes()),
+        Some(hw_keystore.as_ref()),
+    )?;
 
     // Clear working message
     if !cli.quiet {
@@ -207,8 +212,13 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = builder.build();
 
-        // TODO: Pass hardware key store when implemented in Step 5.6
-        let result = sign(&options, password.as_ref().map(|p| p.as_bytes()), None)?;
+        // Get platform-specific hardware key store
+        let hw_keystore = hw_keystore::get_default_keystore();
+        let result = sign(
+            &options,
+            password.as_ref().map(|p| p.as_bytes()),
+            Some(hw_keystore.as_ref()),
+        )?;
 
         if !cli.quiet {
             println!(
@@ -243,12 +253,13 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = builder.build();
 
-        // TODO: Pass hardware key store when implemented in Step 5.6
+        // Get platform-specific hardware key store
+        let hw_keystore = hw_keystore::get_default_keystore();
         sign_multiple_files(
             message_files.into_owned(),
             &options,
             password.as_ref().map(|p| p.as_bytes()),
-            None, // hw
+            Some(hw_keystore.as_ref()),
             cli.sequential,
         )?;
     }
@@ -452,14 +463,14 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     let options = builder.build();
 
-    // TODO: Step 5.6 - Replace with platform-specific hardware key store
-    let hw_store = UnsupportedKeyStore;
+    // Get platform-specific hardware key store
+    let hw_keystore = hw_keystore::get_default_keystore();
 
     let result = change(
         &options,
         current_password.as_ref().map(|p| p.as_bytes()),
         new_password.as_ref().map(|p| p.as_bytes()),
-        &hw_store,
+        hw_keystore.as_ref(),
     )?;
 
     if !cli.quiet {
@@ -558,7 +569,10 @@ fn display_inspect_result(result: &InspectResult) {
     }
 
     // Display hardware key protection status if this is a secret key
-    if matches!(result.key_type, KeyType::SecretEncrypted | KeyType::SecretUnencrypted) {
+    if matches!(
+        result.key_type,
+        KeyType::SecretEncrypted | KeyType::SecretUnencrypted
+    ) {
         println!();
         if result.hw_enrolled {
             println!("Hardware Key Protection:");
@@ -601,21 +615,24 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
+    // Get platform-specific hardware key store for HW inspection
+    let hw_keystore = hw_keystore::get_default_keystore();
+
     // Determine the source and get the inspection result
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
     let default_secret_key = Cli::default_secret_key_path();
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
-            let options = InspectOptions::new(sk_file.as_path());
+            let options = InspectOptionsWithHw::new(sk_file.as_path(), hw_keystore.as_ref());
             (
-                inspect(&options)?,
+                inspect_with_hw(&options)?,
                 format!("Inspecting: {}", sk_file.display()),
                 Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
-            let options = InspectOptions::new(pk_file.as_path());
+            let options = InspectOptionsWithHw::new(pk_file.as_path(), hw_keystore.as_ref());
             (
-                inspect(&options)?,
+                inspect_with_hw(&options)?,
                 format!("Inspecting: {}", pk_file.display()),
                 Some(pk_file.as_path()),
             )
@@ -628,9 +645,9 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else {
             // Default to secret key path
-            let options = InspectOptions::new(&default_secret_key);
+            let options = InspectOptionsWithHw::new(&default_secret_key, hw_keystore.as_ref());
             (
-                inspect(&options)?,
+                inspect_with_hw(&options)?,
                 format!("Inspecting: {} (default)", default_secret_key.display()),
                 Some(default_secret_key.as_path()),
             )

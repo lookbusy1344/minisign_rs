@@ -603,8 +603,8 @@ fn test_inspect_signature_nonexistent_file() {
 
 #[test]
 fn test_inspect_key_with_hw_slot_available_hardware() {
-    use minisign::hw_keystore::mock::MockKeyStore;
     use minisign::hw_keystore::HardwareKeyStore;
+    use minisign::hw_keystore::mock::MockKeyStore;
     use minisign::keys::HwSlot;
     use minisign::ops::inspect::{InspectOptionsWithHw, inspect_with_hw};
 
