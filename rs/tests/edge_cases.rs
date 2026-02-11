@@ -2,11 +2,14 @@
 //!
 //! Tests for boundary conditions and unusual inputs
 
-use minisign::ops::{
-    change::{ChangeOptions, change},
-    generate::{GenerateOptions, generate},
-    sign::{SignOptions, sign},
-    verify::{PublicKeySource, VerifyOptions, verify},
+use minisign::{
+    hw_keystore::unsupported::UnsupportedKeyStore,
+    ops::{
+        change::{ChangeOptions, change},
+        generate::{GenerateOptions, generate},
+        sign::{SignOptions, sign},
+        verify::{PublicKeySource, VerifyOptions, verify},
+    },
 };
 use std::fs;
 use tempfile::TempDir;
@@ -333,8 +336,13 @@ fn test_change_password_to_empty() {
         .force_weak_kdf(cfg!(debug_assertions)) // Use weak KDF in debug builds for faster test
         .build();
 
-    change(&change_opts, Some(b"original_password"), Some(b""))
-        .expect("Should change password to empty");
+    change(
+        &change_opts,
+        Some(b"original_password"),
+        Some(b""),
+        &UnsupportedKeyStore,
+    )
+    .expect("Should change password to empty");
 
     // Sign with empty password
     let message_file = temp_dir.path().join("message.txt");
@@ -367,8 +375,13 @@ fn test_change_password_from_empty() {
         .force_weak_kdf(cfg!(debug_assertions)) // Use weak KDF in debug builds for faster test
         .build();
 
-    change(&change_opts, Some(b""), Some(b"new_password"))
-        .expect("Should change from empty to non-empty password");
+    change(
+        &change_opts,
+        Some(b""),
+        Some(b"new_password"),
+        &UnsupportedKeyStore,
+    )
+    .expect("Should change from empty to non-empty password");
 
     // Sign with new password
     let message_file = temp_dir.path().join("message.txt");

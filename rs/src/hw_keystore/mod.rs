@@ -35,11 +35,7 @@ pub mod windows;
 pub mod linux;
 
 // Unsupported fallback for platforms without a backend
-#[cfg(not(any(
-    all(target_os = "macos", feature = "hw-keystore-macos"),
-    all(target_os = "windows", feature = "hw-keystore-windows"),
-    all(target_os = "linux", feature = "hw-keystore-linux")
-)))]
+// Always available for testing purposes, even on platforms with a backend
 pub mod unsupported;
 
 /// Hardware key store trait for platform-specific secure key storage

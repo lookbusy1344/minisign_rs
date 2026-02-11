@@ -1,5 +1,6 @@
 use clap::Parser;
 use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
+use minisign::hw_keystore::unsupported::UnsupportedKeyStore;
 use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
@@ -451,10 +452,14 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     let options = builder.build();
 
+    // TODO: Step 5.6 - Replace with platform-specific hardware key store
+    let hw_store = UnsupportedKeyStore;
+
     let result = change(
         &options,
         current_password.as_ref().map(|p| p.as_bytes()),
         new_password.as_ref().map(|p| p.as_bytes()),
+        &hw_store,
     )?;
 
     if !cli.quiet {

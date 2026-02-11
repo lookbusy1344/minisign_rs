@@ -4,13 +4,14 @@
 
 use super::file_utils::{load_secret_key, write_secret_key_file};
 use crate::{
-    Result, constants::SCRYPT_LOG_N, crypto::calculate_kdf_params, errors::Error,
-    keys::SeckeyStruct,
+    Result, constants::SCRYPT_LOG_N, crypto::calculate_kdf_params, ecies_wrap::ecies_wrap,
+    errors::Error, hw_keystore::HardwareKeyStore, keys::SeckeyStruct,
 };
 use std::path::{Path, PathBuf};
 
 /// Options for changing secret key password
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // Builder pattern is used to construct this
 pub struct ChangeOptions<'a> {
     /// Path to the secret key file
     secret_key_file: &'a Path,
@@ -21,15 +22,22 @@ pub struct ChangeOptions<'a> {
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
     #[cfg_attr(not(debug_assertions), allow(dead_code))]
     force_weak_kdf: bool,
+    /// Add hardware key protection to an existing password-protected key
+    add_hardware_key: bool,
+    /// Remove hardware key protection, keeping only password protection
+    remove_hardware_key: bool,
 }
 
 /// Builder for `ChangeOptions`
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // Builder pattern in use
 pub struct ChangeOptionsBuilder<'a> {
     secret_key_file: &'a Path,
     remove_password: bool,
     allow_kdf_fallback: bool,
     force_weak_kdf: bool,
+    add_hardware_key: bool,
+    remove_hardware_key: bool,
 }
 
 impl<'a> ChangeOptionsBuilder<'a> {
@@ -41,6 +49,8 @@ impl<'a> ChangeOptionsBuilder<'a> {
             remove_password: false,
             allow_kdf_fallback: false,
             force_weak_kdf: false,
+            add_hardware_key: false,
+            remove_hardware_key: false,
         }
     }
 
@@ -65,6 +75,20 @@ impl<'a> ChangeOptionsBuilder<'a> {
         self
     }
 
+    /// Add hardware key protection to an existing password-protected key
+    #[must_use]
+    pub const fn add_hardware_key(mut self, add: bool) -> Self {
+        self.add_hardware_key = add;
+        self
+    }
+
+    /// Remove hardware key protection, keeping only password protection
+    #[must_use]
+    pub const fn remove_hardware_key(mut self, remove: bool) -> Self {
+        self.remove_hardware_key = remove;
+        self
+    }
+
     /// Build the `ChangeOptions`
     #[must_use]
     pub const fn build(self) -> ChangeOptions<'a> {
@@ -80,6 +104,8 @@ impl<'a> ChangeOptionsBuilder<'a> {
             remove_password: self.remove_password,
             allow_kdf_fallback: self.allow_kdf_fallback,
             force_weak_kdf: self.force_weak_kdf,
+            add_hardware_key: self.add_hardware_key,
+            remove_hardware_key: self.remove_hardware_key,
         }
     }
 }
@@ -123,6 +149,8 @@ impl<'a> ChangeOptions<'a> {
             remove_password,
             allow_kdf_fallback,
             force_weak_kdf,
+            add_hardware_key: false, // Old API doesn't support HW key operations
+            remove_hardware_key: false,
         }
     }
 }
@@ -134,6 +162,8 @@ pub struct ChangeResult {
     pub secret_key_file: PathBuf,
     /// Whether the key is now encrypted
     pub encrypted: bool,
+    /// Whether the key has hardware key protection
+    pub has_hardware_key: bool,
 }
 
 /// Change or remove the password on a secret key
@@ -143,6 +173,7 @@ pub struct ChangeResult {
 /// * `options` - Change options including the file path
 /// * `old_password` - Current password (if encrypted)
 /// * `new_password` - New password (if not removing encryption)
+/// * `hw_store` - Hardware key store for HW key operations
 ///
 /// # Returns
 ///
@@ -154,13 +185,15 @@ pub struct ChangeResult {
 /// - The secret key file cannot be loaded
 /// - The old password is incorrect
 /// - The new password is not provided when encryption is requested
+/// - Hardware key operations fail (if hardware key add/remove requested)
 /// - File I/O operations fail
 pub fn change(
     options: &ChangeOptions<'_>,
     old_password: Option<&[u8]>,
     new_password: Option<&[u8]>,
+    hw_store: &dyn HardwareKeyStore,
 ) -> Result<ChangeResult> {
-    change_with_log_n(options, old_password, new_password, SCRYPT_LOG_N)
+    change_with_log_n(options, old_password, new_password, hw_store, SCRYPT_LOG_N)
 }
 
 /// Internal implementation of change with custom scrypt `log_n` parameter
@@ -174,6 +207,8 @@ pub fn change(
 /// - Password is required but not provided
 /// - File cannot be read or written
 /// - Encryption/decryption fails
+/// - Hardware key operations fail
+/// - Both add and remove hardware key flags are set simultaneously
 ///
 /// # Note
 ///
@@ -182,20 +217,80 @@ pub fn change_with_log_n(
     options: &ChangeOptions<'_>,
     old_password: Option<&[u8]>,
     new_password: Option<&[u8]>,
+    hw_store: &dyn HardwareKeyStore,
     log_n: u8,
 ) -> Result<ChangeResult> {
-    // Load the secret key (ignore HW slot for now - will be handled in Step 5.4)
-    let (seckey, _hw_slot) = load_secret_key(options.secret_key_file)?;
+    // Validate conflicting options
+    if options.add_hardware_key && options.remove_hardware_key {
+        return Err(Error::other(
+            "Cannot add and remove hardware key simultaneously",
+        ));
+    }
 
-    // Decrypt the secret key with old password
-    let (secret_key, keynum) = if seckey.is_encrypted() {
+    // Load the secret key and existing HW slot (if any)
+    let (seckey, mut hw_slot) = load_secret_key(options.secret_key_file)?;
+
+    // Decrypt the secret key
+    let (secret_key, keynum) = if let Some(ref slot) = hw_slot {
+        // Try HW decryption first if HW slot exists and no password provided
+        if old_password.is_none() && hw_store.is_available() {
+            match seckey.decrypt_with_hw(hw_store, slot) {
+                Ok(result) => result,
+                Err(_) => {
+                    // HW decrypt failed, try password if provided later
+                    if seckey.is_encrypted() {
+                        let pwd = old_password.ok_or(Error::PasswordRequired)?;
+                        seckey.decrypt(pwd)?
+                    } else {
+                        return Err(Error::PasswordRequired);
+                    }
+                }
+            }
+        } else if seckey.is_encrypted() {
+            let pwd = old_password.ok_or(Error::PasswordRequired)?;
+            seckey.decrypt(pwd)?
+        } else {
+            (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
+        }
+    } else if seckey.is_encrypted() {
         let pwd = old_password.ok_or(Error::PasswordRequired)?;
         seckey.decrypt(pwd)?
     } else {
         (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
     };
 
-    // Create new secret key structure with new password
+    // Handle hardware key removal
+    if options.remove_hardware_key
+        && let Some(ref slot) = hw_slot
+    {
+        // Delete HW key from hardware store
+        hw_store.delete_key(&slot.hw_key_label)?;
+        hw_slot = None; // Clear HW slot
+    }
+
+    // Handle hardware key addition
+    if options.add_hardware_key {
+        // Check HW availability
+        if !hw_store.is_available() {
+            return Err(Error::HardwareKeyStoreUnavailable);
+        }
+
+        // Generate HW key label
+        let keynum_hex = format!("{:016x}", u64::from_le_bytes(*keynum.as_bytes()));
+        let hw_key_label = format!("minisign:{keynum_hex}");
+
+        // Generate hardware P-256 key
+        let _hw_pubkey = hw_store.generate_key(&hw_key_label)?;
+
+        // Build plaintext blob for encryption (keynum + secret_key + checksum)
+        let plaintext_blob = SeckeyStruct::build_plaintext_blob(keynum, &secret_key);
+
+        // ECIES-wrap the plaintext blob using hardware key
+        let slot = ecies_wrap(hw_store, &hw_key_label, &plaintext_blob)?;
+        hw_slot = Some(slot);
+    }
+
+    // Create new secret key structure with new password (or remove password)
     let new_seckey = if options.remove_password {
         // Remove encryption
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
@@ -227,12 +322,15 @@ pub fn change_with_log_n(
     } else {
         "minisign encrypted secret key"
     };
-    let seckey_contents = new_seckey.to_file_contents(seckey_comment);
-    // Always overwrite when changing password (force=true)
+
+    // Write with HW slot if present
+    let seckey_contents =
+        new_seckey.to_file_contents_with_hw_slot(seckey_comment, hw_slot.as_ref());
     write_secret_key_file(options.secret_key_file, &seckey_contents, true)?;
 
     Ok(ChangeResult {
         secret_key_file: options.secret_key_file.to_path_buf(),
         encrypted: !options.remove_password,
+        has_hardware_key: hw_slot.is_some(),
     })
 }

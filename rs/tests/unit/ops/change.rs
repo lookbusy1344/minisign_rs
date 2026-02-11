@@ -3,8 +3,10 @@
 use minisign::{
     crypto::generate_keypair,
     errors::Error,
+    hw_keystore::{HardwareKeyStore, mock::MockKeyStore, unsupported::UnsupportedKeyStore},
     keys::SeckeyStruct,
     ops::change::{ChangeOptions, change_with_log_n},
+    ops::file_utils::load_secret_key,
 };
 use std::fs;
 use tempfile::TempDir;
@@ -41,8 +43,14 @@ fn test_change_password_fast() {
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path()).build();
 
-    let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
-        .expect("password change should succeed");
+    let result = change_with_log_n(
+        &options,
+        Some(old_password),
+        Some(new_password),
+        &UnsupportedKeyStore,
+        14,
+    )
+    .expect("password change should succeed");
 
     assert_eq!(result.secret_key_file, sk_path);
     assert!(result.encrypted);
@@ -94,7 +102,7 @@ fn test_remove_password_from_encrypted_key() {
         .remove_password(true)
         .build();
 
-    let result = change_with_log_n(&options, Some(password), None, 14)
+    let result = change_with_log_n(&options, Some(password), None, &UnsupportedKeyStore, 14)
         .expect("password removal should succeed");
 
     assert_eq!(result.secret_key_file, sk_path);
@@ -124,7 +132,7 @@ fn test_add_password_to_unencrypted_key() {
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path()).build();
 
-    let result = change_with_log_n(&options, None, Some(new_password), 14)
+    let result = change_with_log_n(&options, None, Some(new_password), &UnsupportedKeyStore, 14)
         .expect("adding password should succeed");
 
     assert!(result.encrypted);
@@ -170,7 +178,7 @@ fn test_change_without_old_password_fails() {
     // Try to change without old password
     let options = ChangeOptions::builder(&sk_path).build();
 
-    let result = change_with_log_n(&options, None, Some(b"newpass"), 14);
+    let result = change_with_log_n(&options, None, Some(b"newpass"), &UnsupportedKeyStore, 14);
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), Error::PasswordRequired));
 }
@@ -206,7 +214,13 @@ fn test_change_with_wrong_old_password_fails() {
     // Try with wrong old password
     let options = ChangeOptions::builder(&sk_path).build();
 
-    let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
+    let result = change_with_log_n(
+        &options,
+        Some(b"wrongpassword"),
+        Some(b"newpass"),
+        &UnsupportedKeyStore,
+        14,
+    );
     assert!(result.is_err());
 }
 
@@ -223,7 +237,7 @@ fn test_encrypt_without_new_password_fails() {
     // Try to encrypt without providing new password
     let options = ChangeOptions::builder(&sk_path).build();
 
-    let result = change_with_log_n(&options, None, None, 14);
+    let result = change_with_log_n(&options, None, None, &UnsupportedKeyStore, 14);
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), Error::PasswordRequired));
 }
@@ -250,7 +264,7 @@ fn test_change_preserves_file_permissions() {
     // Add password
     let options = ChangeOptions::builder(sk_path.as_path()).build();
 
-    change_with_log_n(&options, None, Some(b"password"), 14)
+    change_with_log_n(&options, None, Some(b"password"), &UnsupportedKeyStore, 14)
         .expect("adding password should succeed");
 
     // Verify permissions are still 0600
@@ -292,8 +306,14 @@ fn test_change_password_with_force_weak_kdf() {
         .force_weak_kdf(true) // Force weak parameters
         .build();
 
-    let result = change_with_log_n(&options, Some(old_password), Some(new_password), 20)
-        .expect("password change should succeed");
+    let result = change_with_log_n(
+        &options,
+        Some(old_password),
+        Some(new_password),
+        &UnsupportedKeyStore,
+        20,
+    )
+    .expect("password change should succeed");
 
     assert!(result.encrypted);
 
@@ -309,4 +329,299 @@ fn test_change_password_with_force_weak_kdf() {
     let (_sk, _kn) = new_seckey
         .decrypt(new_password)
         .expect("should decrypt with new password");
+}
+
+// ============================================================================
+// Hardware Key Tests
+// ============================================================================
+
+#[test]
+fn test_add_hardware_key_to_password_encrypted() {
+    let temp_dir = TempDir::new().unwrap();
+    let hw_store = MockKeyStore::new();
+
+    // Create a password-encrypted key (no HW slot yet)
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let password = b"password";
+    let mut kdf_salt = [0u8; 32];
+    getrandom::fill(&mut kdf_salt).unwrap();
+
+    let n = 1u64 << 14;
+    let r = 8u64;
+    let kdf_opslimit = 4 * n * r;
+    let kdf_memlimit = 128 * n * r;
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    let sk_path = temp_dir.path().join("test.key");
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+
+    // Verify no HW slot initially
+    let (_, hw_slot_before) = load_secret_key(&sk_path).unwrap();
+    assert!(
+        hw_slot_before.is_none(),
+        "should not have HW slot initially"
+    );
+
+    // Add hardware key enrollment
+    let options = ChangeOptions::builder(sk_path.as_path())
+        .add_hardware_key(true)
+        .build();
+
+    let result = change_with_log_n(&options, Some(password), Some(password), &hw_store, 14)
+        .expect("adding hardware key should succeed");
+
+    assert_eq!(result.secret_key_file, sk_path);
+    assert!(result.encrypted);
+    assert!(result.has_hardware_key);
+
+    // Verify HW slot now exists
+    let (seckey_after, hw_slot_after) = load_secret_key(&sk_path).unwrap();
+    assert!(hw_slot_after.is_some(), "should have HW slot after adding");
+
+    // Verify password slot still works
+    seckey_after
+        .decrypt(password)
+        .expect("password slot should still work");
+
+    // Verify HW key was created in hardware
+    let keynum_hex = format!("{:016x}", u64::from_le_bytes(*keynum.as_bytes()));
+    let hw_key_label = format!("minisign:{keynum_hex}");
+    assert!(
+        hw_store.key_exists(&hw_key_label).unwrap(),
+        "HW key should exist in hardware store"
+    );
+}
+
+#[test]
+fn test_remove_hardware_key() {
+    let temp_dir = TempDir::new().unwrap();
+    let hw_store = MockKeyStore::new();
+
+    // Create a key with both password and HW slots
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let password = b"password";
+    let mut kdf_salt = [0u8; 32];
+    getrandom::fill(&mut kdf_salt).unwrap();
+
+    let n = 1u64 << 14;
+    let r = 8u64;
+    let kdf_opslimit = 4 * n * r;
+    let kdf_memlimit = 128 * n * r;
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    let sk_path = temp_dir.path().join("test.key");
+
+    // First add HW key
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    let options_add = ChangeOptions::builder(sk_path.as_path())
+        .add_hardware_key(true)
+        .build();
+    change_with_log_n(&options_add, Some(password), Some(password), &hw_store, 14)
+        .expect("adding hardware key should succeed");
+
+    // Verify HW slot exists
+    let (_, hw_slot_before) = load_secret_key(&sk_path).unwrap();
+    assert!(hw_slot_before.is_some(), "should have HW slot");
+
+    let keynum_hex = format!("{:016x}", u64::from_le_bytes(*keynum.as_bytes()));
+    let hw_key_label = format!("minisign:{keynum_hex}");
+    assert!(hw_store.key_exists(&hw_key_label).unwrap());
+
+    // Now remove HW key
+    let options_remove = ChangeOptions::builder(sk_path.as_path())
+        .remove_hardware_key(true)
+        .build();
+
+    let result = change_with_log_n(
+        &options_remove,
+        Some(password),
+        Some(password),
+        &hw_store,
+        14,
+    )
+    .expect("removing hardware key should succeed");
+
+    assert_eq!(result.secret_key_file, sk_path);
+    assert!(result.encrypted);
+    assert!(!result.has_hardware_key);
+
+    // Verify HW slot is gone
+    let (seckey_after, hw_slot_after) = load_secret_key(&sk_path).unwrap();
+    assert!(
+        hw_slot_after.is_none(),
+        "should not have HW slot after removal"
+    );
+
+    // Verify password slot still works
+    seckey_after
+        .decrypt(password)
+        .expect("password slot should still work");
+
+    // Verify HW key was deleted from hardware store
+    assert!(
+        !hw_store.key_exists(&hw_key_label).unwrap(),
+        "HW key should be deleted from hardware store"
+    );
+}
+
+#[test]
+fn test_add_hardware_key_when_unavailable() {
+    use minisign::hw_keystore::unsupported::UnsupportedKeyStore;
+
+    let temp_dir = TempDir::new().unwrap();
+    let hw_store = UnsupportedKeyStore;
+
+    // Create a password-encrypted key
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let password = b"password";
+    let mut kdf_salt = [0u8; 32];
+    getrandom::fill(&mut kdf_salt).unwrap();
+
+    let n = 1u64 << 14;
+    let r = 8u64;
+    let kdf_opslimit = 4 * n * r;
+    let kdf_memlimit = 128 * n * r;
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    let sk_path = temp_dir.path().join("test.key");
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+
+    // Try to add hardware key when unavailable
+    let options = ChangeOptions::builder(sk_path.as_path())
+        .add_hardware_key(true)
+        .build();
+
+    let result = change_with_log_n(&options, Some(password), Some(password), &hw_store, 14);
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        Error::HardwareKeyStoreUnavailable
+    ));
+}
+
+#[test]
+fn test_cannot_add_and_remove_hardware_key_simultaneously() {
+    let temp_dir = TempDir::new().unwrap();
+    let hw_store = MockKeyStore::new();
+
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let password = b"password";
+    let mut kdf_salt = [0u8; 32];
+    getrandom::fill(&mut kdf_salt).unwrap();
+
+    let n = 1u64 << 14;
+    let r = 8u64;
+    let kdf_opslimit = 4 * n * r;
+    let kdf_memlimit = 128 * n * r;
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    let sk_path = temp_dir.path().join("test.key");
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+
+    // Try to add and remove hardware key simultaneously
+    let options = ChangeOptions::builder(sk_path.as_path())
+        .add_hardware_key(true)
+        .remove_hardware_key(true)
+        .build();
+
+    let result = change_with_log_n(&options, Some(password), Some(password), &hw_store, 14);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_remove_hardware_key_with_hw_decryption() {
+    let temp_dir = TempDir::new().unwrap();
+    let hw_store = MockKeyStore::new();
+
+    // Create a key with both password and HW slots
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let password = b"password";
+    let mut kdf_salt = [0u8; 32];
+    getrandom::fill(&mut kdf_salt).unwrap();
+
+    let n = 1u64 << 14;
+    let r = 8u64;
+    let kdf_opslimit = 4 * n * r;
+    let kdf_memlimit = 128 * n * r;
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    let sk_path = temp_dir.path().join("test.key");
+
+    // First add HW key
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    let options_add = ChangeOptions::builder(sk_path.as_path())
+        .add_hardware_key(true)
+        .build();
+    change_with_log_n(&options_add, Some(password), Some(password), &hw_store, 14)
+        .expect("adding hardware key should succeed");
+
+    // Now remove HW key using HW decryption (no password)
+    let options_remove = ChangeOptions::builder(sk_path.as_path())
+        .remove_hardware_key(true)
+        .build();
+
+    let result = change_with_log_n(&options_remove, None, Some(password), &hw_store, 14)
+        .expect("removing hardware key with HW decryption should succeed");
+
+    assert!(!result.has_hardware_key);
+
+    // Verify password slot was set with the new password
+    let (seckey_after, hw_slot_after) = load_secret_key(&sk_path).unwrap();
+    assert!(
+        hw_slot_after.is_none(),
+        "should not have HW slot after removal"
+    );
+    seckey_after
+        .decrypt(password)
+        .expect("password slot should work with new password");
 }
