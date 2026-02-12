@@ -35,7 +35,11 @@ To use the actual Secure Enclave on your Mac:
 
 This will list all available signing identities.
 
-#### Step 3: Build and Sign
+#### Step 3: Update Entitlements
+
+Edit `entitlements.plist` and replace `YOUR_TEAM_ID` with your actual Team ID (shown in the signing identity from Step 2, e.g., `ABC1234567`).
+
+#### Step 4: Build and Sign
 
 ```bash
 # Build with Secure Enclave support
@@ -45,7 +49,7 @@ cargo build --release --features hw-keystore-macos
 ./scripts/sign_for_secure_enclave.sh "Apple Development: your@email.com"
 ```
 
-#### Step 4: Test
+#### Step 5: Test
 
 ```bash
 # Generate a key (will trigger Touch ID prompt)
