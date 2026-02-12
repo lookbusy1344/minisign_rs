@@ -5,7 +5,7 @@
 
 use super::HardwareKeyStore;
 use crate::errors::{Error, Result};
-use zeroizing::Zeroizing;
+use zeroize::Zeroizing;
 
 /// Linux TPM 2.0 key store
 pub struct LinuxKeyStore {
@@ -30,6 +30,12 @@ impl HardwareKeyStore for LinuxKeyStore {
     fn generate_key(&self, _label: &str) -> Result<p256::PublicKey> {
         Err(Error::HardwareKeyStoreError {
             detail: "Linux TPM not yet implemented".to_string(),
+        })
+    }
+
+    fn get_public_key(&self, _label: &str) -> Result<p256::PublicKey> {
+        Err(Error::HardwareKeyStoreError {
+            detail: "Linux TPM 2.0 support not yet implemented".to_string(),
         })
     }
 

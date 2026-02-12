@@ -65,7 +65,7 @@ hw-keystore-linux = ["dep:tss-esapi"]
 
 # Platform-conditional dependencies (Phase 2)
 [target.'cfg(target_os = "macos")'.dependencies]
-security-framework = { version = "3", optional = true }
+security-framework = { version = "3", optional = true, features = ["OSX_10_15"] }
 security-framework-sys = { version = "2", optional = true }
 core-foundation = { version = "0.10", optional = true }
 
