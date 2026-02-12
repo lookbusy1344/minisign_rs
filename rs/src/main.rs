@@ -99,6 +99,12 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     if force_weak_kdf {
         builder = builder.force_weak_kdf(true);
     }
+    if cli.hardware_key {
+        builder = builder.hardware_key(true);
+    }
+    if cli.quiet {
+        builder = builder.quiet(true);
+    }
 
     let options = builder.build();
 

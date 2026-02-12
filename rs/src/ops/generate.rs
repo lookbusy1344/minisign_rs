@@ -36,6 +36,8 @@ pub struct GenerateOptions<'a> {
     force_weak_kdf: bool,
     /// Enroll hardware key protection during generation
     hardware_key: bool,
+    /// Suppress informational output
+    quiet: bool,
 }
 
 /// Builder for `GenerateOptions`
@@ -50,6 +52,7 @@ pub struct GenerateOptionsBuilder<'a> {
     allow_kdf_fallback: bool,
     force_weak_kdf: bool,
     hardware_key: bool,
+    quiet: bool,
 }
 
 impl<'a> GenerateOptionsBuilder<'a> {
@@ -65,6 +68,7 @@ impl<'a> GenerateOptionsBuilder<'a> {
             allow_kdf_fallback: false,
             force_weak_kdf: false,
             hardware_key: false,
+            quiet: false,
         }
     }
 
@@ -110,6 +114,13 @@ impl<'a> GenerateOptionsBuilder<'a> {
         self
     }
 
+    /// Suppress informational output
+    #[must_use]
+    pub const fn quiet(mut self, quiet: bool) -> Self {
+        self.quiet = quiet;
+        self
+    }
+
     /// Build the `GenerateOptions`
     #[must_use]
     pub const fn build(self) -> GenerateOptions<'a> {
@@ -129,6 +140,7 @@ impl<'a> GenerateOptionsBuilder<'a> {
             allow_kdf_fallback: self.allow_kdf_fallback,
             force_weak_kdf: self.force_weak_kdf,
             hardware_key: self.hardware_key,
+            quiet: self.quiet,
         }
     }
 }
@@ -186,6 +198,7 @@ impl<'a> GenerateOptions<'a> {
             allow_kdf_fallback,
             force_weak_kdf,
             hardware_key: false, // Old API doesn't support HW keys
+            quiet: false,        // Old API defaults to non-quiet
         }
     }
 }
@@ -366,17 +379,29 @@ pub fn generate_with_log_n(
             return Err(Error::HardwareKeyStoreUnavailable);
         }
 
+        // Inform user about hardware key enrollment
+        if !options.quiet {
+            eprintln!(
+                "Enrolling hardware key protection using {}",
+                hw_store.display_name()
+            );
+        }
+
         // Generate HW key label: minisign:<keynum_hex>
         let hw_key_label = format!("minisign:{keynum_hex}");
 
         // Generate hardware P-256 key
         let _hw_pubkey = hw_store.generate_key(&hw_key_label)?;
 
-        // Get plaintext blob for encryption
-        let plaintext_blob = seckey.to_plaintext_blob()?;
+        // Build plaintext blob for encryption (keynum + secret_key + checksum)
+        let plaintext_blob = SeckeyStruct::build_plaintext_blob(keynum, &secret_key);
 
         // ECIES-wrap the plaintext blob using hardware key
         let slot = ecies_wrap(hw_store, &hw_key_label, &plaintext_blob)?;
+
+        if !options.quiet {
+            eprintln!("Hardware key protection enrolled successfully");
+        }
 
         Some(slot)
     } else {
