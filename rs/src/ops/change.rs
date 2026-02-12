@@ -136,6 +136,8 @@ pub struct ChangeResult {
     pub secret_key_file: PathBuf,
     /// Whether the key is now encrypted
     pub encrypted: bool,
+    /// New credential store lookup key (after password change)
+    pub credential_id: String,
 }
 
 /// Change or remove the password on a secret key
@@ -233,8 +235,12 @@ pub fn change_with_log_n(
     let seckey_contents = new_seckey.to_file_contents(seckey_comment);
     write_secret_key_file(options.secret_key_file, &seckey_contents, true)?;
 
+    // Capture new credential ID for credential store
+    let credential_id = new_seckey.credential_id();
+
     Ok(ChangeResult {
         secret_key_file: options.secret_key_file.to_path_buf(),
         encrypted: !options.remove_password,
+        credential_id,
     })
 }

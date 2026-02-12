@@ -122,7 +122,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     // Save password to credential store if requested
     if cli.save_password {
         if let Some(pwd) = &password {
-            match minisign::credential_store::save_password(result.keynum_hex(), pwd) {
+            match minisign::credential_store::save_password(result.credential_id(), pwd) {
                 Ok(()) => {
                     if !cli.quiet {
                         println!("Password saved to OS credential store");
@@ -224,15 +224,15 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
-    // Load secret key to get key ID for credential store lookup
+    // Load secret key to get credential ID for credential store lookup
     let seckey = load_secret_key(secret_key_file)?;
-    let key_id = seckey.keynum().to_key_id();
+    let credential_id = seckey.credential_id();
 
     // Try to get password from credential store first, then prompt if needed
     let password = if cli.no_password {
         None
     } else {
-        get_password_with_credential_store(&key_id, cli.quiet, cli.password_file.as_deref())?
+        get_password_with_credential_store(&credential_id, cli.quiet, cli.password_file.as_deref())?
     };
 
     // Display working message for signing operation
@@ -271,7 +271,12 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
-        save_password_to_credential_store(&key_id, password.as_ref(), cli.save_password, cli.quiet);
+        save_password_to_credential_store(
+            &credential_id,
+            password.as_ref(),
+            cli.save_password,
+            cli.quiet,
+        );
 
         if !cli.quiet {
             println!(
@@ -313,7 +318,12 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             cli.sequential,
         )?;
 
-        save_password_to_credential_store(&key_id, password.as_ref(), cli.save_password, cli.quiet);
+        save_password_to_credential_store(
+            &credential_id,
+            password.as_ref(),
+            cli.save_password,
+            cli.quiet,
+        );
     }
 
     Ok(())
@@ -439,8 +449,8 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
 
     // Get password: check credential store first, then prompt if needed
     let password = if seckey.is_encrypted() {
-        let key_id = seckey.keynum().to_key_id();
-        if let Some(saved_pwd) = minisign::credential_store::get_password(&key_id) {
+        let credential_id = seckey.credential_id();
+        if let Some(saved_pwd) = minisign::credential_store::get_password(&credential_id) {
             if !cli.quiet {
                 eprintln!("Using saved password from credential store");
             }
@@ -476,13 +486,13 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
-    // Load the key to get key ID and check if it's encrypted
+    // Load the key to get credential ID and check if it's encrypted
     let seckey = load_secret_key(secret_key_file)?;
-    let key_id = seckey.keynum().to_key_id();
+    let old_credential_id = seckey.credential_id();
 
     // Handle --forget-password (standalone usage)
     if cli.forget_password {
-        match minisign::credential_store::forget_password(&key_id) {
+        match minisign::credential_store::forget_password(&old_credential_id) {
             Ok(()) => {
                 if !cli.quiet {
                     println!("Password removed from credential store");
@@ -499,7 +509,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     // Get current password: check credential store first, then prompt if needed
     let current_password = if seckey.is_encrypted() {
-        if let Some(saved_pwd) = minisign::credential_store::get_password(&key_id) {
+        if let Some(saved_pwd) = minisign::credential_store::get_password(&old_credential_id) {
             if !cli.quiet {
                 eprintln!("Using saved password from credential store");
             }
@@ -552,10 +562,15 @@ fn handle_change(cli: &Cli) -> Result<()> {
         new_password.as_ref().map(|p| p.as_bytes()),
     )?;
 
+    // Delete old credential entry if password changed (credential_id changes with new password)
+    if seckey.is_encrypted() && old_credential_id != result.credential_id {
+        let _ = minisign::credential_store::forget_password(&old_credential_id);
+    }
+
     // Save new password to credential store if requested
     if cli.save_password {
         if let Some(pwd) = &new_password {
-            match minisign::credential_store::save_password(&key_id, pwd) {
+            match minisign::credential_store::save_password(&result.credential_id, pwd) {
                 Ok(()) => {
                     if !cli.quiet {
                         println!("Password saved to OS credential store");
