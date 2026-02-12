@@ -847,3 +847,81 @@ fn test_decrypt_weak_kdf_key() {
     assert_eq!(decrypted_keynum.as_bytes(), keynum.as_bytes());
     assert_eq!(decrypted_secret_key.as_bytes(), secret_key.as_bytes());
 }
+
+#[test]
+fn test_credential_id_for_encrypted_key() {
+    use minisign::crypto::generate_keypair;
+    use std::fmt::Write;
+
+    // Generate a test keypair
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; KDF_SALT_BYTES];
+    getrandom::fill(&mut kdf_salt).expect("RNG should work");
+
+    // Use weak parameters for faster test execution (N=2^14)
+    let kdf_opslimit = 524_288;
+    let kdf_memlimit = 16_777_216; // 16 MB
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        true, // allow_kdf_fallback if memory is insufficient
+    )
+    .unwrap();
+
+    // For encrypted keys, credential_id returns hex of encrypted_keynum
+    let credential_id = seckey.credential_id();
+
+    // Should be 16 hex characters (8 bytes * 2)
+    assert_eq!(credential_id.len(), 16);
+
+    // Should be valid hex
+    assert!(credential_id.chars().all(|c| c.is_ascii_hexdigit()));
+
+    // Should be uppercase hex
+    assert!(
+        credential_id
+            .chars()
+            .all(|c| !c.is_ascii_lowercase() || !c.is_ascii_alphabetic())
+    );
+
+    // Should NOT be all zeros (encrypted keynum is not zero)
+    assert_ne!(credential_id, "0000000000000000");
+
+    // Should match the hex of encrypted_keynum
+    let expected = seckey
+        .encrypted_keynum()
+        .iter()
+        .fold(String::new(), |mut s, b| {
+            let _ = write!(s, "{b:02X}");
+            s
+        });
+    assert_eq!(credential_id, expected);
+}
+
+#[test]
+fn test_credential_id_for_unencrypted_key() {
+    use minisign::crypto::generate_keypair;
+
+    // Generate a test keypair
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+
+    // For unencrypted keys, credential_id returns same as keynum().to_key_id()
+    let credential_id = seckey.credential_id();
+    let key_id = seckey.keynum().to_key_id();
+
+    assert_eq!(credential_id, key_id);
+
+    // Should be 16 hex characters (8 bytes * 2)
+    assert_eq!(credential_id.len(), 16);
+
+    // Should be valid uppercase hex
+    assert!(credential_id.chars().all(|c| c.is_ascii_hexdigit()));
+}
