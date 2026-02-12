@@ -600,6 +600,36 @@ impl SeckeyStruct {
         &self.keynum
     }
 
+    /// Raw encrypted keynum bytes (positions 54-61 in the key file).
+    /// For unencrypted keys, returns all zeros.
+    #[must_use]
+    pub const fn encrypted_keynum(&self) -> &[u8; KEYNUM_BYTES] {
+        &self.encrypted_keynum
+    }
+
+    /// Credential store lookup key — always available without decryption.
+    ///
+    /// For encrypted keys: hex of the encrypted keynum bytes at file offset 54-61.
+    /// For unencrypted keys: hex of the plaintext keynum (same as `to_key_id()`).
+    ///
+    /// This value is deterministic for a given key file and changes when the
+    /// password or KDF salt changes. It is unique per key+password+salt combination.
+    #[must_use]
+    pub fn credential_id(&self) -> String {
+        if self.encrypted {
+            // Use encrypted keynum bytes — available without decryption
+            use std::fmt::Write;
+            self.encrypted_keynum
+                .iter()
+                .fold(String::new(), |mut s, b| {
+                    let _ = write!(s, "{b:02X}");
+                    s
+                })
+        } else {
+            self.keynum.to_key_id()
+        }
+    }
+
     /// Check if the key is encrypted
     #[must_use]
     pub const fn is_encrypted(&self) -> bool {
