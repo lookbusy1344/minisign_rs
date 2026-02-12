@@ -8,6 +8,21 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - Create feature branches from `lb_rust`
 - Merge completed work back to `lb_rust`
 
+## Privacy & Security
+- **NO personally identifiable information (PII) in commits**
+  - No real email addresses (use `your@email.com` as placeholder)
+  - No team IDs, device IDs, or account identifiers
+  - No real names, usernames, or handles
+  - Use placeholders: `YOUR_TEAM_ID`, `EXAMPLE_ID`, etc.
+- **Check for PII before committing:**
+  ```bash
+  # Search for potential PII patterns
+  rg -i "your-real-email|YOUR_TEAM_ID_HERE"
+  git diff --cached  # Review staged changes
+  ```
+- **In documentation/examples:** Always use generic placeholders
+- **Test files:** Use synthetic/mock data only
+
 ## Non-Negotiable Rules
 - **ZERO unsafe code**
 - **ZERO clippy warnings** (pedantic mode)
