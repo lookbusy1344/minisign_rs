@@ -1,4 +1,4 @@
-# Plan: Credential Store — Cleartext Key ID in Secret Key Comment
+# Plan: Fix Credential Store — Use Encrypted Keynum as Credential ID
 
 ## Context
 
@@ -7,8 +7,7 @@ together render it completely non-functional:
 
 1. **Missing keyring backend features** — `keyring = "3"` ships with no default backends.
    Without `apple-native`, `windows-native`, or `sync-secret-service` features, the crate
-   silently uses a mock backend on all platforms. Every credential store operation appears
-   to succeed but nothing persists. **(Already fixed in this session — Cargo.toml updated.)**
+   silently uses a mock backend on all platforms. **(Already fixed — Cargo.toml updated.)**
 
 2. **Zeroed key ID for encrypted keys** — `SeckeyStruct::from_bytes` sets
    `keynum = [0u8; 8]` for encrypted keys (the real keynum is inside the encrypted blob).
@@ -21,145 +20,183 @@ and the graceful-degradation design (fall back to password prompt) masks lookup 
 
 ## Solution
 
-Store the key ID in cleartext in the secret key file's comment line. The key ID is already
-public (present in `.pub` files and every `.minisig` signature). No security implications.
+Use the **encrypted keynum bytes** (positions 54-61 in the secret key binary) as the
+credential store lookup key. These bytes are:
+- Always available without decryption
+- Unique per key+password+salt combination
+- Deterministic for a given key file
 
-### Comment format
+For encrypted keys, these are the XOR of the derived key with the plaintext keynum.
+For unencrypted keys, these are the plaintext keynum (same as today, and no password
+to store anyway).
 
-```
-untrusted comment: minisign encrypted secret key 31FCAABFDC95A530
-```
+No file format changes. No comment modifications. No backwards compatibility concerns.
 
-C minisign ignores the comment content, so this is fully backwards-compatible. Old key files
-without the key ID in the comment continue to work — the credential store lookup simply
-falls back to a file-path-based key.
+### Credential store key
 
-### Credential store lookup order
+A new method `SeckeyStruct::credential_id() -> String` returns a hex string suitable
+for credential store lookup:
+- Encrypted: hex of `encrypted_keynum` bytes (the raw bytes at file offset 54-61)
+- Unencrypted: hex of plaintext `keynum` (same as `to_key_id()`)
 
-1. **Key ID from comment** — if the secret key file has a key ID in the comment, look up
-   the password by key ID (survives file moves).
-2. **Canonical file path** — fall back to looking up by canonical absolute path of the
-   secret key file (works for old files without key ID in comment, breaks on file move).
-3. **Prompt** — if neither lookup succeeds, prompt the user.
+### Trade-off
 
-### Credential store save strategy
+The encrypted keynum changes when the password or salt changes (e.g., via `-K`).
+This is handled: the change-password flow deletes the old credential and saves the
+new one under the new `credential_id()`. If someone changes the password via C minisign,
+the Rust credential store lookup misses — graceful fallback to prompting.
 
-When `--save-password` is used, save the password under **both**:
-- The key ID (primary, stable)
-- The canonical file path (fallback, for old-format files)
+### Save strategy (when `--save-password`)
 
-When `--forget-password` is used, forget under **both** keys.
+Save under `credential_id()` (the encrypted keynum hex).
+During generate: the new SeckeyStruct has the encrypted keynum.
+During sign: `credential_id()` is available from the loaded key.
+During change-password: delete old credential (old `credential_id()`), save new
+credential (new `credential_id()` after re-encryption).
 
 ## Files to Modify
 
-### 1. `src/keys.rs` — Comment-based key ID
+### 1. `src/keys.rs` — Add `credential_id()` method
 
-**`to_file_contents` (line 808):**
-- If `self.keynum` is not all-zeros, append the key ID hex to the comment.
-- Format: `"untrusted comment: {comment} {keynum_hex}\n{base64}\n"`
-- If keynum is all-zeros (old encrypted key never re-saved), omit it.
+**After line 601 (existing `keynum()` getter):**
 
-**`from_file_contents` (line 792):**
-- After splitting lines, extract the last whitespace-delimited token from the comment.
-- Check if it's a 16-character uppercase hex string.
-- If so, parse it as a `KeyNum` and set it on the struct (overriding the zeros).
-- Add a helper: `fn parse_keynum_from_comment(comment: &str) -> Option<KeyNum>`
+Add getter for encrypted keynum and the `credential_id()` method:
 
-### 2. `src/credential_store.rs` — Path-based fallback
+```rust
+/// Raw encrypted keynum bytes (positions 54-61 in the key file).
+/// For unencrypted keys, returns all zeros.
+#[must_use]
+pub const fn encrypted_keynum(&self) -> &[u8; KEYNUM_BYTES] {
+    &self.encrypted_keynum
+}
 
-Add a `path:` prefix convention for file-path-based credential entries:
+/// Credential store lookup key — always available without decryption.
+///
+/// For encrypted keys: hex of the encrypted keynum bytes at file offset 54-61.
+/// For unencrypted keys: hex of the plaintext keynum (same as `to_key_id()`).
+///
+/// This value is deterministic for a given key file and changes when the
+/// password or KDF salt changes. It is unique per key+password+salt combination.
+#[must_use]
+pub fn credential_id(&self) -> String {
+    if self.encrypted {
+        // Use encrypted keynum bytes — available without decryption
+        use std::fmt::Write;
+        self.encrypted_keynum.iter().fold(String::new(), |mut s, b| {
+            let _ = write!(s, "{b:02X}");
+            s
+        })
+    } else {
+        self.keynum.to_key_id()
+    }
+}
+```
 
-- `save_password_for_path(path: &Path, password: &str) -> Result<()>`
-- `get_password_for_path(path: &Path) -> Option<Zeroizing<String>>`
-- `forget_password_for_path(path: &Path) -> Result<()>`
-
-These use `format!("path:{}", canonical_path.display())` as the keyring user/key.
-Use `std::fs::canonicalize` to normalize the path.
-
-### 3. `src/main.rs` — Updated lookup and save flows
+### 2. `src/main.rs` — Update all credential store call sites
 
 **`get_password_with_credential_store` (line 159):**
-- Change signature to accept `key_id: &str, secret_key_path: &Path, quiet, password_file`.
-- Try `credential_store::get_password(key_id)` first (if key_id is not all-zeros).
-- Fall back to `credential_store::get_password_for_path(secret_key_path)`.
-- Fall back to prompting.
+- Change `key_id` param from the zeroed keynum to `credential_id`.
+- No signature change needed — it already takes `&str`.
+
+**`handle_sign` (line 227-236):**
+- Change `let key_id = seckey.keynum().to_key_id()` to `let credential_id = seckey.credential_id()`
+- Use `credential_id` for credential store lookup and save.
+- Keep the existing `key_id` logic (from `seckey.keynum().to_key_id()`) for display purposes
+  where needed, but credential store operations use `credential_id`.
 
 **`save_password_to_credential_store` (line 176):**
-- Change signature to also accept `secret_key_path: &Path`.
-- Save under both key ID and path.
-
-**`handle_sign` (line 200):**
-- Pass `secret_key_file` to the updated functions.
+- Change `key_id` usage to `credential_id`.
 
 **`handle_change_password` (line 474):**
-- Same — pass `secret_key_file` to updated functions.
-- After re-encryption, the new SeckeyStruct has the real keynum (line 193-198),
-  so `to_file_contents` will include it in the comment → future lookups work by key ID.
+- Before decryption: capture `let old_credential_id = seckey.credential_id()` for deleting
+  old credential.
+- After re-encryption: use `new_seckey.credential_id()` for saving new credential.
+- Forget-password block (line 484): use `old_credential_id`.
 
-**Forget-password block (line 484):**
-- Also forget by path: `credential_store::forget_password_for_path(secret_key_file)`.
+**Change-password credential store flow (lines 501-515, 556-571):**
+- Old password lookup at line 502: use `seckey.credential_id()`
+- New password save at line 558: use the re-encrypted struct's `credential_id()`
+- Need to also delete old credential entry when password changes and `--save-password`
+  is used, since the `credential_id()` changes with the new password.
 
-### 4. `src/ops/generate.rs` — Key ID in generate comment
+**Generate flow (line 125):**
+- Change from `result.keynum_hex()` to using the `SeckeyStruct`'s `credential_id()`.
+- The generate flow in `main.rs` line 125 uses `result.keynum_hex()`. We need access to
+  the SeckeyStruct's credential_id. Either:
+  (a) Add `credential_id` to `GenerateResult`
+  (b) Pass `credential_id` back from the generate op
+  Approach (a) is cleaner — add a `credential_id: String` field to `GenerateResult`
+  in `src/ops/generate.rs`.
 
-**Lines 339-343:** The secret key comment is currently a static string. No change needed —
-`to_file_contents` will automatically append the keynum since the struct has it.
+### 3. `src/ops/generate.rs` — Return `credential_id` in result
 
-### 5. `src/ops/change.rs` — Key ID in change-password comment
+**`GenerateResult` struct (around line 183):**
+- Add field: `credential_id: String`
+- Add getter: `pub fn credential_id(&self) -> &str`
 
-**Lines 227-233:** Same — `new_seckey.to_file_contents(seckey_comment)` will automatically
-include the keynum since the re-encrypted struct has the real keynum.
+**`generate_with_log_n` (around line 354):**
+- After creating the SeckeyStruct, capture `seckey.credential_id()` and include it in
+  the `GenerateResult`.
 
-### 6. Tests
+### 4. `src/ops/inspect.rs` — Update `has_password` checks
 
-**`tests/cli_test.rs`:**
-- The three new end-to-end tests written this session should now pass.
-- Add a test for the file-path fallback: generate key (old format, no keynum in comment),
-  manually save password by path, sign without `--password-file`.
-- Add a test that a re-saved key (via `-K`) gets the keynum in the comment.
+**`inspect_secret_key` (line 250-288):**
+- The `--no-decrypt` path. Currently uses `seckey.keynum().to_key_id()` which returns
+  zeros for encrypted keys. Change to `seckey.credential_id()`.
+- Line 288: `has_password(&key_id)` → `has_password(&seckey.credential_id())`
+- This is the path at line 288 inside `inspect_secret_key`. The `key_id` variable
+  at line 251 is used for display AND credential check. Split these: use
+  `seckey.keynum().to_key_id()` for display, `seckey.credential_id()` for the
+  credential store check.
 
-**`tests/unit/credential_store.rs`:**
-- Add tests for `save_password_for_path` / `get_password_for_path` / `forget_password_for_path`.
+**`inspect_private` (line 187-237):**
+- The decrypt path. Currently uses `decrypted_keynum.to_key_id()` for the credential
+  check (line 219). Change to `seckey.credential_id()` since the credential is stored
+  under the encrypted keynum, not the decrypted one.
 
-**Compatibility tests:**
-- Verify C minisign can still load key files with the new comment format.
-- Verify this Rust implementation can load old key files without keynum in comment.
+### 5. Tests
 
-### 7. Existing tests — comment assertions
+**Existing 3 new CLI tests (`tests/cli_test.rs`):**
+- Should now pass with the corrected credential store flow.
+- The `generate_key_with_saved_password` helper generates with `--save-password` (which
+  saves under `credential_id()`), and the sign test looks up under `credential_id()`.
 
-Search for tests that assert on the exact comment string content (e.g.,
-`"minisign encrypted secret key"` without trailing key ID). These will need updating
-to account for the appended key ID.
+**Update `test_save_password_flag_with_generate` (line 2079):**
+- Currently verifies with `credential_store::get_password(key_id)` where `key_id` is
+  the decrypted keynum from inspect output. This will need to verify with the
+  encrypted keynum-based credential ID instead. May need to expose credential_id
+  or verify differently (e.g., just verify signing works without password-file).
+
+**Update `test_inspect_shows_password_saved_status` (line 2352):**
+- Currently saves password under decrypted key ID. Needs to save under credential_id.
+
+**Update other existing credential store CLI tests** that directly call
+`credential_store::save_password(key_id, ...)` with the decrypted key ID.
+
+**Add unit test for `credential_id()`:**
+- Encrypted key returns hex of encrypted_keynum
+- Unencrypted key returns same as `keynum().to_key_id()`
+
+## Implementation Order
+
+1. ✅ Fix `Cargo.toml` keyring features (done)
+2. `src/keys.rs` — add `encrypted_keynum()` getter and `credential_id()` method
+3. `src/ops/generate.rs` — add `credential_id` to `GenerateResult`
+4. `src/main.rs` — update all credential store call sites
+5. `src/ops/inspect.rs` — update `has_password` checks
+6. Tests — update existing tests, verify new end-to-end tests pass
+7. Clippy + fmt + full test suite
 
 ## Verification
 
 ```bash
-# Clippy + format
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 cargo fmt
-
-# Fast tests
 gtimeout 120 cargo test
-
-# Slow tests
 gtimeout 120 cargo test -- --ignored
-
-# Specifically run credential store tests
 gtimeout 120 cargo test "credential_store" -- --nocapture
-
-# Specifically run new end-to-end tests
 gtimeout 120 cargo test --test cli_test "test_sign_uses_saved_password" -- --nocapture
 gtimeout 120 cargo test --test cli_test "test_sign_multiple_files_uses_saved" -- --nocapture
 gtimeout 120 cargo test --test cli_test "test_save_password_on_sign_then_reuse" -- --nocapture
-
-# Verify C minisign compatibility (if C minisign installed)
 gtimeout 120 cargo test "compatibility" -- --nocapture
 ```
-
-## Implementation Order
-
-1. Fix `Cargo.toml` keyring features ✅ (already done)
-2. `keys.rs` — `to_file_contents` and `from_file_contents` changes
-3. `credential_store.rs` — path-based fallback functions
-4. `main.rs` — updated lookup/save/forget flows
-5. Tests — update assertions for new comment format, verify end-to-end tests pass
-6. Run full test suite + clippy
