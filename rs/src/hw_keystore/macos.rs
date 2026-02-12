@@ -5,13 +5,24 @@
 
 use super::HardwareKeyStore;
 use crate::errors::{Error, Result};
+use core_foundation::base::{TCFType, ToVoid};
+use core_foundation::data::CFData;
+use core_foundation::dictionary::CFMutableDictionary;
+use core_foundation::error::CFErrorRef;
+use core_foundation::number::CFNumber;
+use p256::elliptic_curve::sec1::ToEncodedPoint;
 use security_framework::access_control::{ProtectionMode, SecAccessControl};
 use security_framework::item::Location;
 use security_framework::item::{ItemClass, ItemSearchOptions, KeyClass, Reference, SearchResult};
-use security_framework::key::{GenerateKeyOptions, KeyType, SecKey, Token};
+use security_framework::key::{Algorithm, GenerateKeyOptions, KeyType, SecKey, Token};
 use security_framework_sys::access_control::{
     kSecAccessControlBiometryCurrentSet, kSecAccessControlPrivateKeyUsage,
 };
+use security_framework_sys::item::{
+    kSecAttrKeyClass, kSecAttrKeyClassPublic, kSecAttrKeySizeInBits, kSecAttrKeyType,
+    kSecAttrKeyTypeECSECPrimeRandom,
+};
+use security_framework_sys::key::SecKeyCreateWithData;
 use zeroize::Zeroizing;
 
 /// macOS Secure Enclave key store
@@ -163,23 +174,42 @@ impl HardwareKeyStore for MacOSKeyStore {
         sec1_bytes_to_p256_public_key(pub_key_data.bytes())
     }
 
-    fn ecdh(&self, _label: &str, _peer_public: &p256::PublicKey) -> Result<Zeroizing<[u8; 32]>> {
+    fn ecdh(&self, label: &str, peer_public: &p256::PublicKey) -> Result<Zeroizing<[u8; 32]>> {
         if !self.is_available() {
             return Err(Error::HardwareKeyStoreUnavailable);
         }
 
-        // TODO: Implement ECDH with:
-        // 1. Find private key in Keychain by label
-        // 2. Import peer public key as SecKey
-        // 3. SecKeyCopyKeyExchangeResult with kSecKeyAlgorithmECDHKeyExchangeStandard
-        // 4. Return 32-byte shared secret
-        //
-        // This triggers biometric auth prompt automatically
+        // 1. Find our SE private key
+        let private_key = find_se_key_by_label(label)?;
 
-        Err(Error::HardwareKeyStoreError {
-            detail: "macOS Secure Enclave ECDH not yet implemented - use mock for testing"
-                .to_string(),
-        })
+        // 2. Import peer public key as SecKey (ONE unsafe helper — see below)
+        let peer_sec_key = import_p256_public_key(peer_public)?;
+
+        // 3. Perform ECDH inside Secure Enclave (safe API)
+        //    This triggers biometric authentication automatically
+        let shared_secret_bytes = private_key
+            .key_exchange(
+                Algorithm::ECDHKeyExchangeStandard,
+                &peer_sec_key,
+                32,   // P-256 shared secret is 32 bytes (x-coordinate)
+                None, // no shared_info — we do our own HKDF in ecies.rs
+            )
+            .map_err(|e| map_cf_error_to_hw_error(&e, "ECDH failed"))?;
+
+        // 4. Convert to fixed-size array with Zeroizing wrapper
+        if shared_secret_bytes.len() != 32 {
+            return Err(Error::HardwareKeyStoreError {
+                detail: format!(
+                    "ECDH produced {} bytes, expected 32",
+                    shared_secret_bytes.len()
+                ),
+            });
+        }
+
+        let mut shared_secret = Zeroizing::new([0u8; 32]);
+        shared_secret.copy_from_slice(&shared_secret_bytes);
+
+        Ok(shared_secret)
     }
 
     fn key_exists(&self, _label: &str) -> Result<bool> {
@@ -253,6 +283,77 @@ fn sec1_bytes_to_p256_public_key(bytes: &[u8]) -> Result<p256::PublicKey> {
     p256::PublicKey::from_sec1_bytes(bytes).map_err(|e| Error::HardwareKeyStoreError {
         detail: format!("invalid P-256 public key ({} bytes): {e}", bytes.len()),
     })
+}
+
+/// Import a `p256::PublicKey` as a `SecKey` for use in ECDH.
+///
+/// This is the ONLY unsafe block in the macOS keystore implementation.
+/// It is required because `security-framework` v3.5.1 does not provide a safe
+/// wrapper around `SecKeyCreateWithData` for importing external key data.
+///
+/// # Safety boundary
+///
+/// The unsafe block calls `SecKeyCreateWithData` with:
+/// - Well-formed `CFData` containing the SEC1-encoded public key
+/// - A properly constructed attributes dictionary
+/// - A mutable error pointer for failure reporting
+///
+/// All Core Foundation objects are wrapped in Rust types that handle
+/// reference counting automatically (no manual `CFRelease` needed).
+fn import_p256_public_key(public_key: &p256::PublicKey) -> Result<SecKey> {
+    let encoded = public_key.to_encoded_point(false); // uncompressed SEC1
+    let key_data = CFData::from_buffer(encoded.as_bytes());
+
+    let mut attrs = CFMutableDictionary::new();
+
+    // SAFETY: These are read-only extern static CFStringRef constants from
+    // the Security framework. Accessing them behind the ToVoid trait is the
+    // standard pattern used throughout security-framework's own source code.
+    unsafe {
+        attrs.add(
+            &kSecAttrKeyType.to_void(),
+            &kSecAttrKeyTypeECSECPrimeRandom.to_void(),
+        );
+        attrs.add(
+            &kSecAttrKeyClass.to_void(),
+            &kSecAttrKeyClassPublic.to_void(),
+        );
+        attrs.add(
+            &kSecAttrKeySizeInBits.to_void(),
+            &CFNumber::from(256i32).to_void(),
+        );
+    }
+
+    let mut error: CFErrorRef = std::ptr::null_mut();
+
+    // SAFETY: SecKeyCreateWithData is a well-documented Apple API.
+    // We pass correctly typed CFData and CFDictionary refs.
+    // The returned SecKey (if non-null) is immediately wrapped in a
+    // Rust SecKey that will CFRelease it on drop.
+    let sec_key_ref = unsafe {
+        SecKeyCreateWithData(
+            key_data.as_concrete_TypeRef(),
+            attrs.to_immutable().as_concrete_TypeRef(),
+            &raw mut error,
+        )
+    };
+
+    if sec_key_ref.is_null() {
+        if !error.is_null() {
+            let cf_error =
+                unsafe { core_foundation::error::CFError::wrap_under_create_rule(error) };
+            return Err(Error::HardwareKeyStoreError {
+                detail: format!("failed to import peer public key: {cf_error}"),
+            });
+        }
+        return Err(Error::HardwareKeyStoreError {
+            detail: "failed to import peer public key".to_string(),
+        });
+    }
+
+    // SAFETY: SecKeyCreateWithData returned a non-null SecKeyRef with +1 retain count.
+    // wrap_under_create_rule takes ownership (will CFRelease on drop).
+    Ok(unsafe { SecKey::wrap_under_create_rule(sec_key_ref) })
 }
 
 /// Map Core Foundation `CFError` to minisign `HardwareKeyStoreError` with context
