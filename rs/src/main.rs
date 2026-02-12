@@ -1,6 +1,5 @@
 use clap::Parser;
 use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
-use minisign::hw_keystore;
 use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
@@ -8,10 +7,10 @@ use minisign::{
     Error, Result,
     cli::{Action, Cli},
     ops::{
-        ChangeOptions, GenerateOptions, InspectOptionsWithHw, InspectPrivateOptions, InspectResult,
-        KeyType, PublicKeySource, RecreateOptions, SecurityLevel, SignOptions,
-        SignatureInspectResult, VerifyOptions, change, generate, inspect_base64, inspect_private,
-        inspect_signature, inspect_with_hw, recreate, sign, verify,
+        ChangeOptions, GenerateOptions, InspectPrivateOptions, InspectResult, KeyType,
+        PublicKeySource, RecreateOptions, SecurityLevel, SignOptions, SignatureInspectResult,
+        VerifyOptions, change, generate, inspect_base64, inspect_private, inspect_signature,
+        recreate, sign, verify,
     },
 };
 use std::io::IsTerminal;

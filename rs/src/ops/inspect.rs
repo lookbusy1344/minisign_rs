@@ -5,7 +5,6 @@
 
 use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::errors::{Error, Result};
-use crate::hw_keystore::HardwareKeyStore;
 use crate::keys::{PubkeyStruct, SeckeyStruct};
 use crate::signature::SignatureAlgorithm;
 use std::fs;
@@ -97,39 +96,6 @@ impl<'a> InspectPrivateOptions<'a> {
     }
 }
 
-/// Options for inspecting a key file with hardware key store
-pub struct InspectOptionsWithHw<'a> {
-    /// Path to the key file
-    key_file: &'a std::path::Path,
-    /// Hardware key store for checking HW key availability
-    hw_store: &'a dyn HardwareKeyStore,
-}
-
-impl<'a> InspectOptionsWithHw<'a> {
-    /// Create new inspect options with hardware key store
-    ///
-    /// # Arguments
-    ///
-    /// * `key_file` - Path to the key file
-    /// * `hw_store` - Hardware key store for checking HW key availability
-    #[must_use]
-    pub const fn new(key_file: &'a std::path::Path, hw_store: &'a dyn HardwareKeyStore) -> Self {
-        Self { key_file, hw_store }
-    }
-
-    /// Get the key file path
-    #[must_use]
-    pub const fn key_file(&self) -> &std::path::Path {
-        self.key_file
-    }
-
-    /// Get the hardware key store
-    #[must_use]
-    pub const fn hw_store(&self) -> &dyn HardwareKeyStore {
-        self.hw_store
-    }
-}
-
 /// Result of inspecting a key file
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InspectResult {
@@ -143,16 +109,6 @@ pub struct InspectResult {
     pub security_level: Option<SecurityLevel>,
     /// KDF information (for encrypted secret keys)
     pub kdf_info: Option<KdfInfo>,
-    /// Whether hardware key protection is enrolled
-    pub hw_enrolled: bool,
-    /// Hardware key label (if enrolled)
-    pub hw_label: Option<String>,
-    /// Hardware backend name (if enrolled and backend is available/unavailable)
-    pub hw_backend_name: Option<&'static str>,
-    /// Whether the hardware key is available (None if backend unavailable)
-    pub hw_key_available: Option<bool>,
-    /// Whether to show a warning that HW is enrolled but unavailable
-    pub hw_unavailable_warning: bool,
 }
 
 /// Type of key being inspected
@@ -271,11 +227,6 @@ pub fn inspect_private(
                 is_fallback,
                 weakness_multiplier,
             }),
-            hw_enrolled: false,
-            hw_label: None,
-            hw_backend_name: None,
-            hw_key_available: None,
-            hw_unavailable_warning: false,
         });
     }
 
@@ -302,11 +253,6 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
             key_type: KeyType::SecretUnencrypted,
             security_level: Some(SecurityLevel::None),
             kdf_info: None,
-            hw_enrolled: false,
-            hw_label: None,
-            hw_backend_name: None,
-            hw_key_available: None,
-            hw_unavailable_warning: false,
         });
     }
 
@@ -345,11 +291,6 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
             is_fallback,
             weakness_multiplier,
         }),
-        hw_enrolled: false,
-        hw_label: None,
-        hw_backend_name: None,
-        hw_key_available: None,
-        hw_unavailable_warning: false,
     })
 }
 
@@ -364,11 +305,6 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
         key_type: KeyType::Public,
         security_level: None,
         kdf_info: None,
-        hw_enrolled: false,
-        hw_label: None,
-        hw_backend_name: None,
-        hw_key_available: None,
-        hw_unavailable_warning: false,
     }
 }
 
@@ -381,61 +317,6 @@ pub struct SignatureInspectResult {
     pub key_id_words: String,
     /// Signature algorithm type
     pub algorithm: SignatureAlgorithm,
-}
-
-/// Inspect a key file with hardware key store information
-///
-/// This function loads the key file and checks for hardware key enrollment.
-/// If a hardware key slot is present, it checks whether the hardware backend
-/// is available and whether the key exists in the hardware.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - The file cannot be read
-/// - The file format is invalid
-/// - The key structure cannot be parsed
-pub fn inspect_with_hw(options: &InspectOptionsWithHw<'_>) -> Result<InspectResult> {
-    use crate::ops::file_utils::load_secret_key;
-
-    let contents = fs::read_to_string(options.key_file())
-        .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
-
-    // Try to parse as secret key first
-    if let Ok((seckey, hw_slot)) = load_secret_key(options.key_file()) {
-        let mut result = inspect_secret_key(&seckey)?;
-
-        // Check for HW enrollment
-        if let Some(slot) = hw_slot {
-            result.hw_enrolled = true;
-            result.hw_label = Some(slot.hw_key_label.clone());
-
-            // Check hardware backend availability
-            let hw_store = options.hw_store();
-            if hw_store.is_available() {
-                result.hw_backend_name = Some(hw_store.display_name());
-                // Check if the key exists in hardware
-                result.hw_key_available = Some(hw_store.key_exists(&slot.hw_key_label)?);
-                result.hw_unavailable_warning = false;
-            } else {
-                // Hardware backend not available
-                result.hw_backend_name = Some(hw_store.display_name());
-                result.hw_key_available = None;
-                result.hw_unavailable_warning = true;
-            }
-        }
-
-        return Ok(result);
-    }
-
-    // Try to parse as public key
-    if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
-        return Ok(inspect_public_key(&pubkey));
-    }
-
-    Err(Error::InvalidKeyFormat(
-        "File is not a valid minisign key".to_string(),
-    ))
 }
 
 /// Inspect a signature file and return key ID information

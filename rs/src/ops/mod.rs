@@ -14,9 +14,8 @@ pub mod verify;
 pub use change::{ChangeOptions, ChangeResult, change};
 pub use generate::{GenerateOptions, GenerateResult, generate};
 pub use inspect::{
-    InspectOptions, InspectOptionsWithHw, InspectPrivateOptions, InspectResult, KeyType,
-    SecurityLevel, SignatureInspectResult, inspect, inspect_base64, inspect_private,
-    inspect_signature, inspect_with_hw,
+    InspectOptions, InspectPrivateOptions, InspectResult, KeyType, SecurityLevel,
+    SignatureInspectResult, inspect, inspect_base64, inspect_private, inspect_signature,
 };
 pub use recreate::{RecreateOptions, RecreateResult, recreate};
 pub use sign::{SignOptions, SignResult, sign};
