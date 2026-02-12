@@ -125,7 +125,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
             match minisign::credential_store::save_password(result.credential_id(), pwd) {
                 Ok(()) => {
                     if !cli.quiet {
-                        println!("Password saved to OS credential store");
+                        eprintln!("Password saved to OS credential store");
                     }
                 }
                 Err(e) => {
@@ -184,7 +184,7 @@ fn save_password_to_credential_store(
             match minisign::credential_store::save_password(key_id, pwd) {
                 Ok(()) => {
                     if !quiet {
-                        println!("Password saved to OS credential store");
+                        eprintln!("Password saved to OS credential store");
                     }
                 }
                 Err(e) => {
@@ -573,7 +573,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
             match minisign::credential_store::save_password(&result.credential_id, pwd) {
                 Ok(()) => {
                     if !cli.quiet {
-                        println!("Password saved to OS credential store");
+                        eprintln!("Password saved to OS credential store");
                     }
                 }
                 Err(e) => {
