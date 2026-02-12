@@ -7,7 +7,6 @@ use crate::{
     Result,
     crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
     errors::Error,
-    hw_keystore::HardwareKeyStore,
     signature::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
@@ -296,30 +295,9 @@ pub struct FileSignResult {
 fn load_and_decrypt_key(
     secret_key_file: &Path,
     password: Option<&[u8]>,
-    hw: Option<&dyn HardwareKeyStore>,
 ) -> Result<(SecretKey, crate::crypto::KeyNum)> {
-    let (seckey, hw_slot) = load_secret_key(secret_key_file)?;
+    let seckey = load_secret_key(secret_key_file)?;
 
-    // Try hardware decryption first if HW slot is present
-    if let Some(slot) = &hw_slot
-        && let Some(hw_store) = hw
-        && hw_store.is_available()
-    {
-        // Attempt hardware decryption
-        match seckey.decrypt_with_hw(hw_store, slot) {
-            Ok(result) => {
-                // HW decryption succeeded
-                return Ok(result);
-            }
-            Err(e) => {
-                // HW decryption failed - will fall back to password
-                // Log the reason (auth denied, key not found, etc.)
-                eprintln!("Hardware key unavailable ({e}), falling back to password");
-            }
-        }
-    }
-
-    // Fall back to password decryption (or unencrypted key)
     if seckey.is_encrypted() {
         let pwd = password.ok_or(Error::PasswordRequired)?;
         seckey.decrypt(pwd)
@@ -391,9 +369,8 @@ pub fn sign_single_file(
     message_file: &Path,
     options: &SignOptions<'_>,
     password: Option<&[u8]>,
-    hw: Option<&dyn HardwareKeyStore>,
 ) -> Result<SignResult> {
-    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password, hw)?;
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password)?;
     sign_file_with_key(message_file, &secret_key, keynum, options)
 }
 
@@ -444,9 +421,8 @@ pub fn sign_single_file(
 pub fn sign(
     options: &SignOptions<'_>,
     password: Option<&[u8]>,
-    hw: Option<&dyn HardwareKeyStore>,
 ) -> Result<SignResult> {
-    sign_single_file(options.message_file(), options, password, hw)
+    sign_single_file(options.message_file(), options, password)
 }
 
 /// Sign multiple files (parallel or sequential)
@@ -472,7 +448,6 @@ pub fn sign_multiple_files(
     files: Vec<PathBuf>,
     options: &SignOptions<'_>,
     password: Option<&[u8]>,
-    hw: Option<&dyn HardwareKeyStore>,
     sequential: bool,
 ) -> Result<()> {
     // Deduplicate files to prevent race conditions when signing the same file multiple times
@@ -494,7 +469,7 @@ pub fn sign_multiple_files(
 
     // Fast path for single file
     if files.len() == 1 {
-        sign_single_file(&files[0], options, password, hw)?;
+        sign_single_file(&files[0], options, password)?;
         println!(
             "Signed: {} → {}.minisig",
             files[0].display(),
@@ -504,7 +479,7 @@ pub fn sign_multiple_files(
     }
 
     // Load and decrypt key once — avoids N-1 redundant scrypt derivations
-    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password, hw)?;
+    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password)?;
 
     // Show key ID once at the top (like verification does)
     if !options.quiet() {
