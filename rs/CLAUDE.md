@@ -96,8 +96,8 @@ tests/
 ```
 
 ## Testing
-- **Fast tests** (227 tests): Default, use N=2^14 for scrypt
-- **Slow tests** (3 tests): `--ignored`, use production N=2^20
+- **Fast tests** (416 tests): Default, use N=2^14 for scrypt
+- **Slow tests** (10 tests): `--ignored`, use production N=2^20
 - Must test compatibility with C minisign after crypto changes
 - C minisign must be installed for compatibility tests
 - **IMPORTANT**: All tests MUST be in the `tests/` directory (not `src/`) to enable proper CodeQL security analysis exclusions

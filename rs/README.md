@@ -32,7 +32,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **230 total tests** covering all operations and CLI behavior
+- **426 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Credential store tests (skip gracefully when OS keyring unavailable)
@@ -41,9 +41,9 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Edge case tests for unicode, symlinks, and large files
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
-- **3 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (227 tests) using optimized scrypt parameters (~3 seconds)
-- **Slow test suite** (3 tests) with production scrypt parameters (~2 seconds)
+- **10 slow security tests** using production scrypt parameters (marked `#[ignore]`)
+- **Fast test suite** (416 tests) using optimized scrypt parameters (~10 seconds)
+- **Slow test suite** (10 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
