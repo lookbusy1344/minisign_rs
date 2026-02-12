@@ -186,6 +186,8 @@ pub struct GenerateResult {
     keynum_hex: String,
     /// The full public key in base64 format (for -P flag)
     public_key_base64: String,
+    /// Credential store lookup key (for --save-password)
+    credential_id: String,
 }
 
 impl GenerateResult {
@@ -211,6 +213,12 @@ impl GenerateResult {
     #[must_use]
     pub fn public_key_base64(&self) -> &str {
         &self.public_key_base64
+    }
+
+    /// Get the credential store lookup key
+    #[must_use]
+    pub fn credential_id(&self) -> &str {
+        &self.credential_id
     }
 }
 
@@ -325,6 +333,9 @@ pub fn generate_with_log_n(
     // Create the public key structure
     let pubkey = PubkeyStruct::new(keynum, public_key);
 
+    // Capture credential ID for credential store
+    let credential_id = seckey.credential_id();
+
     // Generate comments
     let keynum_hex = keynum.to_key_id();
     let default_comment = format!("minisign public key {keynum_hex}");
@@ -356,6 +367,7 @@ pub fn generate_with_log_n(
         public_key_file: options.public_key_file.to_path_buf(),
         keynum_hex,
         public_key_base64,
+        credential_id,
     })
 }
 
