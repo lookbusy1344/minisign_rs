@@ -814,6 +814,8 @@ impl SeckeyStruct {
         // First line is the untrusted comment (ignored for parsing)
         // Second line is base64-encoded SeckeyStruct
         let data = decode_base64(lines[1])?;
+        Self::from_bytes(&data)
+    }
 
     /// Serialize to file format (comment + base64)
     #[must_use]
