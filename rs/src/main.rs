@@ -119,6 +119,25 @@ fn handle_generate(cli: &Cli) -> Result<()> {
             .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
     }
 
+    // Save password to credential store if requested
+    if cli.save_password {
+        if let Some(pwd) = &password {
+            match minisign::credential_store::save_password(result.keynum_hex(), pwd) {
+                Ok(()) => {
+                    if !cli.quiet {
+                        println!("Password saved to OS credential store");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to save password to credential store: {e}");
+                    eprintln!("The key was still created successfully.");
+                }
+            }
+        } else {
+            eprintln!("Warning: --save-password ignored (key has no password)");
+        }
+    }
+
     if !cli.quiet {
         println!(
             "The secret key was saved as {} - Keep it secret!",
@@ -135,6 +154,47 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Get password for a key: check credential store first, then prompt
+fn get_password_with_credential_store(
+    key_id: &str,
+    quiet: bool,
+    password_file: Option<&std::path::Path>,
+) -> Result<Option<Zeroizing<String>>> {
+    if let Some(saved_pwd) = minisign::credential_store::get_password(key_id) {
+        if !quiet {
+            eprintln!("Using saved password from credential store");
+        }
+        Ok(Some(saved_pwd))
+    } else {
+        Ok(Some(prompt_password("Password: ", password_file)?))
+    }
+}
+
+/// Save password to credential store if requested
+fn save_password_to_credential_store(
+    key_id: &str,
+    password: Option<&Zeroizing<String>>,
+    save_password: bool,
+    quiet: bool,
+) {
+    if save_password {
+        if let Some(pwd) = password {
+            match minisign::credential_store::save_password(key_id, pwd) {
+                Ok(()) => {
+                    if !quiet {
+                        println!("Password saved to OS credential store");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to save password to credential store: {e}");
+                }
+            }
+        } else {
+            eprintln!("Warning: --save-password ignored (key has no password)");
+        }
+    }
 }
 
 fn handle_sign(cli: &Cli) -> Result<()> {
@@ -164,11 +224,15 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
-    // Prompt for password (we'll check if the key needs it later)
+    // Load secret key to get key ID for credential store lookup
+    let seckey = load_secret_key(secret_key_file)?;
+    let key_id = seckey.keynum().to_key_id();
+
+    // Try to get password from credential store first, then prompt if needed
     let password = if cli.no_password {
         None
     } else {
-        Some(prompt_password("Password: ", cli.password_file.as_deref())?)
+        get_password_with_credential_store(&key_id, cli.quiet, cli.password_file.as_deref())?
     };
 
     // Display working message for signing operation
@@ -206,6 +270,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         let options = builder.build();
 
         let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
+
+        save_password_to_credential_store(&key_id, password.as_ref(), cli.save_password, cli.quiet);
 
         if !cli.quiet {
             println!(
@@ -246,6 +312,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             password.as_ref().map(|p| p.as_bytes()),
             cli.sequential,
         )?;
+
+        save_password_to_credential_store(&key_id, password.as_ref(), cli.save_password, cli.quiet);
     }
 
     Ok(())
@@ -369,9 +437,17 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     // Load the key to check if it's encrypted
     let seckey = load_secret_key(secret_key_file)?;
 
-    // Prompt for password only if the key is encrypted
+    // Get password: check credential store first, then prompt if needed
     let password = if seckey.is_encrypted() {
-        Some(prompt_password("Password: ", cli.password_file.as_deref())?)
+        let key_id = seckey.keynum().to_key_id();
+        if let Some(saved_pwd) = minisign::credential_store::get_password(&key_id) {
+            if !cli.quiet {
+                eprintln!("Using saved password from credential store");
+            }
+            Some(saved_pwd)
+        } else {
+            Some(prompt_password("Password: ", cli.password_file.as_deref())?)
+        }
     } else {
         None
     };
@@ -400,17 +476,40 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
-    // Load the key to check if it's encrypted (without decrypting)
+    // Load the key to get key ID and check if it's encrypted
     let seckey = load_secret_key(secret_key_file)?;
+    let key_id = seckey.keynum().to_key_id();
 
-    // Prompt for current password ONLY if the key is encrypted
-    // -W flag only affects the NEW password (desired end state)
-    // We MUST have the old password to decrypt an encrypted key
+    // Handle --forget-password (standalone usage)
+    if cli.forget_password {
+        match minisign::credential_store::forget_password(&key_id) {
+            Ok(()) => {
+                if !cli.quiet {
+                    println!("Password removed from credential store");
+                }
+                return Ok(());
+            }
+            Err(e) => {
+                return Err(Error::CredentialStoreError(format!(
+                    "Failed to remove password: {e}"
+                )));
+            }
+        }
+    }
+
+    // Get current password: check credential store first, then prompt if needed
     let current_password = if seckey.is_encrypted() {
-        Some(prompt_password(
-            "Current password: ",
-            cli.password_file.as_deref(),
-        )?)
+        if let Some(saved_pwd) = minisign::credential_store::get_password(&key_id) {
+            if !cli.quiet {
+                eprintln!("Using saved password from credential store");
+            }
+            Some(saved_pwd)
+        } else {
+            Some(prompt_password(
+                "Current password: ",
+                cli.password_file.as_deref(),
+            )?)
+        }
     } else {
         None
     };
@@ -452,6 +551,24 @@ fn handle_change(cli: &Cli) -> Result<()> {
         current_password.as_ref().map(|p| p.as_bytes()),
         new_password.as_ref().map(|p| p.as_bytes()),
     )?;
+
+    // Save new password to credential store if requested
+    if cli.save_password {
+        if let Some(pwd) = &new_password {
+            match minisign::credential_store::save_password(&key_id, pwd) {
+                Ok(()) => {
+                    if !cli.quiet {
+                        println!("Password saved to OS credential store");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to save password to credential store: {e}");
+                }
+            }
+        } else {
+            eprintln!("Warning: --save-password ignored (key has no password)");
+        }
+    }
 
     if !cli.quiet {
         println!("Password changed for {}", result.secret_key_file.display());
@@ -504,6 +621,10 @@ fn display_inspect_result(result: &InspectResult) {
         KeyType::SecretEncrypted => {
             println!("├─ Encrypted: Yes");
             println!("├─ KDF Algorithm: Scrypt");
+            println!(
+                "├─ Password saved: {}",
+                if result.password_saved { "Yes" } else { "No" }
+            );
 
             if let Some(kdf) = &result.kdf_info {
                 println!("└─ KDF Parameters:");
@@ -538,7 +659,11 @@ fn display_inspect_result(result: &InspectResult) {
             }
         }
         KeyType::SecretUnencrypted => {
-            println!("└─ Encrypted: No");
+            println!("├─ Encrypted: No");
+            println!(
+                "└─ Password saved: {}",
+                if result.password_saved { "Yes" } else { "No" }
+            );
             println!();
             println!("*** WARNING: This key is stored in plaintext.");
             println!("   Anyone with file access can use it without a password.");

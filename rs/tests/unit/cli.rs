@@ -32,7 +32,8 @@ fn test_action_detection() {
         password_file: None,
         allow_kdf_fallback: false,
         force_weak_kdf: false,
-        hardware_key: false,
+        save_password: false,
+        forget_password: false,
         help: None,
         version: None,
     };
@@ -68,7 +69,8 @@ fn test_no_action() {
         password_file: None,
         allow_kdf_fallback: false,
         force_weak_kdf: false,
-        hardware_key: false,
+        save_password: false,
+        forget_password: false,
         help: None,
         version: None,
     };
@@ -104,7 +106,8 @@ fn test_inspect_action_detection() {
         password_file: None,
         allow_kdf_fallback: false,
         force_weak_kdf: false,
-        hardware_key: false,
+        save_password: false,
+        forget_password: false,
         help: None,
         version: None,
     };
@@ -190,7 +193,8 @@ fn test_allow_kdf_fallback_flag_defaults_to_false() {
         version: None,
         allow_kdf_fallback: false,
         force_weak_kdf: false,
-        hardware_key: false,
+        save_password: false,
+        forget_password: false,
     };
     assert!(!cli.allow_kdf_fallback);
 }
@@ -227,7 +231,8 @@ fn test_allow_kdf_fallback_flag_can_be_enabled() {
         version: None,
         allow_kdf_fallback: true,
         force_weak_kdf: false,
-        hardware_key: false,
+        save_password: false,
+        forget_password: false,
     };
     assert!(cli.allow_kdf_fallback);
 }
@@ -352,19 +357,37 @@ fn cli_sequential_flag_can_be_set() {
 }
 
 #[test]
-fn cli_hardware_key_flag_defaults_false() {
+fn cli_save_password_flag_defaults_false() {
     let cli = Cli::try_parse_from(["minisign_rs", "-G"]).unwrap();
-    assert!(!cli.hardware_key);
+    assert!(!cli.save_password);
 }
 
 #[test]
-fn cli_hardware_key_long_flag() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-G", "--hardware-key"]).unwrap();
-    assert!(cli.hardware_key);
+fn cli_save_password_long_flag() {
+    let cli = Cli::try_parse_from(["minisign_rs", "-G", "--save-password"]).unwrap();
+    assert!(cli.save_password);
 }
 
 #[test]
-fn cli_hardware_key_short_alias() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-G", "--hw"]).unwrap();
-    assert!(cli.hardware_key);
+fn cli_save_password_short_alias() {
+    let cli = Cli::try_parse_from(["minisign_rs", "-G", "--sp"]).unwrap();
+    assert!(cli.save_password);
+}
+
+#[test]
+fn cli_forget_password_flag_defaults_false() {
+    let cli = Cli::try_parse_from(["minisign_rs", "-K"]).unwrap();
+    assert!(!cli.forget_password);
+}
+
+#[test]
+fn cli_forget_password_long_flag() {
+    let cli = Cli::try_parse_from(["minisign_rs", "-K", "--forget-password"]).unwrap();
+    assert!(cli.forget_password);
+}
+
+#[test]
+fn cli_forget_password_short_alias() {
+    let cli = Cli::try_parse_from(["minisign_rs", "-K", "--fp"]).unwrap();
+    assert!(cli.forget_password);
 }

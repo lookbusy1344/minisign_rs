@@ -131,9 +131,13 @@ pub struct Cli {
     #[cfg_attr(debug_assertions, arg(long = "force-weak-kdf", hide = true))]
     pub force_weak_kdf: bool,
 
-    /// Enroll hardware key protection during generate (--hardware-key or --hw)
-    #[arg(long = "hardware-key", visible_alias = "hw")]
-    pub hardware_key: bool,
+    /// Save password to OS credential store after successful use
+    #[arg(long = "save-password", visible_alias = "sp")]
+    pub save_password: bool,
+
+    /// Remove saved password from OS credential store
+    #[arg(long = "forget-password", visible_alias = "fp")]
+    pub forget_password: bool,
 
     /// Show help
     #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]

@@ -109,6 +109,8 @@ pub struct InspectResult {
     pub security_level: Option<SecurityLevel>,
     /// KDF information (for encrypted secret keys)
     pub kdf_info: Option<KdfInfo>,
+    /// Whether a password is saved in the OS credential store for this key
+    pub password_saved: bool,
 }
 
 /// Type of key being inspected
@@ -213,8 +215,11 @@ pub fn inspect_private(
 
         let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
+        let key_id = decrypted_keynum.to_key_id();
+        let password_saved = crate::credential_store::has_password(&key_id);
+
         return Ok(InspectResult {
-            key_id: decrypted_keynum.to_key_id(),
+            key_id,
             key_id_words: crate::wordlist::keynum_to_words(&decrypted_keynum),
             key_type: KeyType::SecretEncrypted,
             security_level: Some(security_level),
@@ -227,6 +232,7 @@ pub fn inspect_private(
                 is_fallback,
                 weakness_multiplier,
             }),
+            password_saved,
         });
     }
 
@@ -247,12 +253,14 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
 
     if !seckey.is_encrypted() {
         // Unencrypted key
+        let password_saved = crate::credential_store::has_password(&key_id);
         return Ok(InspectResult {
             key_id,
             key_id_words,
             key_type: KeyType::SecretUnencrypted,
             security_level: Some(SecurityLevel::None),
             kdf_info: None,
+            password_saved,
         });
     }
 
@@ -277,6 +285,8 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
     // Classify security level
     let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
+    let password_saved = crate::credential_store::has_password(&key_id);
+
     Ok(InspectResult {
         key_id,
         key_id_words,
@@ -291,6 +301,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
             is_fallback,
             weakness_multiplier,
         }),
+        password_saved,
     })
 }
 
@@ -305,6 +316,7 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
         key_type: KeyType::Public,
         security_level: None,
         kdf_info: None,
+        password_saved: false, // Public keys don't have passwords
     }
 }
 
