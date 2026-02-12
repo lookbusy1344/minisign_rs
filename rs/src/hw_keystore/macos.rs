@@ -212,26 +212,36 @@ impl HardwareKeyStore for MacOSKeyStore {
         Ok(shared_secret)
     }
 
-    fn key_exists(&self, _label: &str) -> Result<bool> {
+    fn key_exists(&self, label: &str) -> Result<bool> {
         if !self.is_available() {
-            return Err(Error::HardwareKeyStoreUnavailable);
+            return Ok(false);
         }
 
-        // TODO: Search Keychain for key with matching application tag
-        // Use ItemSearchOptions with kSecAttrApplicationTag filter
-
-        Ok(false)
+        match find_se_key_by_label(label) {
+            Ok(_) => Ok(true),
+            Err(Error::HardwareKeyNotFound { .. }) => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 
-    fn delete_key(&self, _label: &str) -> Result<()> {
+    fn delete_key(&self, label: &str) -> Result<()> {
         if !self.is_available() {
             return Err(Error::HardwareKeyStoreUnavailable);
         }
 
-        // TODO: Use SecItemDelete with query matching application tag
-        // Returns errSecSuccess or errSecItemNotFound (both OK)
+        let result = ItemSearchOptions::new()
+            .class(ItemClass::key())
+            .key_class(KeyClass::private())
+            .label(label)
+            .delete();
 
-        Ok(())
+        match result {
+            Ok(()) => Ok(()),
+            Err(e) if e.code() == -25300 => Ok(()), // errSecItemNotFound — idempotent
+            Err(e) => Err(Error::HardwareKeyStoreError {
+                detail: format!("failed to delete key: {e}"),
+            }),
+        }
     }
 
     fn is_available(&self) -> bool {
