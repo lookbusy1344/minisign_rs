@@ -7,6 +7,7 @@ use super::HardwareKeyStore;
 use crate::errors::{Error, Result};
 use security_framework::access_control::{ProtectionMode, SecAccessControl};
 use security_framework::item::Location;
+use security_framework::item::{ItemClass, ItemSearchOptions, KeyClass, Reference, SearchResult};
 use security_framework::key::{GenerateKeyOptions, KeyType, SecKey, Token};
 use security_framework_sys::access_control::{
     kSecAccessControlBiometryCurrentSet, kSecAccessControlPrivateKeyUsage,
@@ -136,21 +137,30 @@ impl HardwareKeyStore for MacOSKeyStore {
         sec1_bytes_to_p256_public_key(pub_key_data.bytes())
     }
 
-    fn get_public_key(&self, _label: &str) -> Result<p256::PublicKey> {
+    fn get_public_key(&self, label: &str) -> Result<p256::PublicKey> {
         if !self.is_available() {
             return Err(Error::HardwareKeyStoreUnavailable);
         }
 
-        // TODO: Implement public key retrieval from keychain
-        // This should:
-        // 1. Search keychain for key with label
-        // 2. Extract public key component
-        // 3. Convert to p256::PublicKey format
-        Err(Error::HardwareKeyStoreError {
-            detail:
-                "macOS Secure Enclave public key retrieval not yet implemented - use mock for testing"
-                    .to_string(),
-        })
+        // 1. Search keychain for private key by label (safe API)
+        let private_key = find_se_key_by_label(label)?;
+
+        // 2. Extract public key (safe API)
+        let public_key_ref =
+            private_key
+                .public_key()
+                .ok_or_else(|| Error::HardwareKeyStoreError {
+                    detail: "failed to get public key from SE private key".to_string(),
+                })?;
+
+        // 3. Export and convert (same as generate_key)
+        let pub_key_data = public_key_ref.external_representation().ok_or_else(|| {
+            Error::HardwareKeyStoreError {
+                detail: "failed to export public key representation".to_string(),
+            }
+        })?;
+
+        sec1_bytes_to_p256_public_key(pub_key_data.bytes())
     }
 
     fn ecdh(&self, _label: &str, _peer_public: &p256::PublicKey) -> Result<Zeroizing<[u8; 32]>> {
@@ -206,6 +216,37 @@ impl HardwareKeyStore for MacOSKeyStore {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/// Search Keychain for a private key matching the given label.
+/// Returns the `SecKey` reference for further operations.
+fn find_se_key_by_label(label: &str) -> Result<SecKey> {
+    let results = ItemSearchOptions::new()
+        .class(ItemClass::key())
+        .key_class(KeyClass::private())
+        .label(label)
+        .load_refs(true)
+        .limit(1)
+        .search()
+        .map_err(|e| {
+            // errSecItemNotFound = -25300
+            if e.code() == -25300 {
+                Error::HardwareKeyNotFound {
+                    label: label.to_string(),
+                }
+            } else {
+                Error::HardwareKeyStoreError {
+                    detail: format!("keychain search failed: {e}"),
+                }
+            }
+        })?;
+
+    match results.into_iter().next() {
+        Some(SearchResult::Ref(Reference::Key(sec_key))) => Ok(sec_key),
+        _ => Err(Error::HardwareKeyNotFound {
+            label: label.to_string(),
+        }),
+    }
+}
 
 /// Convert uncompressed SEC1 bytes (65 bytes: 0x04 || x || y) to `p256::PublicKey`
 fn sec1_bytes_to_p256_public_key(bytes: &[u8]) -> Result<p256::PublicKey> {
