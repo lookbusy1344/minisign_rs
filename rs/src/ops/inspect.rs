@@ -216,7 +216,8 @@ pub fn inspect_private(
         let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
         let key_id = decrypted_keynum.to_key_id();
-        let password_saved = crate::credential_store::has_password(&key_id);
+        let credential_id = seckey.credential_id();
+        let password_saved = crate::credential_store::has_password(&credential_id);
 
         return Ok(InspectResult {
             key_id,
@@ -250,10 +251,11 @@ pub fn inspect_private(
 fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
     let key_id = seckey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(seckey.keynum());
+    let credential_id = seckey.credential_id();
 
     if !seckey.is_encrypted() {
         // Unencrypted key
-        let password_saved = crate::credential_store::has_password(&key_id);
+        let password_saved = crate::credential_store::has_password(&credential_id);
         return Ok(InspectResult {
             key_id,
             key_id_words,
@@ -285,7 +287,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
     // Classify security level
     let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
-    let password_saved = crate::credential_store::has_password(&key_id);
+    let password_saved = crate::credential_store::has_password(&credential_id);
 
     Ok(InspectResult {
         key_id,
