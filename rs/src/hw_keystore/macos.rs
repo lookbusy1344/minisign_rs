@@ -392,46 +392,48 @@ mod tests {
         let keystore = MacOSKeyStore::new();
         assert_eq!(keystore.display_name(), "Secure Enclave");
 
-        // Currently not implemented, so not available
-        assert!(!keystore.is_available());
+        // Availability depends on hardware (SE + Touch ID enrolled)
+        // Returns true on Apple Silicon/T2 Macs with biometric enrolled
+        let _available = keystore.is_available();
     }
 
     #[test]
-    fn test_macos_unavailable_returns_error() {
+    fn test_macos_operations_when_unavailable() {
         let keystore = MacOSKeyStore::new();
 
-        // All operations should return unavailable error
+        // If SE is unavailable, operations should return unavailable error
+        // (Skip test if SE is actually available)
+        if keystore.is_available() {
+            return;
+        }
+
         let result = keystore.generate_key("test");
         assert!(matches!(result, Err(Error::HardwareKeyStoreUnavailable)));
 
-        let result = keystore.key_exists("test");
+        let result = keystore.get_public_key("test");
         assert!(matches!(result, Err(Error::HardwareKeyStoreUnavailable)));
 
         let result = keystore.delete_key("test");
         assert!(matches!(result, Err(Error::HardwareKeyStoreUnavailable)));
     }
 
-    // Full integration test requires completing the implementation
+    // Full integration test requires hardware and Touch ID interaction
     #[test]
-    #[ignore = "requires complete macOS Secure Enclave implementation"]
+    #[ignore = "requires Secure Enclave hardware and Touch ID"]
     fn test_macos_generate_and_delete() {
-        // This test is a template for when implementation is complete
-        if std::env::var("MINISIGN_TEST_HW_KEYSTORE").is_err() {
-            return;
-        }
-
         let keystore = MacOSKeyStore::new();
         if !keystore.is_available() {
             eprintln!("Secure Enclave not available, skipping test");
             return;
         }
 
-        let label = "minisign-test-key-001";
+        let label = "minisign:test_integration_001";
 
         // Clean up
         let _ = keystore.delete_key(label);
+        assert!(!keystore.key_exists(label).unwrap());
 
-        // Generate key
+        // Generate key (triggers Touch ID prompt)
         let public_key = keystore
             .generate_key(label)
             .expect("Failed to generate key");
@@ -440,8 +442,61 @@ mod tests {
         // Verify exists
         assert!(keystore.key_exists(label).unwrap());
 
+        // Retrieve public key
+        let retrieved = keystore
+            .get_public_key(label)
+            .expect("Failed to retrieve public key");
+        assert_eq!(public_key, retrieved);
+
         // Delete
         keystore.delete_key(label).expect("Failed to delete key");
         assert!(!keystore.key_exists(label).unwrap());
+    }
+
+    #[test]
+    #[ignore = "requires Secure Enclave hardware and Touch ID"]
+    fn test_macos_ecdh_round_trip() {
+        use p256::ecdh::EphemeralSecret;
+        use rand::thread_rng;
+
+        let keystore = MacOSKeyStore::new();
+        if !keystore.is_available() {
+            return;
+        }
+
+        let label = "minisign:test_ecdh_001";
+        let _ = keystore.delete_key(label);
+
+        // Generate HW key (triggers Touch ID)
+        let _hw_pub = keystore.generate_key(label).expect("generate failed");
+
+        // Ephemeral peer key
+        let peer_secret = EphemeralSecret::random(&mut thread_rng());
+        let peer_public = p256::PublicKey::from(&peer_secret);
+
+        // ECDH inside SE (triggers Touch ID)
+        let shared_secret = keystore.ecdh(label, &peer_public).expect("ecdh failed");
+        assert_eq!(shared_secret.len(), 32);
+
+        // Verify the shared secret is non-zero
+        assert!(shared_secret.iter().any(|&b| b != 0));
+
+        // Cleanup
+        keystore.delete_key(label).expect("delete failed");
+    }
+
+    #[test]
+    #[ignore = "requires Secure Enclave hardware and Touch ID"]
+    fn test_macos_delete_idempotent() {
+        let keystore = MacOSKeyStore::new();
+        if !keystore.is_available() {
+            return;
+        }
+
+        let label = "minisign:test_idempotent_001";
+        // Delete a key that doesn't exist — should succeed
+        keystore
+            .delete_key(label)
+            .expect("idempotent delete failed");
     }
 }
