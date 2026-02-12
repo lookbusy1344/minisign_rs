@@ -2475,3 +2475,272 @@ fn test_forget_password_is_idempotent() {
         .assert()
         .success();
 }
+
+/// Helper: generate a key with --save-password, return the key ID string.
+/// Leaves the password saved in the credential store for subsequent test steps.
+fn generate_key_with_saved_password(
+    sk_path: &std::path::Path,
+    pk_path: &std::path::Path,
+    password: &str,
+) -> String {
+    let password_file = sk_path.parent().unwrap().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(sk_path)
+        .arg("-p")
+        .arg(pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract key ID via inspect
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(|s| s.trim().to_string())
+        .expect("Key ID not found in inspect output")
+}
+
+#[test]
+#[serial_test::serial]
+fn test_sign_uses_saved_password_from_credential_store() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    fs::write(&message_file, "test message for credential store signing").unwrap();
+
+    let key_id =
+        generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_sign_test");
+
+    // Sign WITHOUT --password-file — must auto-retrieve from credential store.
+    // If credential store retrieval fails, the command will block on stdin
+    // (which assert_cmd closes), causing a failure.
+    let sign_output = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&sign_output.stderr);
+    assert!(
+        stderr.contains("Using saved password from credential store"),
+        "Expected credential store retrieval message in stderr, got: {stderr}"
+    );
+
+    // Verify the signature is valid
+    minisign_cmd()
+        .arg("-V")
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success();
+
+    // Clean up
+    let _ = credential_store::forget_password(&key_id);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_sign_multiple_files_uses_saved_password() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+    let file3 = temp_dir.path().join("file3.txt");
+    fs::write(&file1, "content one").unwrap();
+    fs::write(&file2, "content two").unwrap();
+    fs::write(&file3, "content three").unwrap();
+
+    let key_id =
+        generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_multi_sign");
+
+    // Sign multiple files without providing a password
+    let sign_output = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&file1)
+        .arg(&file2)
+        .arg(&file3)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&sign_output.stderr);
+    assert!(
+        stderr.contains("Using saved password from credential store"),
+        "Expected credential store retrieval message in stderr, got: {stderr}"
+    );
+
+    // Verify all three signatures
+    for file in [&file1, &file2, &file3] {
+        minisign_cmd()
+            .arg("-V")
+            .arg("-p")
+            .arg(&pk_path)
+            .arg("-m")
+            .arg(file)
+            .assert()
+            .success();
+    }
+
+    // Clean up
+    let _ = credential_store::forget_password(&key_id);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_save_password_on_sign_then_reuse() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "save_on_sign_test";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key WITHOUT --save-password
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    let file1 = temp_dir.path().join("first.txt");
+    let file2 = temp_dir.path().join("second.txt");
+    fs::write(&file1, "first signing").unwrap();
+    fs::write(&file2, "second signing").unwrap();
+
+    // First sign WITH --password-file AND --save-password
+    // This should save the password to the credential store
+    let first_sign = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&file1)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("--save-password")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&first_sign.stderr);
+    assert!(
+        stderr.contains("Password saved to OS credential store"),
+        "Expected save confirmation in stderr, got: {stderr}"
+    );
+
+    // Second sign WITHOUT --password-file — should auto-retrieve
+    let second_sign = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&file2)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&second_sign.stderr);
+    assert!(
+        stderr.contains("Using saved password from credential store"),
+        "Expected credential store retrieval message in stderr, got: {stderr}"
+    );
+
+    // Verify both signatures
+    for file in [&file1, &file2] {
+        minisign_cmd()
+            .arg("-V")
+            .arg("-p")
+            .arg(&pk_path)
+            .arg("-m")
+            .arg(file)
+            .assert()
+            .success();
+    }
+
+    // Extract key ID for cleanup
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    if let Some(key_id) = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+    {
+        let _ = credential_store::forget_password(key_id);
+    }
+}
