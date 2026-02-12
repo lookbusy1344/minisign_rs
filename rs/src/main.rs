@@ -7,10 +7,10 @@ use minisign::{
     Error, Result,
     cli::{Action, Cli},
     ops::{
-        ChangeOptions, GenerateOptions, InspectPrivateOptions, InspectResult, KeyType,
-        PublicKeySource, RecreateOptions, SecurityLevel, SignOptions, SignatureInspectResult,
-        VerifyOptions, change, generate, inspect_base64, inspect_private, inspect_signature,
-        recreate, sign, verify,
+        ChangeOptions, GenerateOptions, InspectOptions, InspectPrivateOptions, InspectResult,
+        KeyType, PublicKeySource, RecreateOptions, SecurityLevel, SignOptions,
+        SignatureInspectResult, VerifyOptions, change, generate, inspect, inspect_base64,
+        inspect_private, inspect_signature, recreate, sign, verify,
     },
 };
 use std::io::IsTerminal;
@@ -98,9 +98,6 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     if force_weak_kdf {
         builder = builder.force_weak_kdf(true);
     }
-    if cli.hardware_key {
-        builder = builder.hardware_key(true);
-    }
     if cli.quiet {
         builder = builder.quiet(true);
     }
@@ -115,13 +112,7 @@ fn handle_generate(cli: &Cli) -> Result<()> {
             .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
     }
 
-    // Get platform-specific hardware key store
-    let hw_keystore = hw_keystore::get_default_keystore();
-    let result = generate(
-        &options,
-        password.as_ref().map(|p| p.as_bytes()),
-        Some(hw_keystore.as_ref()),
-    )?;
+    let result = generate(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
     // Clear working message
     if !cli.quiet {
@@ -217,13 +208,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = builder.build();
 
-        // Get platform-specific hardware key store
-        let hw_keystore = hw_keystore::get_default_keystore();
-        let result = sign(
-            &options,
-            password.as_ref().map(|p| p.as_bytes()),
-            Some(hw_keystore.as_ref()),
-        )?;
+        let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
 
         if !cli.quiet {
             println!(
@@ -258,13 +243,10 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = builder.build();
 
-        // Get platform-specific hardware key store
-        let hw_keystore = hw_keystore::get_default_keystore();
         sign_multiple_files(
             message_files.into_owned(),
             &options,
             password.as_ref().map(|p| p.as_bytes()),
-            Some(hw_keystore.as_ref()),
             cli.sequential,
         )?;
     }
@@ -388,7 +370,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     let public_key_file = cli.public_key_file.as_ref().unwrap_or(&default_public_key);
 
     // Load the key to check if it's encrypted
-    let (seckey, _hw_slot) = load_secret_key(secret_key_file)?;
+    let seckey = load_secret_key(secret_key_file)?;
 
     // Prompt for password only if the key is encrypted
     let password = if seckey.is_encrypted() {
@@ -422,7 +404,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Load the key to check if it's encrypted (without decrypting)
-    let (seckey, _hw_slot) = load_secret_key(secret_key_file)?;
+    let seckey = load_secret_key(secret_key_file)?;
 
     // Prompt for current password ONLY if the key is encrypted
     // -W flag only affects the NEW password (desired end state)
@@ -468,14 +450,10 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     let options = builder.build();
 
-    // Get platform-specific hardware key store
-    let hw_keystore = hw_keystore::get_default_keystore();
-
     let result = change(
         &options,
         current_password.as_ref().map(|p| p.as_bytes()),
         new_password.as_ref().map(|p| p.as_bytes()),
-        hw_keystore.as_ref(),
     )?;
 
     if !cli.quiet {
@@ -572,42 +550,6 @@ fn display_inspect_result(result: &InspectResult) {
             println!("└─ Type: Ed25519 Public Key");
         }
     }
-
-    // Display hardware key protection status if this is a secret key
-    if matches!(
-        result.key_type,
-        KeyType::SecretEncrypted | KeyType::SecretUnencrypted
-    ) {
-        println!();
-        if result.hw_enrolled {
-            println!("Hardware Key Protection:");
-            println!("├─ Status: Enrolled");
-            if let Some(label) = &result.hw_label {
-                println!("├─ Label: {label}");
-            }
-            if let Some(backend) = result.hw_backend_name {
-                println!("├─ Backend: {backend}");
-            }
-            if let Some(available) = result.hw_key_available {
-                if available {
-                    println!("└─ Key available: Yes");
-                } else {
-                    println!("└─ Key available: No (device changed?)");
-                }
-            } else {
-                println!("└─ Key available: Unknown (backend unavailable)");
-            }
-
-            // Show warning if HW enrolled but backend unavailable
-            if result.hw_unavailable_warning {
-                println!();
-                println!("*** WARNING: Hardware key protection enrolled but backend unavailable.");
-                println!("   You can still decrypt with the recovery password.");
-            }
-        } else {
-            println!("Hardware Key Protection: Not enrolled");
-        }
-    }
 }
 
 fn handle_inspect(cli: &Cli) -> Result<()> {
@@ -620,24 +562,21 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    // Get platform-specific hardware key store for HW inspection
-    let hw_keystore = hw_keystore::get_default_keystore();
-
     // Determine the source and get the inspection result
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
     let default_secret_key = Cli::default_secret_key_path();
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
-            let options = InspectOptionsWithHw::new(sk_file.as_path(), hw_keystore.as_ref());
+            let options = InspectOptions::new(sk_file.as_path());
             (
-                inspect_with_hw(&options)?,
+                inspect(&options)?,
                 format!("Inspecting: {}", sk_file.display()),
                 Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
-            let options = InspectOptionsWithHw::new(pk_file.as_path(), hw_keystore.as_ref());
+            let options = InspectOptions::new(pk_file.as_path());
             (
-                inspect_with_hw(&options)?,
+                inspect(&options)?,
                 format!("Inspecting: {}", pk_file.display()),
                 Some(pk_file.as_path()),
             )
@@ -650,9 +589,9 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else {
             // Default to secret key path
-            let options = InspectOptionsWithHw::new(&default_secret_key, hw_keystore.as_ref());
+            let options = InspectOptions::new(&default_secret_key);
             (
-                inspect_with_hw(&options)?,
+                inspect(&options)?,
                 format!("Inspecting: {} (default)", default_secret_key.display()),
                 Some(default_secret_key.as_path()),
             )

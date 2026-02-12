@@ -406,7 +406,7 @@ pub fn sign_single_file(
 ///     false,       // quiet
 /// );
 ///
-/// let result = sign(&options, password, None)?;
+/// let result = sign(&options, password)?;
 /// println!("File signed: {}", result.signature_file.display());
 /// # Ok::<(), minisign::Error>(())
 /// ```

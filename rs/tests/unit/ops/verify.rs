@@ -156,7 +156,7 @@ fn test_verify_with_wrong_keynum() {
         .force(true)
         .quiet(true)
         .build();
-    sign(&sign_opts, None, None).expect("sign should succeed");
+    sign(&sign_opts, None).expect("sign should succeed");
 
     // Try to verify with key 2 (different keynum) - should fail
     let verify_opts = VerifyOptions::new(
@@ -215,7 +215,7 @@ fn test_verify_file_too_large_fails() {
         .signature_file(sig_path.as_path())
         .build();
 
-    sign(&sign_opts, None, None).expect("signing should succeed");
+    sign(&sign_opts, None).expect("signing should succeed");
 
     // Verify with small file should succeed
     let verify_opts = VerifyOptions::new(
@@ -258,7 +258,7 @@ fn test_verify_prehashed_mode_no_size_limit() {
         .force(true)
         .build();
 
-    sign(&sign_opts, None, None).expect("signing large file in prehashed mode should succeed");
+    sign(&sign_opts, None).expect("signing large file in prehashed mode should succeed");
 
     // Verify should succeed with prehashed mode (streaming)
     let verify_opts = VerifyOptions::new(
@@ -304,7 +304,7 @@ fn test_verify_multiple_files_sequential() {
         .trusted_comment("Batch verification test")
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, None, true).expect("signing should succeed");
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Now verify multiple files
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
@@ -355,7 +355,7 @@ fn test_verify_multiple_files_parallel() {
         .trusted_comment("Parallel verification test")
         .build();
 
-    sign_multiple_files(paths.clone(), &sign_opts, None, None, false)
+    sign_multiple_files(paths.clone(), &sign_opts, None, false)
         .expect("signing should succeed");
 
     // Now verify multiple files in parallel
@@ -411,7 +411,7 @@ fn test_verify_multiple_files_partial_failure() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, None, true).expect("signing should succeed");
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Corrupt file2's content (signature won't match)
     fs::write(&file2, b"Corrupted message").unwrap();
@@ -473,7 +473,7 @@ fn test_verify_multiple_files_all_attempted() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, None, true).expect("signing should succeed");
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Now create file2 but don't sign it
     fs::write(&file2, b"M2").unwrap();
@@ -537,7 +537,7 @@ fn test_verify_multiple_files_quiet_mode() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, None, true).expect("signing should succeed");
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Verify with quiet mode (should suppress output)
     let verify_paths = vec![file1.clone(), file2.clone()];
@@ -605,7 +605,7 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, None, true).expect("signing should succeed");
+    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Try to verify with wrong key - all should fail
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
@@ -650,7 +650,7 @@ fn test_verify_rejects_legacy_with_force_prehashed() {
         .prehashed(false) // LEGACY mode (non-prehashed, "Ed")
         .build();
 
-    sign(&sign_opts, None, None).expect("signing should succeed");
+    sign(&sign_opts, None).expect("signing should succeed");
 
     // Try to verify with force_prehashed=true - should REJECT legacy signature
     let verify_opts = VerifyOptions::new(
@@ -701,7 +701,7 @@ fn test_verify_accepts_legacy_without_force_prehashed() {
         .prehashed(false) // LEGACY mode (non-prehashed, "Ed")
         .build();
 
-    sign(&sign_opts, None, None).expect("signing should succeed");
+    sign(&sign_opts, None).expect("signing should succeed");
 
     // Verify with force_prehashed=false - should ACCEPT legacy signature
     let verify_opts = VerifyOptions::new(
@@ -744,7 +744,7 @@ fn test_verify_accepts_prehashed_with_force_prehashed() {
         .force(true) // prehashed=true means PREHASHED mode
         .build();
 
-    sign(&sign_opts, None, None).expect("signing should succeed");
+    sign(&sign_opts, None).expect("signing should succeed");
 
     // Verify with force_prehashed=true - should ACCEPT prehashed signature
     let verify_opts = VerifyOptions::new(

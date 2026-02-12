@@ -2,14 +2,11 @@
 //!
 //! Tests for boundary conditions and unusual inputs
 
-use minisign::{
-    hw_keystore::unsupported::UnsupportedKeyStore,
-    ops::{
-        change::{ChangeOptions, change},
-        generate::{GenerateOptions, generate},
-        sign::{SignOptions, sign},
-        verify::{PublicKeySource, VerifyOptions, verify},
-    },
+use minisign::ops::{
+    change::{ChangeOptions, change},
+    generate::{GenerateOptions, generate},
+    sign::{SignOptions, sign},
+    verify::{PublicKeySource, VerifyOptions, verify},
 };
 use std::fs;
 use tempfile::TempDir;
@@ -28,7 +25,7 @@ fn test_empty_file_signing() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create empty file
     fs::write(&message_file, b"").expect("Failed to create empty file");
@@ -38,7 +35,7 @@ fn test_empty_file_signing() {
         .signature_file(sig_file.as_path())
         .force(true)
         .build();
-    sign(&sign_opts, None, None).expect("Should sign empty file");
+    sign(&sign_opts, None).expect("Should sign empty file");
 
     // Verify signature on empty file
     let verify_opts = VerifyOptions::new(
@@ -66,7 +63,7 @@ fn test_empty_file_legacy_mode() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create empty file
     fs::write(&message_file, b"").expect("Failed to create empty file");
@@ -77,7 +74,7 @@ fn test_empty_file_legacy_mode() {
         .prehashed(false)
         .force(true)
         .build();
-    sign(&sign_opts, None, None).expect("Should sign empty file in legacy mode");
+    sign(&sign_opts, None).expect("Should sign empty file in legacy mode");
 
     // Verify signature on empty file
     let verify_opts = VerifyOptions::new(
@@ -105,7 +102,7 @@ fn test_unicode_in_trusted_comment() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message
     fs::write(&message_file, b"Test message").expect("Failed to write message");
@@ -118,7 +115,7 @@ fn test_unicode_in_trusted_comment() {
         .untrusted_comment("Test signature 测试 اختبار 🚀")
         .quiet(true)
         .build();
-    let result = sign(&sign_opts, None, None).expect("Should sign with Unicode comments");
+    let result = sign(&sign_opts, None).expect("Should sign with Unicode comments");
     assert!(result.trusted_comment.contains("🔐"));
     assert!(result.trusted_comment.contains("签名"));
 
@@ -149,7 +146,7 @@ fn test_unicode_in_untrusted_comment() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message
     fs::write(&message_file, b"Test").expect("Failed to write message");
@@ -161,7 +158,7 @@ fn test_unicode_in_untrusted_comment() {
         .untrusted_comment("Файл подписан ✓")
         .quiet(true)
         .build();
-    sign(&sign_opts, None, None).expect("Should sign with Unicode untrusted comment");
+    sign(&sign_opts, None).expect("Should sign with Unicode untrusted comment");
 
     // Verify and check untrusted comment
     let verify_opts = VerifyOptions::new(
@@ -190,7 +187,7 @@ fn test_large_file_prehashed() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create a 100MB file (not 4GB to keep tests fast)
     // This tests that large files work with prehashed mode
@@ -204,7 +201,7 @@ fn test_large_file_prehashed() {
         .trusted_comment("Large file signature")
         .quiet(true)
         .build();
-    sign(&sign_opts, None, None).expect("Should sign large file");
+    sign(&sign_opts, None).expect("Should sign large file");
 
     // Verify signature
     let verify_opts = VerifyOptions::new(
@@ -236,7 +233,7 @@ fn test_symlink_handling() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create message file and symlink to it
     fs::write(&message_file, b"Real file content").expect("Failed to write message");
@@ -248,7 +245,7 @@ fn test_symlink_handling() {
         .force(true)
         .quiet(true)
         .build();
-    sign(&sign_opts, None, None).expect("Should sign through symlink");
+    sign(&sign_opts, None).expect("Should sign through symlink");
 
     // Verify using the symlink
     let verify_opts = VerifyOptions::new(
@@ -287,7 +284,7 @@ fn test_generate_key_with_empty_password() {
         .build();
 
     // Empty password should work
-    generate(&gen_opts, Some(b""), None).expect("Should generate key with empty password");
+    generate(&gen_opts, Some(b"")).expect("Should generate key with empty password");
 
     // Verify the key was created
     assert!(secret_key.exists(), "Secret key should be created");
@@ -304,7 +301,7 @@ fn test_generate_key_with_empty_password() {
         .build();
 
     // Should be able to sign with empty password
-    sign(&sign_opts, Some(b""), None).expect("Should sign with empty password");
+    sign(&sign_opts, Some(b"")).expect("Should sign with empty password");
 
     // Verify the signature
     let verify_opts = VerifyOptions::new(
@@ -329,7 +326,7 @@ fn test_change_password_to_empty() {
     let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
         .force(true)
         .build();
-    generate(&gen_opts, Some(b"original_password"), None).expect("Failed to generate key");
+    generate(&gen_opts, Some(b"original_password")).expect("Failed to generate key");
 
     // Change password to empty
     let change_opts = ChangeOptions::builder(secret_key.as_path())
@@ -340,7 +337,6 @@ fn test_change_password_to_empty() {
         &change_opts,
         Some(b"original_password"),
         Some(b""),
-        &UnsupportedKeyStore,
     )
     .expect("Should change password to empty");
 
@@ -354,7 +350,7 @@ fn test_change_password_to_empty() {
         .force(true)
         .build();
 
-    sign(&sign_opts, Some(b""), None).expect("Should sign with new empty password");
+    sign(&sign_opts, Some(b"")).expect("Should sign with new empty password");
 }
 
 /// Test changing password from empty to non-empty
@@ -368,7 +364,7 @@ fn test_change_password_from_empty() {
     let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
         .force(true)
         .build();
-    generate(&gen_opts, Some(b""), None).expect("Failed to generate key with empty password");
+    generate(&gen_opts, Some(b"")).expect("Failed to generate key with empty password");
 
     // Change from empty password to non-empty
     let change_opts = ChangeOptions::builder(secret_key.as_path())
@@ -379,7 +375,6 @@ fn test_change_password_from_empty() {
         &change_opts,
         Some(b""),
         Some(b"new_password"),
-        &UnsupportedKeyStore,
     )
     .expect("Should change from empty to non-empty password");
 
@@ -393,7 +388,7 @@ fn test_change_password_from_empty() {
         .force(true)
         .build();
 
-    sign(&sign_opts, Some(b"new_password"), None).expect("Should sign with new non-empty password");
+    sign(&sign_opts, Some(b"new_password")).expect("Should sign with new non-empty password");
 }
 
 /// Test untrusted comment at exactly max valid length (1003 bytes)
@@ -412,7 +407,7 @@ fn test_untrusted_comment_max_valid_length() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -428,7 +423,7 @@ fn test_untrusted_comment_max_valid_length() {
         .quiet(true)
         .build();
 
-    sign(&sign_opts, None, None).expect("Should sign with max valid untrusted comment");
+    sign(&sign_opts, None).expect("Should sign with max valid untrusted comment");
 
     // Verify signature
     let verify_opts = VerifyOptions::new(
@@ -458,7 +453,7 @@ fn test_untrusted_comment_error_threshold() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -475,7 +470,7 @@ fn test_untrusted_comment_error_threshold() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
     assert!(result.is_err());
 
     // Note: The C implementation only warns for untrusted comments, but the Rust
@@ -498,7 +493,7 @@ fn test_untrusted_comment_just_under_threshold() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -514,7 +509,7 @@ fn test_untrusted_comment_just_under_threshold() {
         .quiet(true)
         .build();
 
-    sign(&sign_opts, None, None).expect("Should sign successfully");
+    sign(&sign_opts, None).expect("Should sign successfully");
 
     // Verify signature still works
     let verify_opts = VerifyOptions::new(
@@ -544,7 +539,7 @@ fn test_trusted_comment_max_valid_length() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -560,7 +555,7 @@ fn test_trusted_comment_max_valid_length() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None).expect("Should sign with max valid trusted comment");
+    let result = sign(&sign_opts, None).expect("Should sign with max valid trusted comment");
     assert_eq!(result.trusted_comment, max_valid_trusted);
 
     // Verify signature
@@ -591,7 +586,7 @@ fn test_trusted_comment_error_threshold() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -607,7 +602,7 @@ fn test_trusted_comment_error_threshold() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
     assert!(
         result.is_err(),
         "Should fail with trusted comment at error threshold"
@@ -650,7 +645,7 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -659,7 +654,7 @@ fn test_symlink_to_existing_file_cannot_overwrite() {
         .signature_file(sig_file.as_path())
         .build();
 
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
     assert!(
         result.is_err(),
         "Should fail to overwrite file via symlink without force"
@@ -702,7 +697,7 @@ fn test_symlink_outside_working_directory() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Sign using the symlink - should follow it and sign the real file
     let sig_file = work_dir.join("message_link.txt.minisig");
@@ -713,7 +708,7 @@ fn test_symlink_outside_working_directory() {
         .build();
 
     // Should succeed - symlink following is expected behavior
-    sign(&sign_opts, None, None).expect("Should sign file via symlink");
+    sign(&sign_opts, None).expect("Should sign file via symlink");
 
     // Verify using the real file path works
     let verify_opts = VerifyOptions::new(
@@ -755,7 +750,7 @@ fn test_parent_directory_symlink_no_escape() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Verify files were created in the real directory
     let real_secret_key = real_dir.join("test.key");
@@ -786,7 +781,7 @@ fn test_parent_directory_symlink_no_escape() {
         .force(true)
         .build();
 
-    sign(&sign_opts, None, None).expect("Should sign using symlinked directory path");
+    sign(&sign_opts, None).expect("Should sign using symlinked directory path");
 
     // Verify signature exists in real directory
     let real_sig_file = real_dir.join("message.txt.minisig");
@@ -819,7 +814,7 @@ fn test_circular_symlink_handling() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Attempt to sign the circular symlink
     let sig_file = temp_dir.path().join("link1.txt.minisig");
@@ -830,7 +825,7 @@ fn test_circular_symlink_handling() {
         .build();
 
     // Should fail gracefully (not infinite loop or panic)
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
     assert!(
         result.is_err(),
         "Should fail gracefully with circular symlink"
@@ -854,7 +849,7 @@ fn test_unicode_zero_width_joiners() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -869,7 +864,7 @@ fn test_unicode_zero_width_joiners() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None).expect("Should sign with ZWJ in comment");
+    let result = sign(&sign_opts, None).expect("Should sign with ZWJ in comment");
     assert!(result.trusted_comment.contains('\u{200D}'));
 }
 
@@ -890,7 +885,7 @@ fn test_unicode_rtl_override() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -904,7 +899,7 @@ fn test_unicode_rtl_override() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None).expect("Should sign with RTL override");
+    let result = sign(&sign_opts, None).expect("Should sign with RTL override");
     assert!(result.trusted_comment.contains('\u{202E}'));
 
     // Verify signature works despite RTL
@@ -936,7 +931,7 @@ fn test_unicode_homoglyphs() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -951,7 +946,7 @@ fn test_unicode_homoglyphs() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None).expect("Should sign with homoglyphs");
+    let result = sign(&sign_opts, None).expect("Should sign with homoglyphs");
 
     // Verify exact preservation (no Unicode normalization)
     assert_eq!(result.trusted_comment, homoglyph_comment);
@@ -978,7 +973,7 @@ fn test_unicode_multibyte_at_byte_limit() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -1003,7 +998,7 @@ fn test_unicode_multibyte_at_byte_limit() {
         .build();
 
     let result =
-        sign(&sign_opts, None, None).expect("Should sign with multi-byte char at byte limit");
+        sign(&sign_opts, None).expect("Should sign with multi-byte char at byte limit");
     assert_eq!(result.trusted_comment, comment_with_multibyte);
 }
 
@@ -1026,7 +1021,7 @@ fn test_unicode_multibyte_exceeds_limit() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
@@ -1047,7 +1042,7 @@ fn test_unicode_multibyte_exceeds_limit() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
     assert!(
         result.is_err(),
         "Should reject comment exceeding byte limit with multi-byte char"
@@ -1074,7 +1069,7 @@ fn test_path_traversal_attack() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Attempt to sign with path traversal
     let malicious_path = temp_dir.path().join("../../../etc/passwd");
@@ -1084,7 +1079,7 @@ fn test_path_traversal_attack() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
 
     // Should fail because /etc/passwd either doesn't exist on this system
     // or we don't have write permission for /etc/passwd.minisig
@@ -1106,7 +1101,7 @@ fn test_null_byte_in_path() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // On Unix, null bytes in paths are rejected by the OS
     // On Windows, they're also invalid
@@ -1124,7 +1119,7 @@ fn test_null_byte_in_path() {
         .build(); // Use the base path without null
 
     // Even with a normal path, this should fail because the file doesn't exist
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
     assert!(result.is_err());
 
     // The key point is we didn't panic or do anything unsafe with the null byte
@@ -1144,7 +1139,7 @@ fn test_overlong_path() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     // Create an extremely long path (most filesystems have limits around 255 bytes for filename)
     let long_name = "a".repeat(300);
@@ -1155,7 +1150,7 @@ fn test_overlong_path() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
 
     // Should fail gracefully (file doesn't exist or path too long)
     assert!(result.is_err());
@@ -1177,7 +1172,7 @@ fn test_windows_reserved_names() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     let reserved_names = vec!["CON", "PRN", "AUX", "NUL", "COM1", "LPT1"];
 
@@ -1189,7 +1184,7 @@ fn test_windows_reserved_names() {
             .quiet(true)
             .build();
 
-        let result = sign(&sign_opts, None, None);
+        let result = sign(&sign_opts, None);
 
         // Should fail gracefully on Windows
         assert!(result.is_err(), "Reserved name {name} should fail");
@@ -1211,7 +1206,7 @@ fn test_relative_path_handling() {
         .force(true)
         .no_password(true)
         .build();
-    generate(&gen_opts, None, None).expect("Failed to generate key");
+    generate(&gen_opts, None).expect("Failed to generate key");
 
     fs::write(&message_file, b"Test content").expect("Failed to write message");
 
@@ -1227,7 +1222,7 @@ fn test_relative_path_handling() {
         .quiet(true)
         .build();
 
-    let result = sign(&sign_opts, None, None);
+    let result = sign(&sign_opts, None);
 
     // Restore original directory
     std::env::set_current_dir(&original_dir).expect("Failed to restore dir");

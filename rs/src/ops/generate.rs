@@ -259,7 +259,7 @@ impl GenerateResult {
 ///     false,  // force_weak_kdf
 /// );
 ///
-/// let result = generate(&options, password, None)?;
+/// let result = generate(&options, password)?;
 /// println!("Key pair generated successfully");
 /// println!("Secret key: {}", result.secret_key_file().display());
 /// println!("Public key: {}", result.public_key_file().display());

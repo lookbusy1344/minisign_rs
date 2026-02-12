@@ -14,7 +14,6 @@ mod unit {
 
     pub mod ops {
         pub mod change;
-        pub mod generate;
         pub mod inspect;
         pub mod recreate;
         pub mod sign;
