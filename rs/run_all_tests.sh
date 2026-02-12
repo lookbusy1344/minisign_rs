@@ -19,7 +19,14 @@ if [[ "$1" == "--with-credential-store" ]]; then
 fi
 
 echo "Running regular tests (excluding credential store tests)..."
-gtimeout 120 cargo test -- --skip credential_store --skip save_password --skip forget_password
+# Skip all tests that interact with OS credential store (macOS Keychain)
+# Patterns: credential_store, save_password, saved_password, forget_password, password_saved
+gtimeout 120 cargo test -- \
+    --skip credential_store \
+    --skip save_password \
+    --skip saved_password \
+    --skip forget_password \
+    --skip password_saved
 
 echo ""
 echo "Running slow/ignored tests..."
