@@ -6,6 +6,8 @@
 use super::HardwareKeyStore;
 use crate::errors::{Error, Result};
 use security_framework::access_control::{ProtectionMode, SecAccessControl};
+use security_framework::item::Location;
+use security_framework::key::{GenerateKeyOptions, KeyType, SecKey, Token};
 use security_framework_sys::access_control::{
     kSecAccessControlBiometryCurrentSet, kSecAccessControlPrivateKeyUsage,
 };
@@ -88,32 +90,50 @@ impl Default for MacOSKeyStore {
 }
 
 impl HardwareKeyStore for MacOSKeyStore {
-    fn generate_key(&self, _label: &str) -> Result<p256::PublicKey> {
+    fn generate_key(&self, label: &str) -> Result<p256::PublicKey> {
         if !self.is_available() {
             return Err(Error::HardwareKeyStoreUnavailable);
         }
 
-        // TODO: Implement full key generation with:
-        // 1. SecAccessControlCreateWithFlags for biometric auth
-        // 2. SecKeyCreateRandomKey with kSecAttrTokenIDSecureEnclave
-        // 3. Extract and return public key
-        //
-        // Required Security.framework constants:
-        // - kSecAttrTokenIDSecureEnclave
-        // - kSecAccessControlBiometryCurrentSet
-        // - kSecAccessControlPrivateKeyUsage
-        // - kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        //
-        // These need to be either:
-        // - Imported from security-framework-sys (if available)
-        // - Defined manually via FFI
-        // - Or use higher-level security-framework APIs if they exist
+        // 1. Create biometric-gated access control (safe API)
+        let access_control = SecAccessControl::create_with_protection(
+            Some(ProtectionMode::AccessibleWhenPasscodeSetThisDeviceOnly),
+            kSecAccessControlPrivateKeyUsage | kSecAccessControlBiometryCurrentSet,
+        )
+        .map_err(|e| Error::HardwareKeyStoreError {
+            detail: format!("failed to create access control: {e}"),
+        })?;
 
-        Err(Error::HardwareKeyStoreError {
-            detail:
-                "macOS Secure Enclave key generation not yet implemented - use mock for testing"
-                    .to_string(),
-        })
+        // 2. Configure key generation via builder (safe API)
+        let mut opts = GenerateKeyOptions::default();
+        opts.set_key_type(KeyType::ec_sec_prime_random())
+            .set_size_in_bits(256)
+            .set_token(Token::SecureEnclave)
+            .set_label(label)
+            .set_location(Location::DataProtectionKeychain)
+            .set_access_control(access_control);
+
+        // 3. Generate key — triggers Touch ID prompt for SE key creation
+        let private_key = SecKey::new(&opts)
+            .map_err(|e| map_cf_error_to_hw_error(&e, "key generation failed"))?;
+
+        // 4. Extract public key (safe API)
+        let public_key_ref =
+            private_key
+                .public_key()
+                .ok_or_else(|| Error::HardwareKeyStoreError {
+                    detail: "failed to extract public key from SE private key".to_string(),
+                })?;
+
+        // 5. Export public key bytes (safe API)
+        let pub_key_data = public_key_ref.external_representation().ok_or_else(|| {
+            Error::HardwareKeyStoreError {
+                detail: "failed to export public key representation".to_string(),
+            }
+        })?;
+
+        // 6. Convert to p256::PublicKey
+        sec1_bytes_to_p256_public_key(pub_key_data.bytes())
     }
 
     fn get_public_key(&self, _label: &str) -> Result<p256::PublicKey> {
@@ -180,6 +200,34 @@ impl HardwareKeyStore for MacOSKeyStore {
 
     fn display_name(&self) -> &'static str {
         "Secure Enclave"
+    }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Convert uncompressed SEC1 bytes (65 bytes: 0x04 || x || y) to `p256::PublicKey`
+fn sec1_bytes_to_p256_public_key(bytes: &[u8]) -> Result<p256::PublicKey> {
+    p256::PublicKey::from_sec1_bytes(bytes).map_err(|e| Error::HardwareKeyStoreError {
+        detail: format!("invalid P-256 public key ({} bytes): {e}", bytes.len()),
+    })
+}
+
+/// Map Core Foundation `CFError` to minisign `HardwareKeyStoreError` with context
+fn map_cf_error_to_hw_error(cf_error: &core_foundation::error::CFError, context: &str) -> Error {
+    // errSecUserCanceled = -128, errSecAuthFailed = -25293
+    const ERR_SEC_USER_CANCELED: isize = -128;
+    const ERR_SEC_AUTH_FAILED: isize = -25293;
+
+    let description = cf_error.description();
+    let code = cf_error.code();
+
+    match code {
+        ERR_SEC_USER_CANCELED | ERR_SEC_AUTH_FAILED => Error::HardwareKeyStoreAuthDenied,
+        _ => Error::HardwareKeyStoreError {
+            detail: format!("{context}: {description} (code {code})"),
+        },
     }
 }
 
