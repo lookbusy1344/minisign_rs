@@ -2,30 +2,13 @@
 //!
 //! This module provides hardware key storage via macOS Secure Enclave.
 //! Keys are protected by Touch ID / Face ID and never leave the secure boundary.
-//!
-//! ## Implementation Status
-//!
-//! **Implemented:**
-//! - Secure Enclave availability detection
-//! - Basic key generation framework
-//! - Key deletion
-//!
-//! **TODO:**
-//! - Complete key generation with proper Secure Enclave attributes
-//! - Implement ECDH operation inside Secure Enclave
-//! - Proper Keychain search by application tag
-//!
-//! **Challenges:**
-//! The Security.framework FFI is complex:
-//! - Many constants not exported by security-framework-sys
-//! - Type conversions between Rust and Core Foundation are intricate
-//! - Requires careful memory management with CF types
-//! - Biometric prompts need proper UI context
-//!
-//! The mock implementation provides full functionality for testing all higher layers.
 
 use super::HardwareKeyStore;
 use crate::errors::{Error, Result};
+use security_framework::access_control::{ProtectionMode, SecAccessControl};
+use security_framework_sys::access_control::{
+    kSecAccessControlBiometryCurrentSet, kSecAccessControlPrivateKeyUsage,
+};
 use zeroize::Zeroizing;
 
 /// macOS Secure Enclave key store
@@ -49,15 +32,52 @@ impl MacOSKeyStore {
     /// - Mac computers with Apple Silicon (M1, M2, M3, M4, etc.)
     /// - Mac computers with T2 Security Chip (2018-2020 Intel Macs)
     ///
-    /// Currently stubbed - full implementation requires:
-    /// - Checking for Secure Enclave chip presence
-    /// - Verifying biometric enrollment (Touch ID/Face ID)
-    /// - Testing access control flag creation
+    /// This performs two checks:
+    /// 1. Architecture check - SE only on ARM64 or `x86_64` with T2
+    /// 2. Access control test - verifies biometric + SE flags can be created
     #[must_use]
     fn is_secure_enclave_available() -> bool {
-        // TODO: Implement proper Secure Enclave detection
-        // For now, assume unavailable to prevent usage until fully implemented
-        false
+        // Check 1: Architecture — only Apple Silicon and T2 Intel Macs have SE
+        if !Self::is_likely_se_hardware() {
+            return false;
+        }
+
+        // Check 2: Try creating an access control with SE flags
+        // This validates that the system supports biometric + SE
+        // without generating any keys or triggering a prompt
+        Self::test_se_access_control()
+    }
+
+    /// Check if the hardware architecture is likely to have Secure Enclave
+    #[must_use]
+    fn is_likely_se_hardware() -> bool {
+        #[cfg(target_arch = "aarch64")]
+        {
+            true // All Apple Silicon Macs have Secure Enclave
+        }
+
+        #[cfg(target_arch = "x86_64")]
+        {
+            true // Optimistic for T2 — validated by test_se_access_control()
+        }
+
+        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+        {
+            false
+        }
+    }
+
+    /// Test if SE access control can be created
+    ///
+    /// This validates biometric + SE support without generating keys
+    /// or triggering authentication prompts.
+    #[must_use]
+    fn test_se_access_control() -> bool {
+        SecAccessControl::create_with_protection(
+            Some(ProtectionMode::AccessibleWhenPasscodeSetThisDeviceOnly),
+            kSecAccessControlPrivateKeyUsage | kSecAccessControlBiometryCurrentSet,
+        )
+        .is_ok()
     }
 }
 
