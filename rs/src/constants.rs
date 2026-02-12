@@ -83,26 +83,3 @@ pub const MAX_MESSAGE_SIZE_BYTES: u64 = 1024 * 1024 * 1024; // 1 GB
 /// decryption, the key ID is displayed as "0000000000000000" to indicate
 /// that the real key ID is not yet available without the password.
 pub const ENCRYPTED_KEYNUM_PLACEHOLDER: &str = "0000000000000000";
-
-/// Hardware slot version number
-///
-/// This version field allows future format evolution without breaking existing
-/// HW-encrypted keys. Current version is 1.
-pub const HW_SLOT_VERSION: u16 = 1;
-
-/// Hardware slot fixed size (excluding variable-length label)
-///
-/// Layout:
-/// - 0-1: `hw_version` (u16, 2 bytes)
-/// - 2-34: `ephemeral_pubkey` (33 bytes, compressed P-256)
-/// - 35-46: `nonce` (12 bytes, AES-256-GCM)
-/// - 47-150: `ciphertext` (104 bytes, encrypted blob)
-/// - 151-166: `tag` (16 bytes, AES-256-GCM auth tag)
-/// - 167+: `hw_key_label` (variable length UTF-8)
-pub const HW_SLOT_FIXED_SIZE: usize = 167;
-
-/// Maximum hardware key label size in bytes
-///
-/// Labels are UTF-8 strings (e.g., "minisign:a1b2c3d4e5f6g7h8").
-/// This limit prevents resource exhaustion from maliciously large labels.
-pub const HW_KEY_LABEL_MAX_BYTES: usize = 64;
