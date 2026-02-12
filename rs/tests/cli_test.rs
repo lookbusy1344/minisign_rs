@@ -2537,8 +2537,7 @@ fn test_sign_uses_saved_password_from_credential_store() {
     let message_file = temp_dir.path().join("message.txt");
     fs::write(&message_file, "test message for credential store signing").unwrap();
 
-    let key_id =
-        generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_sign_test");
+    let key_id = generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_sign_test");
 
     // Sign WITHOUT --password-file — must auto-retrieve from credential store.
     // If credential store retrieval fails, the command will block on stdin
