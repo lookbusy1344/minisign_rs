@@ -2049,3 +2049,429 @@ fn test_recreate_rejects_w_flag() {
         .stderr(predicate::str::contains("not supported"))
         .stderr(predicate::str::contains("recreate"));
 }
+
+// ============================================================================
+// Credential Store Tests
+// ============================================================================
+
+/// Check if the keyring backend is available for testing
+fn is_keyring_available_for_cli_tests() -> bool {
+    use minisign::credential_store;
+
+    let test_key = "minisign_cli_test_availability";
+
+    // Try to save a test password
+    if credential_store::save_password(test_key, "test").is_err() {
+        return false;
+    }
+
+    // Try to retrieve it
+    let retrieved = credential_store::get_password(test_key);
+
+    // Clean up
+    let _ = credential_store::forget_password(test_key);
+
+    retrieved.is_some()
+}
+
+#[test]
+#[serial_test::serial]
+fn test_save_password_flag_with_generate() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "test_password_123";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key with --save-password flag
+    let gen_output = minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    eprintln!(
+        "Generate stdout: {}",
+        String::from_utf8_lossy(&gen_output.stdout)
+    );
+    eprintln!(
+        "Generate stderr: {}",
+        String::from_utf8_lossy(&gen_output.stderr)
+    );
+
+    // Extract key ID to check credential store
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    eprintln!("Inspect output: {output_str}");
+
+    let key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found in inspect output");
+
+    eprintln!("Extracted key_id: {key_id}");
+
+    // Verify password was saved to credential store
+    let saved_password = credential_store::get_password(key_id);
+    let is_some = saved_password.is_some();
+    eprintln!("saved_password.is_some(): {is_some}");
+    assert!(
+        saved_password.is_some(),
+        "Password should be saved in credential store for key_id: {key_id}"
+    );
+    assert_eq!(saved_password.as_ref().map(|s| s.as_str()), Some(password));
+
+    // Clean up credential store
+    let _ = credential_store::forget_password(key_id);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_save_password_short_flag() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "short_flag_test";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Test short flag --sp
+    minisign_cmd()
+        .arg("-G")
+        .arg("--sp")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract key ID
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    let key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Verify password saved
+    assert!(credential_store::has_password(key_id));
+
+    // Clean up
+    let _ = credential_store::forget_password(key_id);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_forget_password_standalone() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "forget_test_pwd";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key and save password
+    minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract key ID
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    let key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Verify password is saved
+    assert!(credential_store::has_password(key_id));
+
+    // Forget password using standalone --forget-password
+    minisign_cmd()
+        .arg("-K")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    // Verify password was removed
+    assert!(!credential_store::has_password(key_id));
+}
+
+#[test]
+#[serial_test::serial]
+fn test_forget_password_short_flag() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "short_forget_test";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate and save
+    minisign_cmd()
+        .arg("-G")
+        .arg("--sp")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract key ID
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    let key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Use short flag --fp to forget
+    minisign_cmd()
+        .arg("-K")
+        .arg("--fp")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    // Verify removed
+    assert!(!credential_store::has_password(key_id));
+}
+
+#[test]
+#[serial_test::serial]
+fn test_inspect_shows_password_saved_status() {
+    use minisign::credential_store;
+
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "inspect_test_pwd";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate without saving password
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Inspect should show password not saved
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    assert!(
+        output_str.contains("Password saved: No") || output_str.contains("Password saved: no"),
+        "Inspect should show password not saved"
+    );
+
+    // Extract key ID
+    let key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Save password manually using credential store
+    credential_store::save_password(key_id, password).unwrap();
+
+    // Inspect should now show password saved
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    assert!(
+        output_str.contains("Password saved: Yes") || output_str.contains("Password saved: yes"),
+        "Inspect should show password saved"
+    );
+
+    // Clean up
+    let _ = credential_store::forget_password(key_id);
+}
+
+#[test]
+#[serial_test::serial]
+fn test_forget_password_is_idempotent() {
+    if !is_keyring_available_for_cli_tests() {
+        eprintln!("Skipping test: keyring backend unavailable");
+        return;
+    }
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, "test").unwrap();
+
+    // Generate key without saving password
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Forgetting a non-existent password should succeed (idempotent)
+    minisign_cmd()
+        .arg("-K")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    // Forgetting again should still succeed
+    minisign_cmd()
+        .arg("-K")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+}
