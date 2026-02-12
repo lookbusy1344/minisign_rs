@@ -32,8 +32,6 @@ pub struct GenerateOptions<'a> {
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
     #[cfg_attr(not(debug_assertions), allow(dead_code))]
     force_weak_kdf: bool,
-    /// Suppress informational output
-    quiet: bool,
 }
 
 /// Builder for `GenerateOptions`
@@ -47,7 +45,6 @@ pub struct GenerateOptionsBuilder<'a> {
     no_password: bool,
     allow_kdf_fallback: bool,
     force_weak_kdf: bool,
-    quiet: bool,
 }
 
 impl<'a> GenerateOptionsBuilder<'a> {
@@ -62,7 +59,6 @@ impl<'a> GenerateOptionsBuilder<'a> {
             no_password: false,
             allow_kdf_fallback: false,
             force_weak_kdf: false,
-            quiet: false,
         }
     }
 
@@ -101,13 +97,6 @@ impl<'a> GenerateOptionsBuilder<'a> {
         self
     }
 
-    /// Suppress informational output
-    #[must_use]
-    pub const fn quiet(mut self, quiet: bool) -> Self {
-        self.quiet = quiet;
-        self
-    }
-
     /// Build the `GenerateOptions`
     #[must_use]
     pub const fn build(self) -> GenerateOptions<'a> {
@@ -126,7 +115,6 @@ impl<'a> GenerateOptionsBuilder<'a> {
             no_password: self.no_password,
             allow_kdf_fallback: self.allow_kdf_fallback,
             force_weak_kdf: self.force_weak_kdf,
-            quiet: self.quiet,
         }
     }
 }
@@ -183,7 +171,6 @@ impl<'a> GenerateOptions<'a> {
             no_password,
             allow_kdf_fallback,
             force_weak_kdf,
-            quiet: false, // Old API defaults to non-quiet
         }
     }
 }

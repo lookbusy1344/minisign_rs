@@ -512,18 +512,6 @@ impl SeckeyStruct {
         }
     }
 
-    /// Get the plaintext blob for hardware key wrapping
-    ///
-    /// Returns the plaintext blob (`keynum` + `secret_key` + `checksum`) that can be
-    /// wrapped using ECIES with a hardware key.
-    ///
-    /// This method only works for encrypted keys. The blob contains:
-    /// - 8 bytes: `keynum`
-    /// - 64 bytes: Ed25519 secret key
-    /// - 32 bytes: Blake2b-256 checksum
-    ///
-    /// # Errors
-
     /// Get the unencrypted secret key (only works for unencrypted keys)
     ///
     /// # Errors
