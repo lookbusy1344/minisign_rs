@@ -524,8 +524,6 @@ impl SeckeyStruct {
     ///
     /// # Errors
 
-
-
     /// Get the unencrypted secret key (only works for unencrypted keys)
     ///
     /// # Errors
@@ -824,7 +822,6 @@ impl SeckeyStruct {
         let base64 = encode_base64(bytes);
         format!("untrusted comment: {comment}\n{base64}\n")
     }
-
 }
 
 impl std::fmt::Debug for SeckeyStruct {
@@ -841,4 +838,3 @@ impl std::fmt::Debug for SeckeyStruct {
             .finish()
     }
 }
-

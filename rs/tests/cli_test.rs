@@ -2049,4 +2049,3 @@ fn test_recreate_rejects_w_flag() {
         .stderr(predicate::str::contains("not supported"))
         .stderr(predicate::str::contains("recreate"));
 }
-

@@ -418,10 +418,7 @@ pub fn sign_single_file(
 /// - The message file cannot be read
 /// - The signature file already exists (unless force is true)
 /// - File I/O operations fail
-pub fn sign(
-    options: &SignOptions<'_>,
-    password: Option<&[u8]>,
-) -> Result<SignResult> {
+pub fn sign(options: &SignOptions<'_>, password: Option<&[u8]>) -> Result<SignResult> {
     sign_single_file(options.message_file(), options, password)
 }
 

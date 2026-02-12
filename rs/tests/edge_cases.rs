@@ -333,12 +333,8 @@ fn test_change_password_to_empty() {
         .force_weak_kdf(cfg!(debug_assertions)) // Use weak KDF in debug builds for faster test
         .build();
 
-    change(
-        &change_opts,
-        Some(b"original_password"),
-        Some(b""),
-    )
-    .expect("Should change password to empty");
+    change(&change_opts, Some(b"original_password"), Some(b""))
+        .expect("Should change password to empty");
 
     // Sign with empty password
     let message_file = temp_dir.path().join("message.txt");
@@ -371,12 +367,8 @@ fn test_change_password_from_empty() {
         .force_weak_kdf(cfg!(debug_assertions)) // Use weak KDF in debug builds for faster test
         .build();
 
-    change(
-        &change_opts,
-        Some(b""),
-        Some(b"new_password"),
-    )
-    .expect("Should change from empty to non-empty password");
+    change(&change_opts, Some(b""), Some(b"new_password"))
+        .expect("Should change from empty to non-empty password");
 
     // Sign with new password
     let message_file = temp_dir.path().join("message.txt");
@@ -997,8 +989,7 @@ fn test_unicode_multibyte_at_byte_limit() {
         .quiet(true)
         .build();
 
-    let result =
-        sign(&sign_opts, None).expect("Should sign with multi-byte char at byte limit");
+    let result = sign(&sign_opts, None).expect("Should sign with multi-byte char at byte limit");
     assert_eq!(result.trusted_comment, comment_with_multibyte);
 }
 

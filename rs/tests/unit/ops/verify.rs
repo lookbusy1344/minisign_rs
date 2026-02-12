@@ -355,8 +355,7 @@ fn test_verify_multiple_files_parallel() {
         .trusted_comment("Parallel verification test")
         .build();
 
-    sign_multiple_files(paths.clone(), &sign_opts, None, false)
-        .expect("signing should succeed");
+    sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
 
     // Now verify multiple files in parallel
     let verify_opts = VerifyOptions::new(

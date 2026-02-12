@@ -1,9 +1,7 @@
 //! Common file operation utilities for key and signature file handling
 
 use crate::{
-    Error, Result,
-    constants::MAX_MESSAGE_SIZE_BYTES,
-    keys::SeckeyStruct,
+    Error, Result, constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct,
     validation::validate_windows_path,
 };
 use std::fs::OpenOptions;

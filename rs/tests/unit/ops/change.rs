@@ -1,7 +1,9 @@
 //! Unit tests for password change operations
 
 use minisign::{
-    crypto::generate_keypair, errors::Error, keys::SeckeyStruct,
+    crypto::generate_keypair,
+    errors::Error,
+    keys::SeckeyStruct,
     ops::change::{ChangeOptions, change_with_log_n},
 };
 use std::fs;

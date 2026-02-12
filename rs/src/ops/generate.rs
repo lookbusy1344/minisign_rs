@@ -183,7 +183,7 @@ impl<'a> GenerateOptions<'a> {
             no_password,
             allow_kdf_fallback,
             force_weak_kdf,
-            quiet: false,        // Old API defaults to non-quiet
+            quiet: false, // Old API defaults to non-quiet
         }
     }
 }
@@ -277,10 +277,7 @@ impl GenerateResult {
 /// # Panics
 ///
 /// Will not panic. The function uses `?` operator for all fallible operations.
-pub fn generate(
-    options: &GenerateOptions<'_>,
-    password: Option<&[u8]>,
-) -> Result<GenerateResult> {
+pub fn generate(options: &GenerateOptions<'_>, password: Option<&[u8]>) -> Result<GenerateResult> {
     generate_with_log_n(options, password, SCRYPT_LOG_N)
 }
 
