@@ -2,37 +2,33 @@
 
 ## Summary
 
-Real Secure Enclave access for **command-line tools** requires a **paid Apple Developer Program membership** ($99/year). Free Apple IDs cannot use the necessary entitlements.
+Real Secure Enclave access requires **wrapping CLI tools in an app bundle** with a **provisioning profile**. Both free and paid Apple Developer accounts can work, but the setup differs.
 
-## What We Discovered
+## The Core Issue: CLI Tools vs App Bundles
 
-### Problem: Free Apple ID + Entitlements = Process Killed
+### What We Discovered
 
-When signing a CLI binary with entitlements using a free Apple Developer certificate:
+According to [Apple Developer Forums](https://developer.apple.com/forums/thread/125510):
+
+> "To interact with keys protected by the Secure Enclave you must use the iOS-style keychain, which requires an entitlement authorized by a provisioning profile. **A tool has nowhere to store a provisioning profile** and thus Xcode doesn't do the right thing out of the box. **The solution is to embed your tool in an app-like structure.**"
+
+### The Problem with Raw CLI Binaries
+
+When signing a CLI binary (not in an app bundle) with entitlements:
 - **Without entitlements**: Binary runs fine ✅
-- **With ANY entitlements**: macOS kills the process (exit code 137 / SIGKILL) ❌
+- **With entitlements**: macOS kills the process (exit code 137 / SIGKILL) ❌
 
-This affects entitlements like:
-- `keychain-access-groups` (required for Secure Enclave keychain access)
-- `com.apple.application-identifier`
-- `com.apple.security.application-groups`
-
-### Why This Happens
-
-macOS security policy:
-1. **Free Apple Developer certificates** can sign binaries for basic code signing
-2. **Entitlements** require proper provisioning profiles from paid Developer Program
-3. **CLI tools with entitlements** need notarization or Apple's approval
-4. Without proper setup, macOS **kills the process** to prevent privilege escalation
+**Why?** Raw CLI binaries have no place to store the `embedded.provisionprofile` file that macOS requires for entitlements validation.
 
 ### What Works vs. What Doesn't
 
-| Scenario | Free Apple ID | Paid Developer Program |
-|----------|---------------|------------------------|
-| Sign binary (no entitlements) | ✅ Works | ✅ Works |
-| Sign binary (with entitlements) | ❌ Killed by macOS | ✅ Works (with proper setup) |
-| Access Secure Enclave | ❌ Error -34018 | ✅ Works |
-| Use Mock KeyStore | ✅ Works perfectly | ✅ Works perfectly |
+| Approach | Works? | Limitation |
+|----------|--------|------------|
+| Raw CLI binary (no entitlements) | ✅ Runs | ❌ Can't access Secure Enclave (error -34018) |
+| Raw CLI binary (with entitlements via codesign) | ❌ SIGKILL | macOS kills process immediately |
+| App bundle (manually created + codesign) | ❌ SIGKILL | No provisioning profile embedded |
+| App bundle (via Xcode) | ✅ Should work | Requires Xcode project setup |
+| Mock KeyStore | ✅ Works perfectly | No hardware access (perfect for dev) |
 
 ## Solutions
 
@@ -50,42 +46,41 @@ cargo run --release -- -G --hardware-key -s test.key -p test.pub
 - Identical API to real Secure Enclave
 - Fast (no Touch ID prompts during development)
 - Cross-platform testing
+- No Apple Developer account needed
 
-### Option 2: Paid Apple Developer Program
+### Option 2: App Bundle with Xcode (Free or Paid Apple ID)
 
-For real Secure Enclave access:
+**The proper way** to access Secure Enclave from a CLI tool:
 
-1. **Join Apple Developer Program** ($99/year)
-   - https://developer.apple.com/programs/
-
-2. **Create proper App ID and provisioning profile**
-   - Sign in to developer.apple.com
-   - Certificates, Identifiers & Profiles
-   - Create App ID with Keychain Access capability
-
-3. **Sign with distribution certificate**
-   ```bash
-   codesign --force --sign "Apple Development: you@email.com" \
-            --entitlements entitlements.plist \
-            ./target/release/minisign_rs
+1. **Wrap the CLI tool in an app bundle structure**
+   ```
+   minisign_rs.app/
+   └── Contents/
+       ├── Info.plist
+       ├── MacOS/
+       │   └── minisign_rs (your Cargo-built binary)
+       └── embedded.provisionprofile (added by Xcode)
    ```
 
-4. **(Optional) Notarize for distribution**
-   ```bash
-   xcrun notarytool submit minisign_rs.zip \
-         --apple-id you@email.com \
-         --team-id TEAMID123 \
-         --password app-specific-password \
-         --wait
-   ```
+2. **Create Xcode project** that:
+   - Copies the Cargo-built binary into the bundle
+   - Handles code signing with entitlements
+   - Automatically embeds the provisioning profile
 
-### Option 3: Build as macOS App Bundle
+3. **Works with free Apple Developer ID** (with proper Xcode setup)
 
-Package as a `.app` with proper Info.plist:
-- More complex setup
-- Better integration with macOS
-- Can use free Apple ID (with limitations)
-- Still requires paid account for full SE access
+**Key requirement:** Xcode must handle the signing to embed `embedded.provisionprofile`. Manual `codesign` does not embed provisioning profiles.
+
+**See:** [Apple Developer Forums - CLI tools and Secure Enclave](https://developer.apple.com/forums/thread/125510)
+
+### Option 3: Paid Developer Program (Easier Setup)
+
+With a paid account ($99/year), you get:
+- Proper provisioning profiles for CLI tools
+- Ability to notarize for distribution
+- More flexibility in signing approaches
+
+However, **the app bundle approach is still required** even with a paid account.
 
 ## Testing Strategy
 
@@ -149,6 +144,14 @@ The limitation is **not** in our code - it's Apple's security policy for CLI too
 
 **For local development**: Use the Mock KeyStore - it's perfect for this.
 
-**For production/distribution**: Requires paid Apple Developer Program membership.
+**For real Secure Enclave testing**: Create an Xcode project that wraps the Cargo-built binary in an app bundle. This works with **free Apple Developer accounts** if set up correctly through Xcode.
 
-This is not a limitation of the minisign implementation - it's a requirement of macOS security architecture for accessing Secure Enclave from command-line tools.
+**For production/distribution**: An app bundle with proper signing and notarization (paid account recommended for easier workflow).
+
+**The core limitation**: macOS requires CLI tools to be wrapped in app bundles to store provisioning profiles, which are mandatory for Secure Enclave access. This is not a limitation of the minisign implementation - it's a requirement of macOS security architecture.
+
+## References
+
+- [Apple Developer Forums: macOS CLI tool and Secure Enclave](https://developer.apple.com/forums/thread/125510)
+- [Apple Developer Forums: Adding provisioning profile to CLI tool](https://developer.apple.com/forums/thread/657917)
+- [Making a Mac Application Bundle manually](https://tmewett.com/making-macos-bundle-info-plist/)
