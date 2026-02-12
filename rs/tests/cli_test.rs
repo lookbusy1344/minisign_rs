@@ -2074,6 +2074,14 @@ fn is_keyring_available_for_cli_tests() -> bool {
     retrieved.is_some()
 }
 
+/// Helper to get `credential_id` from a secret key file
+fn get_credential_id_from_file(sk_path: &std::path::Path) -> String {
+    use minisign::keys::SeckeyStruct;
+    let contents = fs::read_to_string(sk_path).expect("Failed to read secret key file");
+    let seckey = SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+    seckey.credential_id()
+}
+
 #[test]
 #[serial_test::serial]
 fn test_save_password_flag_with_generate() {
@@ -2141,18 +2149,21 @@ fn test_save_password_flag_with_generate() {
 
     eprintln!("Extracted key_id: {key_id}");
 
-    // Verify password was saved to credential store
-    let saved_password = credential_store::get_password(key_id);
+    // Verify password was saved to credential store using credential_id
+    let credential_id = get_credential_id_from_file(&sk_path);
+    eprintln!("credential_id: {credential_id}");
+
+    let saved_password = credential_store::get_password(&credential_id);
     let is_some = saved_password.is_some();
     eprintln!("saved_password.is_some(): {is_some}");
     assert!(
         saved_password.is_some(),
-        "Password should be saved in credential store for key_id: {key_id}"
+        "Password should be saved in credential store for credential_id: {credential_id}"
     );
     assert_eq!(saved_password.as_ref().map(|s| s.as_str()), Some(password));
 
     // Clean up credential store
-    let _ = credential_store::forget_password(key_id);
+    let _ = credential_store::forget_password(&credential_id);
 }
 
 #[test]
@@ -2200,18 +2211,19 @@ fn test_save_password_short_flag() {
         .clone();
 
     let output_str = String::from_utf8_lossy(&output);
-    let key_id = output_str
+    let _key_id = output_str
         .lines()
         .find(|line| line.contains("Key ID:"))
         .and_then(|line| line.split(':').nth(1))
         .map(str::trim)
         .expect("Key ID not found");
 
-    // Verify password saved
-    assert!(credential_store::has_password(key_id));
+    // Verify password saved using credential_id
+    let credential_id = get_credential_id_from_file(&sk_path);
+    assert!(credential_store::has_password(&credential_id));
 
     // Clean up
-    let _ = credential_store::forget_password(key_id);
+    let _ = credential_store::forget_password(&credential_id);
 }
 
 #[test]
@@ -2259,15 +2271,16 @@ fn test_forget_password_standalone() {
         .clone();
 
     let output_str = String::from_utf8_lossy(&output);
-    let key_id = output_str
+    let _key_id = output_str
         .lines()
         .find(|line| line.contains("Key ID:"))
         .and_then(|line| line.split(':').nth(1))
         .map(str::trim)
         .expect("Key ID not found");
 
-    // Verify password is saved
-    assert!(credential_store::has_password(key_id));
+    // Verify password is saved using credential_id
+    let credential_id = get_credential_id_from_file(&sk_path);
+    assert!(credential_store::has_password(&credential_id));
 
     // Forget password using standalone --forget-password
     minisign_cmd()
@@ -2279,7 +2292,7 @@ fn test_forget_password_standalone() {
         .success();
 
     // Verify password was removed
-    assert!(!credential_store::has_password(key_id));
+    assert!(!credential_store::has_password(&credential_id));
 }
 
 #[test]
@@ -2397,15 +2410,16 @@ fn test_inspect_shows_password_saved_status() {
     );
 
     // Extract key ID
-    let key_id = output_str
+    let _key_id = output_str
         .lines()
         .find(|line| line.contains("Key ID:"))
         .and_then(|line| line.split(':').nth(1))
         .map(str::trim)
         .expect("Key ID not found");
 
-    // Save password manually using credential store
-    credential_store::save_password(key_id, password).unwrap();
+    // Save password manually using credential store with credential_id
+    let credential_id = get_credential_id_from_file(&sk_path);
+    credential_store::save_password(&credential_id, password).unwrap();
 
     // Inspect should now show password saved
     let output = minisign_cmd()
@@ -2427,7 +2441,7 @@ fn test_inspect_shows_password_saved_status() {
     );
 
     // Clean up
-    let _ = credential_store::forget_password(key_id);
+    let _ = credential_store::forget_password(&credential_id);
 }
 
 #[test]
@@ -2537,7 +2551,8 @@ fn test_sign_uses_saved_password_from_credential_store() {
     let message_file = temp_dir.path().join("message.txt");
     fs::write(&message_file, "test message for credential store signing").unwrap();
 
-    let key_id = generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_sign_test");
+    let _key_id =
+        generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_sign_test");
 
     // Sign WITHOUT --password-file — must auto-retrieve from credential store.
     // If credential store retrieval fails, the command will block on stdin
@@ -2569,8 +2584,9 @@ fn test_sign_uses_saved_password_from_credential_store() {
         .assert()
         .success();
 
-    // Clean up
-    let _ = credential_store::forget_password(&key_id);
+    // Clean up using credential_id
+    let credential_id = get_credential_id_from_file(&sk_path);
+    let _ = credential_store::forget_password(&credential_id);
 }
 
 #[test]
@@ -2594,7 +2610,7 @@ fn test_sign_multiple_files_uses_saved_password() {
     fs::write(&file2, "content two").unwrap();
     fs::write(&file3, "content three").unwrap();
 
-    let key_id =
+    let _key_id =
         generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_multi_sign");
 
     // Sign multiple files without providing a password
@@ -2629,8 +2645,9 @@ fn test_sign_multiple_files_uses_saved_password() {
             .success();
     }
 
-    // Clean up
-    let _ = credential_store::forget_password(&key_id);
+    // Clean up using credential_id
+    let credential_id = get_credential_id_from_file(&sk_path);
+    let _ = credential_store::forget_password(&credential_id);
 }
 
 #[test]
@@ -2720,26 +2737,7 @@ fn test_save_password_on_sign_then_reuse() {
             .success();
     }
 
-    // Extract key ID for cleanup
-    let output = minisign_cmd()
-        .arg("-I")
-        .arg("-s")
-        .arg(&sk_path)
-        .arg("--password-file")
-        .arg(&password_file)
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let output_str = String::from_utf8_lossy(&output);
-    if let Some(key_id) = output_str
-        .lines()
-        .find(|line| line.contains("Key ID:"))
-        .and_then(|line| line.split(':').nth(1))
-        .map(str::trim)
-    {
-        let _ = credential_store::forget_password(key_id);
-    }
+    // Clean up using credential_id
+    let credential_id = get_credential_id_from_file(&sk_path);
+    let _ = credential_store::forget_password(&credential_id);
 }
