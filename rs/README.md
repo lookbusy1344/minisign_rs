@@ -27,22 +27,23 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - ✅ Weak key detection with persistent warnings
 - ✅ Multi-file signing with parallel execution (Rayon)
 - ✅ Multi-file verification with parallel execution (Rayon)
-- ✅ Hardware-backed key protection (Secure Enclave, TPM 2.0)
+- ✅ OS credential store integration for password caching (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 - ✅ Full compatibility with C minisign file formats
 
 ### Test Coverage
 
-- **466 total tests** covering all operations and CLI behavior
+- **230 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
+- Credential store tests (skip gracefully when OS keyring unavailable)
 - Compatibility tests verifying interoperability with C minisign
 - Cross-binary tests ensuring full C minisign compatibility
 - Edge case tests for unicode, symlinks, and large files
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
-- **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (455 tests) using optimized scrypt parameters (~10 seconds)
-- **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
+- **3 slow security tests** using production scrypt parameters (marked `#[ignore]`)
+- **Fast test suite** (227 tests) using optimized scrypt parameters (~3 seconds)
+- **Slow test suite** (3 tests) with production scrypt parameters (~2 seconds)
 
 ### Code Quality
 
@@ -146,6 +147,8 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-o` | `--output` | Output verification result to stdout |
 | `-W` | `--no-password` | Do not use password (generate and change only) |
 | | `--sequential` | Process files sequentially instead of in parallel |
+| | `--save-password` / `--sp` | Save password to OS credential store after successful use |
+| | `--forget-password` / `--fp` | Remove saved password from OS credential store |
 
 #### Additional Options
 
@@ -311,81 +314,113 @@ minisign_rs -IP RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 minisign_rs -Ix file.txt.minisig
 ```
 
-### Hardware-Backed Key Protection
+### Password Management with Credential Store
 
-Minisign-rs supports optional hardware-backed key protection using platform security modules (Secure Enclave on macOS, TPM 2.0 on Windows/Linux). This provides defense-in-depth by requiring **both** the key file **and** physical device access with biometric/PIN authentication.
+Minisign-rs integrates with your operating system's credential store to securely cache passwords for encrypted keys. This provides a convenient workflow similar to `gh auth`, `cargo publish`, and other CLI tools.
 
 #### Platform Support
 
-| Platform | Hardware         | Auth Mechanism                     | Availability          |
-|----------|------------------|------------------------------------|------------------------|
-| macOS    | Secure Enclave   | Touch ID / Face ID                 | All Apple Silicon Macs |
-| Windows  | TPM 2.0          | Windows Hello (fingerprint/face/PIN) | Most modern PCs      |
-| Linux    | TPM 2.0          | TPM PIN/password                   | Many laptops, servers |
+| Platform | Credential Store | Backend |
+|----------|-----------------|---------|
+| macOS    | Keychain        | Native macOS Keychain APIs |
+| Windows  | Credential Manager | Windows Credential Manager |
+| Linux    | Secret Service  | libsecret/gnome-keyring |
 
-#### Generate key with hardware protection
+#### Save password during key generation
 
 ```bash
-# Generate with hardware enrollment
-minisign_rs -G --hardware-key
+# Generate key and save password to credential store
+minisign_rs -G --save-password
 
-# Shorter alias
-minisign_rs -G --hw
+# Short flag alias
+minisign_rs -G --sp
 
 # With custom paths
-minisign_rs -G --hw -s mykey.key -p mykey.pub
+minisign_rs -G --sp -s mykey.key -p mykey.pub
 ```
 
-**Note**: A recovery password is always required, even with hardware enrollment. If your device is lost or the hardware key is unavailable, the recovery password provides fallback access.
+**Security**: Passwords are stored securely using your OS's native credential store, encrypted with your user account credentials. On macOS, this integrates with FileVault and system keychain encryption.
 
-#### Sign with hardware-protected keys
+#### Auto-retrieve saved passwords
+
+Once saved, passwords are automatically retrieved from the credential store when needed:
 
 ```bash
-# Sign normally (automatically uses hardware if enrolled)
+# Sign - automatically uses saved password if available
 minisign_rs -S -m file.txt
 
-# No special flags needed - hardware enrollment is auto-detected
-minisign_rs -S -m file1.txt file2.txt file3.txt -t "v1.0.0"
+# No password prompt if password is saved for this key
+minisign_rs -S -m file1.txt file2.txt file3.txt
+
+# Change password - retrieves old password automatically
+minisign_rs -K -s mykey.key
 ```
 
 **Behavior**:
-- If hardware is available: Biometric/PIN prompt, silent decryption
-- If hardware unavailable (device changed): Falls back to recovery password with explanation
+- If password is saved: Silent retrieval, no prompt
+- If password not saved: Normal password prompt
+- If credential store unavailable: Falls back to password prompt (graceful degradation)
 
-#### Manage hardware enrollment
+#### Save password after first use
+
+You can also save a password after successfully using it:
 
 ```bash
-# Add hardware protection to existing password-only key
-minisign_rs -K --add-hardware-key
+# Sign and save password on successful decrypt
+minisign_rs -S -m file.txt --save-password
 
-# Remove hardware protection (keep password only)
-minisign_rs -K --remove-hardware-key
+# Change password and save the new password
+minisign_rs -K --save-password
+```
+
+#### Remove saved passwords
+
+```bash
+# Remove saved password for default key
+minisign_rs -K --forget-password
+
+# Short flag alias
+minisign_rs -K --fp
+
+# Remove saved password for specific key
+minisign_rs -K --forget-password -s mykey.key
+```
+
+**Idempotent**: `--forget-password` succeeds even if no password is saved.
+
+#### Check password status
+
+```bash
+# Inspect shows whether password is saved
+minisign_rs -I -s mykey.key
+
+# Example output shows "Password saved: Yes" or "Password saved: No"
 ```
 
 #### Security model
 
-Hardware key protection defends against:
-- **Key file theft without device**: Cannot sign without physical device + biometric
-- **Malware reading files**: Hardware private key never leaves security module
-- **Memory forensics**: Ed25519 key only decrypted transiently in secure memory
+**What's protected**:
+- Passwords stored in OS credential store (encrypted by OS)
+- Key IDs used as credential identifiers (portable across file moves)
+- Automatic cleanup on credential removal
 
-**Limitations**:
-- Device theft + key file: Attacker can attempt biometric/PIN
-- Weak recovery password: Undermines hardware protection
-- Hardware keys are device-bound: Use recovery password on different devices
+**Security properties**:
+- **Opt-in only**: Passwords never saved automatically
+- **Per-key storage**: Each key ID has independent credential entry
+- **OS-level encryption**: Credentials protected by OS keychain encryption
+- **No silent failures**: Credential store errors never block operations
 
 **When to use**:
-- Personal signing keys on laptops/desktops with biometric enrollment
-- Enhanced security for release signing keys
-- Defense-in-depth for high-value signing operations
+- Personal development machines with full-disk encryption
+- Laptops/desktops where you sign frequently
+- Workstations with trusted OS credential management
+- Streamlining workflows without compromising key file security
 
 **When NOT to use**:
-- Headless servers (no biometric enrollment)
-- CI/CD pipelines (automated signing requires password-only)
-- Shared keys across multiple devices (hardware keys are device-bound)
-- Containers/VMs (hardware typically not available)
-
-See [Hardware Key Protection Documentation](docs/hardware-key-protection.md) for complete technical details, cryptographic design (ECIES), file format specification, and platform-specific implementation notes.
+- Shared/multi-user systems (credentials are per-user account)
+- Headless servers without credential store backend
+- CI/CD pipelines (use `--password-file` or unencrypted keys)
+- Untrusted environments or systems without disk encryption
 
 ## Signature File Format
 
@@ -505,17 +540,18 @@ cargo test && cargo test -- --ignored
 
 ```
 src/
-├── lib.rs          # Public API exports
-├── main.rs         # CLI entry point
-├── cli.rs          # Command-line interface
-├── constants.rs    # Centralized size and parameter constants
-├── crypto.rs       # Ed25519, Blake2b, Scrypt wrappers
-├── keys.rs         # Key types, generation, encryption
-├── signature.rs    # Signature creation and verification
-├── formats.rs      # Binary and base64 encoding/decoding
-├── validation.rs   # Comment and input validation (C compatibility)
-├── errors.rs       # Error types with thiserror
-└── ops/            # High-level operations
+├── lib.rs              # Public API exports
+├── main.rs             # CLI entry point
+├── cli.rs              # Command-line interface
+├── constants.rs        # Centralized size and parameter constants
+├── crypto.rs           # Ed25519, Blake2b, Scrypt wrappers
+├── keys.rs             # Key types, generation, encryption
+├── signature.rs        # Signature creation and verification
+├── credential_store.rs # OS credential store integration
+├── formats.rs          # Binary and base64 encoding/decoding
+├── validation.rs       # Comment and input validation (C compatibility)
+├── errors.rs           # Error types with thiserror
+└── ops/                # High-level operations
     ├── generate.rs    # Key generation
     ├── sign.rs        # File signing
     ├── verify.rs      # Signature verification
@@ -541,25 +577,21 @@ src/
 - `blake2` - Blake2b hashing
 - `scrypt` - Key derivation function
 - `zeroize` - Secure memory wiping
+- `subtle` - Constant-time comparisons
 
-### Hardware Key Support (Optional)
+### System Integration
 
-- `p256` - P-256 ECDH and ephemeral key generation (RustCrypto)
-- `aes-gcm` - AES-256-GCM authenticated encryption (RustCrypto)
-- `hkdf` - HKDF-SHA256 key derivation (RustCrypto)
-- `sha2` - SHA-256 hash function (RustCrypto)
-- `security-framework` - macOS Secure Enclave (macOS only)
-- `windows` - Windows CNG/TPM APIs (Windows only)
-- `tss-esapi` - TPM 2.0 TSS bindings (Linux only)
+- `keyring` - OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 
 ### Utilities
 
-- `rayon` - Data-parallel iteration for multi-file signing
+- `rayon` - Data-parallel iteration for multi-file signing/verification
 - `base64` - Base64 encoding/decoding
 - `rand` - Cryptographic random number generation
 - `thiserror` - Library error types
 - `rpassword` - Secure password input
 - `dirs` - Cross-platform directory discovery
+- `clap` - CLI argument parsing
 
 ### Development
 
@@ -636,6 +668,7 @@ Key Information:
 ├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
 ├─ KDF Algorithm: Scrypt
+├─ Password saved: Yes
 └─ KDF Parameters:
    ├─ opslimit: 33554432 (N=2^20, r=8, p=1)
    ├─ memlimit: 1073741824 (1024 MB)
@@ -767,7 +800,6 @@ All workflows use caching for faster builds.
 - [C/Rust Implementation Comparison](docs/c-rust-parity-gaps.md) - Detailed analysis of both implementations
 - [rsign2 Comparison](docs/rsign2-comparison.md) - Comprehensive comparison with rsign2 Rust implementation
 - [Multi-File Signing](docs/multi-file-signing.md) - Parallel and sequential multi-file signing
-- [Hardware Key Protection](docs/hardware-key-protection.md) - Hardware-backed key protection (ECIES, Secure Enclave, TPM 2.0)
 - [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) - Security implications of weak KDF parameters
 - [Development Guidelines](CLAUDE.md) - Essential development workflow
 - [Design Document](../docs/plans/2026-01-23-rust-rewrite-design.md) - Original implementation plan

@@ -82,11 +82,12 @@ These tools support structural search and replace, rename operations, and other 
 ## Key Locations
 ```
 src/
-├── crypto.rs      # Ed25519, Blake2b, Scrypt
-├── keys.rs        # Key types, generation, encryption
-├── signature.rs   # Signature creation/verification
-├── ops/           # High-level operations (sign, verify, etc)
-└── main.rs        # CLI
+├── crypto.rs            # Ed25519, Blake2b, Scrypt
+├── keys.rs              # Key types, generation, encryption
+├── signature.rs         # Signature creation/verification
+├── credential_store.rs  # OS credential store for password caching
+├── ops/                 # High-level operations (sign, verify, etc)
+└── main.rs              # CLI
 
 tests/
 ├── cli_test.rs           # CLI integration tests
@@ -95,11 +96,12 @@ tests/
 ```
 
 ## Testing
-- **Fast tests** (414 tests): Default, use N=2^14 for scrypt
-- **Slow tests** (11 tests): `--ignored`, use production N=2^20
+- **Fast tests** (227 tests): Default, use N=2^14 for scrypt
+- **Slow tests** (3 tests): `--ignored`, use production N=2^20
 - Must test compatibility with C minisign after crypto changes
 - C minisign must be installed for compatibility tests
 - **IMPORTANT**: All tests MUST be in the `tests/` directory (not `src/`) to enable proper CodeQL security analysis exclusions
+- **Credential store tests**: Skip gracefully when OS keyring backend unavailable (headless environments)
 
 ## Crypto Dependencies (ONLY These)
 - `ed25519-dalek` - Ed25519 signatures
@@ -109,6 +111,11 @@ tests/
 - `subtle` - Constant-time comparisons
 
 Do not add other crypto libs.
+
+## Other Key Dependencies
+- `keyring` - OS credential store integration (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- `clap` - CLI argument parsing
+- `rayon` - Parallel verification for multiple files
 
 ## Dependency Management
 
