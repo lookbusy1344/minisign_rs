@@ -510,10 +510,15 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     // Handle --forget-password (standalone usage)
     if cli.forget_password {
+        let had_password = minisign::credential_store::has_password(&old_credential_id);
         match minisign::credential_store::forget_password(&old_credential_id) {
             Ok(()) => {
                 if !cli.quiet {
-                    println!("Password removed from credential store");
+                    if had_password {
+                        println!("Password removed from credential store");
+                    } else {
+                        println!("No saved password found for this key");
+                    }
                 }
                 return Ok(());
             }
