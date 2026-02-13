@@ -2252,7 +2252,7 @@ fn test_save_password_short_flag() {
 fn test_forget_password_standalone() {
     use minisign::credential_store;
 
-let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password = "forget_test_pwd";
@@ -2320,7 +2320,7 @@ let temp_dir = TempDir::new().unwrap();
 fn test_forget_password_short_flag() {
     use minisign::credential_store;
 
-let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password = "short_forget_test";
@@ -2381,7 +2381,7 @@ let temp_dir = TempDir::new().unwrap();
 fn test_inspect_shows_password_saved_status() {
     use minisign::credential_store;
 
-let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password = "inspect_test_pwd";
@@ -2459,8 +2459,7 @@ let temp_dir = TempDir::new().unwrap();
 #[serial_test::serial]
 #[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_forget_password_is_idempotent() {
-
-let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password_file = temp_dir.path().join("password.txt");
