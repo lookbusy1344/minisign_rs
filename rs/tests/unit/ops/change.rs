@@ -8,6 +8,7 @@ use minisign::{
 };
 use std::fs;
 use tempfile::TempDir;
+
 #[test]
 fn test_change_password_fast() {
     let temp_dir = TempDir::new().unwrap();

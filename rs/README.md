@@ -27,20 +27,22 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - ✅ Weak key detection with persistent warnings
 - ✅ Multi-file signing with parallel execution (Rayon)
 - ✅ Multi-file verification with parallel execution (Rayon)
+- ✅ OS credential store integration for password caching (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 - ✅ Full compatibility with C minisign file formats
 
 ### Test Coverage
 
-- **466 total tests** covering all operations and CLI behavior
+- **492 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
+- Credential store tests (skip gracefully when OS keyring unavailable)
 - Compatibility tests verifying interoperability with C minisign
 - Cross-binary tests ensuring full C minisign compatibility
 - Edge case tests for unicode, symlinks, and large files
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (455 tests) using optimized scrypt parameters (~10 seconds)
+- **Fast test suite** (481 tests) using optimized scrypt parameters (~10 seconds)
 - **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
@@ -80,13 +82,13 @@ Release binaries are available for:
 # Build the project
 cargo build --release
 
-# Run tests (fast - 455 tests, ~10 seconds)
+# Run tests (fast - 481 tests, ~10 seconds)
 cargo test
 
 # Run slow security tests (11 tests, ~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (466 tests, ~21 seconds)
+# Run all tests (492 tests, ~21 seconds)
 cargo test && cargo test -- --ignored
 
 # Check code quality
@@ -145,6 +147,8 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-o` | `--output` | Output verification result to stdout |
 | `-W` | `--no-password` | Do not use password (generate and change only) |
 | | `--sequential` | Process files sequentially instead of in parallel |
+| | `--save-password` / `--sp` | Save password to OS credential store after successful use |
+| | `--forget-password` / `--fp` | Remove saved password from OS credential store |
 
 #### Additional Options
 
@@ -310,6 +314,114 @@ minisign_rs -IP RWQwpZXcv6r8MS48xbhFK+8F8ZPL5VBlUK6+sKAUXTl5kp/EsIKbKAEa
 minisign_rs -Ix file.txt.minisig
 ```
 
+### Password Management with Credential Store
+
+Minisign-rs integrates with your operating system's credential store to securely cache passwords for encrypted keys. This provides a convenient workflow similar to `gh auth`, `cargo publish`, and other CLI tools.
+
+#### Platform Support
+
+| Platform | Credential Store | Backend |
+|----------|-----------------|---------|
+| macOS    | Keychain        | Native macOS Keychain APIs |
+| Windows  | Credential Manager | Windows Credential Manager |
+| Linux    | Secret Service  | libsecret/gnome-keyring |
+
+#### Save password during key generation
+
+```bash
+# Generate key and save password to credential store
+minisign_rs -G --save-password
+
+# Short flag alias
+minisign_rs -G --sp
+
+# With custom paths
+minisign_rs -G --sp -s mykey.key -p mykey.pub
+```
+
+**Security**: Passwords are stored securely using your OS's native credential store, encrypted with your user account credentials. On macOS, this integrates with FileVault and system keychain encryption.
+
+#### Auto-retrieve saved passwords
+
+Once saved, passwords are automatically retrieved from the credential store when needed:
+
+```bash
+# Sign - automatically uses saved password if available
+minisign_rs -S -m file.txt
+
+# No password prompt if password is saved for this key
+minisign_rs -S -m file1.txt file2.txt file3.txt
+
+# Change password - retrieves old password automatically
+minisign_rs -K -s mykey.key
+```
+
+**Behavior**:
+- If password is saved: Silent retrieval, no prompt
+- If password not saved: Normal password prompt
+- If credential store unavailable: Falls back to password prompt (graceful degradation)
+
+#### Save password after first use
+
+You can also save a password after successfully using it:
+
+```bash
+# Sign and save password on successful decrypt
+minisign_rs -S -m file.txt --save-password
+
+# Change password and save the new password
+minisign_rs -K --save-password
+```
+
+#### Remove saved passwords
+
+```bash
+# Remove saved password for default key
+minisign_rs -K --forget-password
+
+# Short flag alias
+minisign_rs -K --fp
+
+# Remove saved password for specific key
+minisign_rs -K --forget-password -s mykey.key
+```
+
+**Idempotent**: `--forget-password` succeeds even if no password is saved.
+
+#### Check password status
+
+```bash
+# Inspect shows whether password is saved
+minisign_rs -I -s mykey.key
+
+# Example output shows "Password saved: Yes" or "Password saved: No"
+```
+
+#### Security model
+
+**What's protected**:
+- Passwords stored in OS credential store (encrypted by OS)
+- Key IDs used as credential identifiers (portable across file moves)
+- Automatic cleanup on credential removal
+
+**Security properties**:
+- **Opt-in only**: Passwords never saved automatically
+- **Per-key storage**: Each key ID has independent credential entry
+- **OS-level encryption**: Credentials protected by OS keychain encryption
+- **No silent failures**: Credential store errors never block operations
+
+**When to use**:
+- Personal development machines with full-disk encryption
+- Laptops/desktops where you sign frequently
+- Workstations with trusted OS credential management
+- Streamlining workflows without compromising key file security
+
+**When NOT to use**:
+- Shared/multi-user systems (credentials are per-user account)
+- Headless servers without credential store backend
+- CI/CD pipelines (use `--password-file` or unencrypted keys)
+- Untrusted environments or systems without disk encryption
+
 ## Signature File Format
 
 Minisign creates `.minisig` files with 4 lines:
@@ -428,17 +540,18 @@ cargo test && cargo test -- --ignored
 
 ```
 src/
-├── lib.rs          # Public API exports
-├── main.rs         # CLI entry point
-├── cli.rs          # Command-line interface
-├── constants.rs    # Centralized size and parameter constants
-├── crypto.rs       # Ed25519, Blake2b, Scrypt wrappers
-├── keys.rs         # Key types, generation, encryption
-├── signature.rs    # Signature creation and verification
-├── formats.rs      # Binary and base64 encoding/decoding
-├── validation.rs   # Comment and input validation (C compatibility)
-├── errors.rs       # Error types with thiserror
-└── ops/            # High-level operations
+├── lib.rs              # Public API exports
+├── main.rs             # CLI entry point
+├── cli.rs              # Command-line interface
+├── constants.rs        # Centralized size and parameter constants
+├── crypto.rs           # Ed25519, Blake2b, Scrypt wrappers
+├── keys.rs             # Key types, generation, encryption
+├── signature.rs        # Signature creation and verification
+├── credential_store.rs # OS credential store integration
+├── formats.rs          # Binary and base64 encoding/decoding
+├── validation.rs       # Comment and input validation (C compatibility)
+├── errors.rs           # Error types with thiserror
+└── ops/                # High-level operations
     ├── generate.rs    # Key generation
     ├── sign.rs        # File signing
     ├── verify.rs      # Signature verification
@@ -464,15 +577,21 @@ src/
 - `blake2` - Blake2b hashing
 - `scrypt` - Key derivation function
 - `zeroize` - Secure memory wiping
+- `subtle` - Constant-time comparisons
+
+### System Integration
+
+- `keyring` - OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 
 ### Utilities
 
-- `rayon` - Data-parallel iteration for multi-file signing
+- `rayon` - Data-parallel iteration for multi-file signing/verification
 - `base64` - Base64 encoding/decoding
 - `rand` - Cryptographic random number generation
 - `thiserror` - Library error types
 - `rpassword` - Secure password input
 - `dirs` - Cross-platform directory discovery
+- `clap` - CLI argument parsing
 
 ### Development
 
@@ -549,6 +668,7 @@ Key Information:
 ├─ Key ID (words): physique aftermath edict lockup tactics Eskimo blockade commence
 ├─ Encrypted: Yes
 ├─ KDF Algorithm: Scrypt
+├─ Password saved: Yes
 └─ KDF Parameters:
    ├─ opslimit: 33554432 (N=2^20, r=8, p=1)
    ├─ memlimit: 1073741824 (1024 MB)

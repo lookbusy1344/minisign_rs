@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 /// Options for changing secret key password
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // Builder pattern is used to construct this
 pub struct ChangeOptions<'a> {
     /// Path to the secret key file
     secret_key_file: &'a Path,
@@ -25,6 +26,7 @@ pub struct ChangeOptions<'a> {
 
 /// Builder for `ChangeOptions`
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // Builder pattern in use
 pub struct ChangeOptionsBuilder<'a> {
     secret_key_file: &'a Path,
     remove_password: bool,
@@ -134,6 +136,8 @@ pub struct ChangeResult {
     pub secret_key_file: PathBuf,
     /// Whether the key is now encrypted
     pub encrypted: bool,
+    /// New credential store lookup key (after password change)
+    pub credential_id: String,
 }
 
 /// Change or remove the password on a secret key
@@ -187,7 +191,7 @@ pub fn change_with_log_n(
     // Load the secret key
     let seckey = load_secret_key(options.secret_key_file)?;
 
-    // Decrypt the secret key with old password
+    // Decrypt the secret key
     let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = old_password.ok_or(Error::PasswordRequired)?;
         seckey.decrypt(pwd)?
@@ -195,7 +199,7 @@ pub fn change_with_log_n(
         (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
     };
 
-    // Create new secret key structure with new password
+    // Create new secret key structure with new password (or remove password)
     let new_seckey = if options.remove_password {
         // Remove encryption
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
@@ -227,12 +231,16 @@ pub fn change_with_log_n(
     } else {
         "minisign encrypted secret key"
     };
+
     let seckey_contents = new_seckey.to_file_contents(seckey_comment);
-    // Always overwrite when changing password (force=true)
     write_secret_key_file(options.secret_key_file, &seckey_contents, true)?;
+
+    // Capture new credential ID for credential store
+    let credential_id = new_seckey.credential_id();
 
     Ok(ChangeResult {
         secret_key_file: options.secret_key_file.to_path_buf(),
         encrypted: !options.remove_password,
+        credential_id,
     })
 }

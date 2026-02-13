@@ -82,6 +82,10 @@ pub enum Error {
     #[error("unsupported checksum algorithm: {0}")]
     UnsupportedChkAlg(String),
 
+    // Credential store errors
+    #[error("credential store operation failed: {0}")]
+    CredentialStoreError(String),
+
     // Key derivation errors
     #[error("key derivation failed: {0}")]
     KdfError(String),

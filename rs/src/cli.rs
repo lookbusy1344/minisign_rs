@@ -131,6 +131,14 @@ pub struct Cli {
     #[cfg_attr(debug_assertions, arg(long = "force-weak-kdf", hide = true))]
     pub force_weak_kdf: bool,
 
+    /// Save password to OS credential store after successful use
+    #[arg(long = "save-password", visible_alias = "sp")]
+    pub save_password: bool,
+
+    /// Remove saved password from OS credential store
+    #[arg(long = "forget-password", visible_alias = "fp")]
+    pub forget_password: bool,
+
     /// Show help
     #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]
     pub help: Option<bool>,

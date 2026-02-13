@@ -4,6 +4,7 @@
 mod unit {
     pub mod cli;
     pub mod constants;
+    pub mod credential_store;
     pub mod crypto;
     pub mod errors;
     pub mod formats;

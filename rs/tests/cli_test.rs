@@ -12,6 +12,36 @@ fn minisign_cmd() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("minisign_rs"))
 }
 
+/// RAII guard for credential store cleanup in CLI tests
+/// Ensures credentials are removed even if tests panic
+#[cfg(feature = "credential_store_tests")]
+mod credential_guard {
+    use minisign::credential_store;
+
+    pub struct CredentialGuard {
+        credential_id: String,
+    }
+
+    impl CredentialGuard {
+        pub fn new(credential_id: impl Into<String>) -> Self {
+            let credential_id = credential_id.into();
+            Self { credential_id }
+        }
+
+        #[allow(dead_code)]
+        pub fn credential_id(&self) -> &str {
+            &self.credential_id
+        }
+    }
+
+    impl Drop for CredentialGuard {
+        fn drop(&mut self) {
+            // Ensure cleanup happens even if test panics
+            let _ = credential_store::forget_password(&self.credential_id);
+        }
+    }
+}
+
 #[test]
 fn test_no_arguments() {
     minisign_cmd()
@@ -68,8 +98,17 @@ fn test_help_shows_correct_app_name() {
 
 #[test]
 fn test_generate_missing_arguments() {
+    let dir = TempDir::new().unwrap();
+    let sk = dir.path().join("test.key");
+    let pk = dir.path().join("test.pub");
+
+    // Non-interactive: should fail because it can't prompt for a password
     minisign_cmd()
         .arg("-G")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
         .assert()
         .failure()
         .stderr(predicate::str::contains("password"));
@@ -2048,4 +2087,721 @@ fn test_recreate_rejects_w_flag() {
         .stderr(predicate::str::contains("no-password"))
         .stderr(predicate::str::contains("not supported"))
         .stderr(predicate::str::contains("recreate"));
+}
+
+// ============================================================================
+// Credential Store Tests
+// ============================================================================
+
+// Removed is_keyring_available_for_cli_tests - tests now use feature flag instead
+
+/// Helper to get `credential_id` from a secret key file
+fn get_credential_id_from_file(sk_path: &std::path::Path) -> String {
+    use minisign::keys::SeckeyStruct;
+    let contents = fs::read_to_string(sk_path).expect("Failed to read secret key file");
+    let seckey = SeckeyStruct::from_file_contents(&contents).expect("Failed to parse secret key");
+    seckey.credential_id()
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_save_password_flag_with_generate() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "test_password_123";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key with --save-password flag
+    let gen_output = minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    eprintln!(
+        "Generate stdout: {}",
+        String::from_utf8_lossy(&gen_output.stdout)
+    );
+    eprintln!(
+        "Generate stderr: {}",
+        String::from_utf8_lossy(&gen_output.stderr)
+    );
+
+    // Extract credential_id for cleanup guard
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    // Extract key ID to verify output
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    eprintln!("Inspect output: {output_str}");
+
+    let key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found in inspect output");
+
+    eprintln!("Extracted key_id: {key_id}");
+    eprintln!("credential_id: {credential_id}");
+
+    // Verify password was saved to credential store
+    let saved_password = credential_store::get_password(&credential_id);
+    let is_some = saved_password.is_some();
+    eprintln!("saved_password.is_some(): {is_some}");
+    assert!(
+        saved_password.is_some(),
+        "Password should be saved in credential store for credential_id: {credential_id}"
+    );
+    assert_eq!(saved_password.as_ref().map(|s| s.as_str()), Some(password));
+
+    // Guard will clean up credential store on drop
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_save_password_short_flag() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "short_flag_test";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Test short flag --sp
+    minisign_cmd()
+        .arg("-G")
+        .arg("--sp")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract credential_id for cleanup guard
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    // Extract key ID to verify output
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    let _key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Verify password saved using credential_id
+    assert!(credential_store::has_password(&credential_id));
+
+    // Guard will clean up on drop
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_forget_password_standalone() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "forget_test_pwd";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key and save password
+    minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract key ID
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    let _key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Verify password is saved using credential_id
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+    assert!(credential_store::has_password(&credential_id));
+
+    // Forget password using standalone --forget-password
+    minisign_cmd()
+        .arg("-K")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    // Verify password was removed
+    assert!(!credential_store::has_password(&credential_id));
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_forget_password_short_flag() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "short_forget_test";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate and save
+    minisign_cmd()
+        .arg("-G")
+        .arg("--sp")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract key ID
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    let key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Use short flag --fp to forget
+    minisign_cmd()
+        .arg("-K")
+        .arg("--fp")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    // Verify removed
+    assert!(!credential_store::has_password(key_id));
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_inspect_shows_password_saved_status() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "inspect_test_pwd";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate without saving password
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Inspect should show password not saved
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    assert!(
+        output_str.contains("Password saved: No") || output_str.contains("Password saved: no"),
+        "Inspect should show password not saved"
+    );
+
+    // Extract key ID
+    let _key_id = output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(str::trim)
+        .expect("Key ID not found");
+
+    // Save password manually using credential store with credential_id
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+    credential_store::save_password(&credential_id, password).unwrap();
+
+    // Inspect should now show password saved
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    assert!(
+        output_str.contains("Password saved: Yes") || output_str.contains("Password saved: yes"),
+        "Inspect should show password saved"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_forget_password_is_idempotent() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, "test").unwrap();
+
+    // Generate key without saving password
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Forgetting a non-existent password should succeed (idempotent)
+    minisign_cmd()
+        .arg("-K")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    // Forgetting again should still succeed
+    minisign_cmd()
+        .arg("-K")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+}
+
+/// Helper: generate a key with --save-password, return the key ID string.
+/// Leaves the password saved in the credential store for subsequent test steps.
+fn generate_key_with_saved_password(
+    sk_path: &std::path::Path,
+    pk_path: &std::path::Path,
+    password: &str,
+) -> String {
+    let password_file = sk_path.parent().unwrap().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(sk_path)
+        .arg("-p")
+        .arg(pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    // Extract key ID via inspect
+    let output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let output_str = String::from_utf8_lossy(&output);
+    output_str
+        .lines()
+        .find(|line| line.contains("Key ID:"))
+        .and_then(|line| line.split(':').nth(1))
+        .map(|s| s.trim().to_string())
+        .expect("Key ID not found in inspect output")
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_sign_uses_saved_password_from_credential_store() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    fs::write(&message_file, "test message for credential store signing").unwrap();
+
+    let _key_id =
+        generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_sign_test");
+
+    // Sign WITHOUT --password-file — must auto-retrieve from credential store.
+    // If credential store retrieval fails, the command will block on stdin
+    // (which assert_cmd closes), causing a failure.
+    let sign_output = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&sign_output.stderr);
+    assert!(
+        stderr.contains("Using saved password from credential store"),
+        "Expected credential store retrieval message in stderr, got: {stderr}"
+    );
+
+    // Verify the signature is valid
+    minisign_cmd()
+        .arg("-V")
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-m")
+        .arg(&message_file)
+        .assert()
+        .success();
+
+    // Clean up using credential_id
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_sign_multiple_files_uses_saved_password() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+    let file3 = temp_dir.path().join("file3.txt");
+    fs::write(&file1, "content one").unwrap();
+    fs::write(&file2, "content two").unwrap();
+    fs::write(&file3, "content three").unwrap();
+
+    let _key_id =
+        generate_key_with_saved_password(&sk_path, &pk_path, "credential_store_multi_sign");
+
+    // Sign multiple files without providing a password
+    let sign_output = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&file1)
+        .arg(&file2)
+        .arg(&file3)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&sign_output.stderr);
+    assert!(
+        stderr.contains("Using saved password from credential store"),
+        "Expected credential store retrieval message in stderr, got: {stderr}"
+    );
+
+    // Verify all three signatures
+    for file in [&file1, &file2, &file3] {
+        minisign_cmd()
+            .arg("-V")
+            .arg("-p")
+            .arg(&pk_path)
+            .arg("-m")
+            .arg(file)
+            .assert()
+            .success();
+    }
+
+    // Clean up using credential_id
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_save_password_on_sign_then_reuse() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "save_on_sign_test";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key WITHOUT --save-password
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    let file1 = temp_dir.path().join("first.txt");
+    let file2 = temp_dir.path().join("second.txt");
+    fs::write(&file1, "first signing").unwrap();
+    fs::write(&file2, "second signing").unwrap();
+
+    // First sign WITH --password-file AND --save-password
+    // This should save the password to the credential store
+    let first_sign = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&file1)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("--save-password")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&first_sign.stderr);
+    assert!(
+        stderr.contains("Password saved to OS credential store"),
+        "Expected save confirmation in stderr, got: {stderr}"
+    );
+
+    // Second sign WITHOUT --password-file — should auto-retrieve
+    let second_sign = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&file2)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&second_sign.stderr);
+    assert!(
+        stderr.contains("Using saved password from credential store"),
+        "Expected credential store retrieval message in stderr, got: {stderr}"
+    );
+
+    // Verify both signatures
+    for file in [&file1, &file2] {
+        minisign_cmd()
+            .arg("-V")
+            .arg("-p")
+            .arg(&pk_path)
+            .arg("-m")
+            .arg(file)
+            .assert()
+            .success();
+    }
+
+    // Clean up using credential_id
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_inspect_uses_saved_password_for_decryption() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password_file = temp_dir.path().join("password.txt");
+
+    // Write password to file
+    let password = "test-password-123";
+    std::fs::write(&password_file, password).unwrap();
+
+    // Generate key
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Get credential ID and save password to credential store
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+    credential_store::save_password(&credential_id, password).unwrap();
+
+    // Inspect with decryption (should use saved password, not prompt)
+    // This should show the actual key ID, not "[encrypted - password required to view]"
+    let inspect_output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout_str = String::from_utf8_lossy(&inspect_output.stdout);
+    let stderr_str = String::from_utf8_lossy(&inspect_output.stderr);
+
+    // Should show "Using saved password from credential store" in stderr
+    assert!(
+        stderr_str.contains("Using saved password from credential store"),
+        "Inspect should use saved password. Stderr:\n{stderr_str}"
+    );
+
+    // Should NOT show "[encrypted - password required to view]"
+    assert!(
+        !stdout_str.contains("[encrypted - password required to view]"),
+        "Key ID should be decrypted using saved password. Output:\n{stdout_str}"
+    );
+
+    // Should show actual key ID (16 hex characters)
+    assert!(
+        stdout_str.lines().any(|line| {
+            line.contains("Key ID:") && line.chars().filter(char::is_ascii_hexdigit).count() >= 16
+        }),
+        "Should show decrypted key ID. Output:\n{stdout_str}"
+    );
 }

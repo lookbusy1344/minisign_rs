@@ -82,11 +82,12 @@ These tools support structural search and replace, rename operations, and other 
 ## Key Locations
 ```
 src/
-├── crypto.rs      # Ed25519, Blake2b, Scrypt
-├── keys.rs        # Key types, generation, encryption
-├── signature.rs   # Signature creation/verification
-├── ops/           # High-level operations (sign, verify, etc)
-└── main.rs        # CLI
+├── crypto.rs            # Ed25519, Blake2b, Scrypt
+├── keys.rs              # Key types, generation, encryption
+├── signature.rs         # Signature creation/verification
+├── credential_store.rs  # OS credential store for password caching
+├── ops/                 # High-level operations (sign, verify, etc)
+└── main.rs              # CLI
 
 tests/
 ├── cli_test.rs           # CLI integration tests
@@ -95,11 +96,38 @@ tests/
 ```
 
 ## Testing
-- **Fast tests** (414 tests): Default, use N=2^14 for scrypt
-- **Slow tests** (11 tests): `--ignored`, use production N=2^20
+
+### Test Categories
+
+- **Fast tests** (~420 tests, ~9s): Default test suite using N=2^14 for scrypt
+  - Run with: `cargo test` or `./run_all_tests.sh`
+
+- **Slow tests** (~10 tests, ~16s): Security tests using production N=2^20 for scrypt
+  - Run with: `cargo test -- --ignored` or `./run_all_tests.sh --slow`
+
+- **Credential store tests** (~15 tests): Tests that interact with OS keyring (macOS Keychain, etc.)
+  - **Require user interaction** (authorization prompts)
+  - **Must run sequentially** (`--test-threads=1`) to avoid parallel prompts
+  - Enabled with: `cargo test --features credential_store_tests -- --test-threads=1`
+  - Run with: `./run_all_tests.sh --credential-store`
+  - Marked with `#[cfg_attr(not(feature = "credential_store_tests"), ignore)]`
+  - Use RAII cleanup guards to ensure credentials removed even on panic
+
+### Test Runner Script
+
+```bash
+./run_all_tests.sh                  # Fast tests only (default)
+./run_all_tests.sh --slow           # Fast + slow tests
+./run_all_tests.sh --credential-store  # Credential store tests only
+./run_all_tests.sh --all            # All tests including credential store
+```
+
+### Test Requirements
+
 - Must test compatibility with C minisign after crypto changes
 - C minisign must be installed for compatibility tests
 - **IMPORTANT**: All tests MUST be in the `tests/` directory (not `src/`) to enable proper CodeQL security analysis exclusions
+- Credential store tests are **completely separate** from fast/slow tests to avoid accidental user prompts during development
 
 ## Crypto Dependencies (ONLY These)
 - `ed25519-dalek` - Ed25519 signatures
@@ -109,6 +137,11 @@ tests/
 - `subtle` - Constant-time comparisons
 
 Do not add other crypto libs.
+
+## Other Key Dependencies
+- `keyring` - OS credential store integration (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- `clap` - CLI argument parsing
+- `rayon` - Parallel verification for multiple files
 
 ## Dependency Management
 
