@@ -12,6 +12,36 @@ fn minisign_cmd() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("minisign_rs"))
 }
 
+/// RAII guard for credential store cleanup in CLI tests
+/// Ensures credentials are removed even if tests panic
+#[cfg(feature = "credential_store_tests")]
+mod credential_guard {
+    use minisign::credential_store;
+
+    pub struct CredentialGuard {
+        credential_id: String,
+    }
+
+    impl CredentialGuard {
+        pub fn new(credential_id: impl Into<String>) -> Self {
+            let credential_id = credential_id.into();
+            Self { credential_id }
+        }
+
+        #[allow(dead_code)]
+        pub fn credential_id(&self) -> &str {
+            &self.credential_id
+        }
+    }
+
+    impl Drop for CredentialGuard {
+        fn drop(&mut self) {
+            // Ensure cleanup happens even if test panics
+            let _ = credential_store::forget_password(&self.credential_id);
+        }
+    }
+}
+
 #[test]
 fn test_no_arguments() {
     minisign_cmd()
@@ -2063,25 +2093,7 @@ fn test_recreate_rejects_w_flag() {
 // Credential Store Tests
 // ============================================================================
 
-/// Check if the keyring backend is available for testing
-fn is_keyring_available_for_cli_tests() -> bool {
-    use minisign::credential_store;
-
-    let test_key = "minisign_cli_test_availability";
-
-    // Try to save a test password
-    if credential_store::save_password(test_key, "test").is_err() {
-        return false;
-    }
-
-    // Try to retrieve it
-    let retrieved = credential_store::get_password(test_key);
-
-    // Clean up
-    let _ = credential_store::forget_password(test_key);
-
-    retrieved.is_some()
-}
+// Removed is_keyring_available_for_cli_tests - tests now use feature flag instead
 
 /// Helper to get `credential_id` from a secret key file
 fn get_credential_id_from_file(sk_path: &std::path::Path) -> String {
@@ -2093,13 +2105,9 @@ fn get_credential_id_from_file(sk_path: &std::path::Path) -> String {
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_save_password_flag_with_generate() {
     use minisign::credential_store;
-
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
 
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -2133,7 +2141,13 @@ fn test_save_password_flag_with_generate() {
         String::from_utf8_lossy(&gen_output.stderr)
     );
 
-    // Extract key ID to check credential store
+    // Extract credential_id for cleanup guard
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    // Extract key ID to verify output
     let output = minisign_cmd()
         .arg("-I")
         .arg("-s")
@@ -2157,11 +2171,9 @@ fn test_save_password_flag_with_generate() {
         .expect("Key ID not found in inspect output");
 
     eprintln!("Extracted key_id: {key_id}");
-
-    // Verify password was saved to credential store using credential_id
-    let credential_id = get_credential_id_from_file(&sk_path);
     eprintln!("credential_id: {credential_id}");
 
+    // Verify password was saved to credential store
     let saved_password = credential_store::get_password(&credential_id);
     let is_some = saved_password.is_some();
     eprintln!("saved_password.is_some(): {is_some}");
@@ -2171,19 +2183,14 @@ fn test_save_password_flag_with_generate() {
     );
     assert_eq!(saved_password.as_ref().map(|s| s.as_str()), Some(password));
 
-    // Clean up credential store
-    let _ = credential_store::forget_password(&credential_id);
+    // Guard will clean up credential store on drop
 }
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_save_password_short_flag() {
     use minisign::credential_store;
-
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
 
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -2206,7 +2213,13 @@ fn test_save_password_short_flag() {
         .assert()
         .success();
 
-    // Extract key ID
+    // Extract credential_id for cleanup guard
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    // Extract key ID to verify output
     let output = minisign_cmd()
         .arg("-I")
         .arg("-s")
@@ -2228,24 +2241,18 @@ fn test_save_password_short_flag() {
         .expect("Key ID not found");
 
     // Verify password saved using credential_id
-    let credential_id = get_credential_id_from_file(&sk_path);
     assert!(credential_store::has_password(&credential_id));
 
-    // Clean up
-    let _ = credential_store::forget_password(&credential_id);
+    // Guard will clean up on drop
 }
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_forget_password_standalone() {
     use minisign::credential_store;
 
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
-
-    let temp_dir = TempDir::new().unwrap();
+let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password = "forget_test_pwd";
@@ -2288,7 +2295,10 @@ fn test_forget_password_standalone() {
         .expect("Key ID not found");
 
     // Verify password is saved using credential_id
+    #[allow(unused_variables)]
     let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
     assert!(credential_store::has_password(&credential_id));
 
     // Forget password using standalone --forget-password
@@ -2306,15 +2316,11 @@ fn test_forget_password_standalone() {
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_forget_password_short_flag() {
     use minisign::credential_store;
 
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
-
-    let temp_dir = TempDir::new().unwrap();
+let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password = "short_forget_test";
@@ -2371,15 +2377,11 @@ fn test_forget_password_short_flag() {
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_inspect_shows_password_saved_status() {
     use minisign::credential_store;
 
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
-
-    let temp_dir = TempDir::new().unwrap();
+let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password = "inspect_test_pwd";
@@ -2427,7 +2429,10 @@ fn test_inspect_shows_password_saved_status() {
         .expect("Key ID not found");
 
     // Save password manually using credential store with credential_id
+    #[allow(unused_variables)]
     let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
     credential_store::save_password(&credential_id, password).unwrap();
 
     // Inspect should now show password saved
@@ -2448,20 +2453,14 @@ fn test_inspect_shows_password_saved_status() {
         output_str.contains("Password saved: Yes") || output_str.contains("Password saved: yes"),
         "Inspect should show password saved"
     );
-
-    // Clean up
-    let _ = credential_store::forget_password(&credential_id);
 }
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_forget_password_is_idempotent() {
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
 
-    let temp_dir = TempDir::new().unwrap();
+let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
     let password_file = temp_dir.path().join("password.txt");
@@ -2546,14 +2545,8 @@ fn generate_key_with_saved_password(
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_sign_uses_saved_password_from_credential_store() {
-    use minisign::credential_store;
-
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
-
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
@@ -2594,20 +2587,16 @@ fn test_sign_uses_saved_password_from_credential_store() {
         .success();
 
     // Clean up using credential_id
+    #[allow(unused_variables)]
     let credential_id = get_credential_id_from_file(&sk_path);
-    let _ = credential_store::forget_password(&credential_id);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
 }
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_sign_multiple_files_uses_saved_password() {
-    use minisign::credential_store;
-
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
-
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
@@ -2655,20 +2644,16 @@ fn test_sign_multiple_files_uses_saved_password() {
     }
 
     // Clean up using credential_id
+    #[allow(unused_variables)]
     let credential_id = get_credential_id_from_file(&sk_path);
-    let _ = credential_store::forget_password(&credential_id);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
 }
 
 #[test]
 #[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
 fn test_save_password_on_sign_then_reuse() {
-    use minisign::credential_store;
-
-    if !is_keyring_available_for_cli_tests() {
-        eprintln!("Skipping test: keyring backend unavailable");
-        return;
-    }
-
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
@@ -2747,6 +2732,8 @@ fn test_save_password_on_sign_then_reuse() {
     }
 
     // Clean up using credential_id
+    #[allow(unused_variables)]
     let credential_id = get_credential_id_from_file(&sk_path);
-    let _ = credential_store::forget_password(&credential_id);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
 }

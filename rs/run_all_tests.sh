@@ -3,44 +3,76 @@
 # Run all tests for minisign-rs
 #
 # Usage:
-#   ./run_all_tests.sh                      # Skip credential store tests (default)
-#   ./run_all_tests.sh --with-credential-store  # Include credential store tests (requires macOS Keychain authorization)
+#   ./run_all_tests.sh                          # Fast tests only (default)
+#   ./run_all_tests.sh --slow                   # Fast + slow tests
+#   ./run_all_tests.sh --credential-store       # Credential store tests only (requires user interaction)
+#   ./run_all_tests.sh --all                    # All tests including credential store
 #
-# Credential store tests are skipped by default because they require multiple
-# macOS Keychain authorization prompts. Run with --with-credential-store only when
-# specifically testing credential store functionality.
+# Test categories:
+#   - Fast tests: Default test suite (~9s, N=2^14 for scrypt)
+#   - Slow tests: Security tests with production KDF params (~16s, N=2^20 for scrypt)
+#   - Credential store tests: Tests requiring OS keyring authorization (macOS Keychain, etc.)
+#
+# Credential store tests are separate because:
+#   - Require user interaction (keyring authorization prompts)
+#   - Must run sequentially (--test-threads=1) to avoid parallel prompts
+#   - Are not needed for general development
 #
 set -e
 
 # Parse command line arguments
-RUN_CREDENTIAL_STORE_TESTS=false
-if [[ "$1" == "--with-credential-store" ]]; then
-    RUN_CREDENTIAL_STORE_TESTS=true
+RUN_MODE="fast"
+if [[ "$1" == "--slow" ]]; then
+    RUN_MODE="slow"
+elif [[ "$1" == "--credential-store" ]]; then
+    RUN_MODE="credential-store"
+elif [[ "$1" == "--all" ]]; then
+    RUN_MODE="all"
 fi
 
-echo "Running regular tests (excluding credential store tests)..."
-# Skip all tests that interact with OS credential store (macOS Keychain)
-# Patterns: credential_store, save_password, saved_password, forget_password, password_saved
-gtimeout 120 cargo test -- \
-    --skip credential_store \
-    --skip save_password \
-    --skip saved_password \
-    --skip forget_password \
-    --skip password_saved
+case "$RUN_MODE" in
+    "fast")
+        echo "Running fast tests..."
+        gtimeout 120 cargo test
+        echo ""
+        echo "✓ Fast tests completed successfully!"
+        ;;
 
-echo ""
-echo "Running slow/ignored tests..."
-gtimeout 300 cargo test -- --ignored
+    "slow")
+        echo "Running fast tests..."
+        gtimeout 120 cargo test
+        echo ""
+        echo "Running slow tests (ignored)..."
+        gtimeout 300 cargo test -- --ignored
+        echo ""
+        echo "✓ Fast and slow tests completed successfully!"
+        ;;
 
-if [[ "$RUN_CREDENTIAL_STORE_TESTS" == true ]]; then
-    echo ""
-    echo "Running credential store tests (will prompt for macOS Keychain authorization)..."
-    echo "Note: You may be prompted multiple times. Click 'Always Allow' to reduce prompts."
-    gtimeout 120 cargo test credential_store
-else
-    echo ""
-    echo "Skipped credential store tests (use --with-credential-store to include them)"
-fi
+    "credential-store")
+        echo "Running credential store tests..."
+        echo "Note: These tests require OS keyring authorization."
+        echo "      You may be prompted multiple times by macOS Keychain."
+        echo "      Click 'Always Allow' to reduce prompts."
+        echo ""
+        gtimeout 180 cargo test --features credential_store_tests -- --test-threads=1
+        echo ""
+        echo "✓ Credential store tests completed successfully!"
+        ;;
 
-echo ""
-echo "All tests completed successfully!"
+    "all")
+        echo "Running fast tests..."
+        gtimeout 120 cargo test
+        echo ""
+        echo "Running slow tests (ignored)..."
+        gtimeout 300 cargo test -- --ignored
+        echo ""
+        echo "Running credential store tests..."
+        echo "Note: These tests require OS keyring authorization."
+        echo "      You may be prompted multiple times by macOS Keychain."
+        echo "      Click 'Always Allow' to reduce prompts."
+        echo ""
+        gtimeout 180 cargo test --features credential_store_tests -- --test-threads=1
+        echo ""
+        echo "✓ All tests completed successfully!"
+        ;;
+esac

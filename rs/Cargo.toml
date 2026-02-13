@@ -35,6 +35,12 @@ proptest = "1.6"
 hex = "0.4"
 serial_test = "3.2"
 
+[features]
+# Enable credential store tests that require user interaction
+# These tests interact with OS keyring (macOS Keychain, Windows Credential Manager, etc.)
+# and must run sequentially to avoid prompting the user multiple times
+credential_store_tests = []
+
 [[bin]]
 name = "minisign_rs"
 path = "src/main.rs"
