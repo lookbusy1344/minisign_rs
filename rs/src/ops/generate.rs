@@ -236,7 +236,6 @@ impl GenerateResult {
 ///
 /// * `options` - Generation options including file paths and encryption settings
 /// * `password` - Password to encrypt the secret key (required unless `no_password` is true)
-/// * `hw` - Optional hardware key store for hardware-backed key protection
 ///
 /// # Returns
 ///
@@ -350,7 +349,6 @@ pub fn generate_with_log_n(
     let default_comment = format!("minisign public key {keynum_hex}");
     let comment = options.comment.unwrap_or(&default_comment);
 
-    // Hardware key enrollment (if requested)
     // Ensure parent directories exist
     ensure_parent_directory(options.secret_key_file)?;
     ensure_parent_directory(options.public_key_file)?;

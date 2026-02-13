@@ -32,7 +32,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **426 total tests** covering all operations and CLI behavior
+- **492 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Credential store tests (skip gracefully when OS keyring unavailable)
@@ -41,9 +41,9 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Edge case tests for unicode, symlinks, and large files
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
-- **10 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (416 tests) using optimized scrypt parameters (~10 seconds)
-- **Slow test suite** (10 tests) with production scrypt parameters (~11 seconds)
+- **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
+- **Fast test suite** (481 tests) using optimized scrypt parameters (~10 seconds)
+- **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
@@ -82,13 +82,13 @@ Release binaries are available for:
 # Build the project
 cargo build --release
 
-# Run tests (fast - 455 tests, ~10 seconds)
+# Run tests (fast - 481 tests, ~10 seconds)
 cargo test
 
 # Run slow security tests (11 tests, ~11 seconds)
 cargo test -- --ignored
 
-# Run all tests (466 tests, ~21 seconds)
+# Run all tests (492 tests, ~21 seconds)
 cargo test && cargo test -- --ignored
 
 # Check code quality
