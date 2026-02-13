@@ -23,10 +23,10 @@ jobs:
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
 
-    - name: Install C minisign
+    - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y minisign
+        sudo apt-get install -y minisign libdbus-1-dev pkg-config
 
     - name: Verify C minisign version
       run: minisign -v
