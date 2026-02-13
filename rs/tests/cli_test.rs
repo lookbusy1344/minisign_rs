@@ -2736,3 +2736,72 @@ fn test_save_password_on_sign_then_reuse() {
     #[cfg(feature = "credential_store_tests")]
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 }
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_inspect_uses_saved_password_for_decryption() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password_file = temp_dir.path().join("password.txt");
+
+    // Write password to file
+    let password = "test-password-123";
+    std::fs::write(&password_file, password).unwrap();
+
+    // Generate key
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .assert()
+        .success();
+
+    // Get credential ID and save password to credential store
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+    credential_store::save_password(&credential_id, password).unwrap();
+
+    // Inspect with decryption (should use saved password, not prompt)
+    // This should show the actual key ID, not "[encrypted - password required to view]"
+    let inspect_output = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stdout_str = String::from_utf8_lossy(&inspect_output.stdout);
+    let stderr_str = String::from_utf8_lossy(&inspect_output.stderr);
+
+    // Should show "Using saved password from credential store" in stderr
+    assert!(
+        stderr_str.contains("Using saved password from credential store"),
+        "Inspect should use saved password. Stderr:\n{stderr_str}"
+    );
+
+    // Should NOT show "[encrypted - password required to view]"
+    assert!(
+        !stdout_str.contains("[encrypted - password required to view]"),
+        "Key ID should be decrypted using saved password. Output:\n{stdout_str}"
+    );
+
+    // Should show actual key ID (16 hex characters)
+    assert!(
+        stdout_str.lines().any(|line| {
+            line.contains("Key ID:") && line.chars().filter(char::is_ascii_hexdigit).count() >= 16
+        }),
+        "Should show decrypted key ID. Output:\n{stdout_str}"
+    );
+}

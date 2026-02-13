@@ -752,15 +752,28 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         };
 
-    // Smart decryption: If key is encrypted and --no-decrypt is not set, prompt for password
+    // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt
     let mut decrypted = false;
     if result.key_type == KeyType::SecretEncrypted
         && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
         && !cli.no_decrypt
         && let Some(path) = key_file_path
     {
-        // Prompt for password and decrypt
-        let password = prompt_password("Password: ", cli.password_file.as_deref())?;
+        // Load secret key to get credential ID for credential store lookup
+        let seckey = load_secret_key(path)?;
+        let credential_id = seckey.credential_id();
+
+        // Try credential store first, then prompt if needed
+        let password =
+            if let Some(saved_pwd) = minisign::credential_store::get_password(&credential_id) {
+                if !cli.quiet {
+                    eprintln!("Using saved password from credential store");
+                }
+                saved_pwd
+            } else {
+                prompt_password("Password: ", cli.password_file.as_deref())?
+            };
+
         let options = InspectPrivateOptions::new(path);
         result = inspect_private(&options, password.as_bytes())?;
         decrypted = true;
