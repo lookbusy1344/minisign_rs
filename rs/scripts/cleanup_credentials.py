@@ -2,10 +2,28 @@
 """
 Utility script to discover and clean up minisign credential entries from macOS Keychain.
 
+This script helps manage password entries saved by minisign_rs --save-password.
+It can list all minisign credential entries and delete selected ones.
+
+Requirements:
+    - macOS (uses 'security' command)
+    - Python 3.7+
+
 Usage:
     python3 cleanup_credentials.py              # Interactive mode
     python3 cleanup_credentials.py --all        # Delete all without prompting
     python3 cleanup_credentials.py --dry-run    # Preview deletions
+    python3 cleanup_credentials.py --all --dry-run  # Preview all
+
+Examples:
+    # List and selectively delete entries
+    python3 cleanup_credentials.py
+
+    # Delete all entries (useful for cleanup after testing)
+    python3 cleanup_credentials.py --all
+
+    # Preview what would be deleted without actually deleting
+    python3 cleanup_credentials.py --dry-run
 """
 
 import argparse
@@ -15,7 +33,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 
 @dataclass
@@ -192,7 +210,7 @@ def select_entries(entries: List[CredentialEntry], select_all: bool) -> List[Cre
                 return []
 
 
-def delete_entry(entry: CredentialEntry) -> tuple[bool, str]:
+def delete_entry(entry: CredentialEntry) -> Tuple[bool, str]:
     """
     Delete a single credential entry from the keychain.
 
