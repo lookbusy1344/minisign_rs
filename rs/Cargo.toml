@@ -17,7 +17,7 @@ getrandom = "0.3"
 rand_core = { version = "0.6", features = ["getrandom"] }
 
 # Other dependencies
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"], optional = true }
 base64 = "0.22"
 clap = { version = "4.5", features = ["derive"] }
 thiserror = "2"
@@ -36,10 +36,14 @@ hex = "0.4"
 serial_test = "3.2"
 
 [features]
+# Enable OS credential store integration (macOS Keychain, Windows Credential Manager, etc.)
+# Enabled by default for production use. Disable during testing to avoid keychain popups.
+default = ["credential_store"]
+credential_store = ["dep:keyring"]
+
 # Enable credential store tests that require user interaction
-# These tests interact with OS keyring (macOS Keychain, Windows Credential Manager, etc.)
-# and must run sequentially to avoid prompting the user multiple times
-credential_store_tests = []
+# These tests interact with OS keyring and must run sequentially to avoid prompting multiple times
+credential_store_tests = ["credential_store"]
 
 [[bin]]
 name = "minisign_rs"

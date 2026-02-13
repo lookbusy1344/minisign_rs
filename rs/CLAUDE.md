@@ -97,15 +97,28 @@ tests/
 
 ## Testing
 
+### Credential Store Feature
+
+The `credential_store` feature controls OS keyring integration (macOS Keychain, Windows Credential Manager, etc.):
+
+- **Enabled by default** for production builds
+- **Disable during development** to avoid keychain popup dialogs:
+  ```bash
+  cargo test --no-default-features     # Run tests without keychain access
+  cargo build --no-default-features    # Build without keyring dependency
+  ```
+- When disabled, credential store functions become no-ops (return Ok/None/false)
+
 ### Test Categories
 
 - **Fast tests** (~420 tests, ~9s): Default test suite using N=2^14 for scrypt
-  - Run with: `cargo test` or `./run_all_tests.sh`
+  - Run with: `cargo test --no-default-features` (no keychain popups)
+  - Or: `cargo test` (with keychain access, may show popups)
 
 - **Slow tests** (~10 tests, ~16s): Security tests using production N=2^20 for scrypt
-  - Run with: `cargo test -- --ignored` or `./run_all_tests.sh --slow`
+  - Run with: `cargo test --no-default-features -- --ignored`
 
-- **Credential store tests** (~15 tests): Tests that interact with OS keyring (macOS Keychain, etc.)
+- **Credential store tests** (~15 tests): Tests that interact with OS keyring
   - **Require user interaction** (authorization prompts)
   - **Must run sequentially** (`--test-threads=1`) to avoid parallel prompts
   - Enabled with: `cargo test --features credential_store_tests -- --test-threads=1`
@@ -116,10 +129,9 @@ tests/
 ### Test Runner Script
 
 ```bash
-./run_all_tests.sh                  # Fast tests only (default)
-./run_all_tests.sh --slow           # Fast + slow tests
+./run_all_tests.sh                     # Fast + slow tests (default, no keychain popups)
 ./run_all_tests.sh --credential-store  # Credential store tests only
-./run_all_tests.sh --all            # All tests including credential store
+./run_all_tests.sh --all               # All tests including credential store
 ```
 
 ### Test Requirements

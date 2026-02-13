@@ -82,21 +82,21 @@ Release binaries are available for:
 # Build the project
 cargo build --release
 
-# Run tests (fast - 481 tests, ~10 seconds)
-cargo test
+# Run tests without keychain popups (recommended for development)
+./run_all_tests.sh                                         # Fast + slow tests (~21s)
+cargo test --no-default-features                           # Fast tests only (~10s)
+cargo test --no-default-features -- --ignored              # Slow tests only (~11s)
 
-# Run slow security tests (11 tests, ~11 seconds)
-cargo test -- --ignored
-
-# Run all tests (492 tests, ~21 seconds)
-cargo test && cargo test -- --ignored
+# Run tests with credential store enabled (may show keychain popups)
+cargo test                                                 # Fast tests
+cargo test -- --ignored                                    # Slow tests
 
 # Check code quality
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 cargo fmt
 
 # Run a specific test
-cargo test test_sign_verify_roundtrip
+cargo test --no-default-features test_sign_verify_roundtrip
 ```
 
 ## Usage
@@ -540,16 +540,37 @@ minisign_rs -V -H -m file.txt -p key.pub
 
 **Fast vs slow tests:** 444 fast tests (N=2^14, ~10s) for development, 11 slow tests (N=2^20, ~11s) for production parameter verification.
 
+### Running Tests Without Keychain Popups
+
+By default, the `credential_store` feature is enabled, which may trigger macOS Keychain or Windows Credential Manager popups during tests. To run tests without these popups:
+
 ```bash
-# Run only fast tests (default, ~10 seconds)
-cargo test
+# Recommended: Run tests without credential store (no keychain popups)
+cargo test --no-default-features
 
-# Run slow security tests (~11 seconds)
-cargo test -- --ignored
+# Run slow security tests without credential store
+cargo test --no-default-features -- --ignored
 
-# Run all tests (~21 seconds)
-cargo test && cargo test -- --ignored
+# Run all standard tests without credential store (~21 seconds)
+cargo test --no-default-features && cargo test --no-default-features -- --ignored
+
+# Use the test runner script (no keychain popups by default)
+./run_all_tests.sh
 ```
+
+### Testing Credential Store Functionality
+
+To explicitly test OS credential store integration (requires user interaction):
+
+```bash
+# Run credential store tests (requires clicking through keychain prompts)
+cargo test --features credential_store_tests -- --test-threads=1
+
+# Or use the script
+./run_all_tests.sh --credential-store
+```
+
+**Note:** Credential store tests require manual authorization and must run sequentially to avoid multiple simultaneous prompts.
 
 ## Architecture
 

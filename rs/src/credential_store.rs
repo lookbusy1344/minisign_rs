@@ -14,12 +14,26 @@
 //!
 //! This ensures credentials can be looked up before password prompting, even when
 //! the key is encrypted and the real keynum is unknown.
+//!
+//! When the `credential_store` feature is disabled, all functions become no-ops
+//! that never access the OS keyring, avoiding keychain popup dialogs during testing.
 
-use crate::{Error, Result};
+use crate::Result;
 use zeroize::Zeroizing;
 
+#[cfg(feature = "credential_store")]
+use crate::Error;
+
+#[cfg(feature = "credential_store")]
+use keyring::Entry;
+
 /// Service name for all minisign credential store entries
+#[cfg(feature = "credential_store")]
 const SERVICE_NAME: &str = "minisign";
+
+//
+// Feature-enabled implementations (use real OS keyring)
+//
 
 /// Save a password for a credential ID in the OS credential store
 ///
@@ -31,8 +45,9 @@ const SERVICE_NAME: &str = "minisign";
 /// Returns `CredentialStoreError` if the credential store is unavailable or
 /// the save operation fails. This error should be reported to the user but
 /// should never prevent the primary operation from succeeding.
+#[cfg(feature = "credential_store")]
 pub fn save_password(credential_id: &str, password: &str) -> Result<()> {
-    let entry = keyring::Entry::new(SERVICE_NAME, credential_id)
+    let entry = Entry::new(SERVICE_NAME, credential_id)
         .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
 
     entry
@@ -52,8 +67,9 @@ pub fn save_password(credential_id: &str, password: &str) -> Result<()> {
 /// Returns `None` on any error (missing entry, no backend, etc.) to ensure
 /// credential store failures never block operations.
 #[must_use]
+#[cfg(feature = "credential_store")]
 pub fn get_password(credential_id: &str) -> Option<Zeroizing<String>> {
-    let entry = keyring::Entry::new(SERVICE_NAME, credential_id).ok()?;
+    let entry = Entry::new(SERVICE_NAME, credential_id).ok()?;
     let password = entry.get_password().ok()?;
     Some(Zeroizing::new(password))
 }
@@ -67,8 +83,9 @@ pub fn get_password(credential_id: &str) -> Option<Zeroizing<String>> {
 /// Returns `CredentialStoreError` if the credential store is unavailable or
 /// the delete operation fails. This error should be reported to the user.
 /// Attempting to delete a non-existent entry is not an error (idempotent).
+#[cfg(feature = "credential_store")]
 pub fn forget_password(credential_id: &str) -> Result<()> {
-    let entry = keyring::Entry::new(SERVICE_NAME, credential_id)
+    let entry = Entry::new(SERVICE_NAME, credential_id)
         .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
 
     // delete_credential is idempotent - deleting a non-existent entry succeeds
@@ -89,6 +106,37 @@ pub fn forget_password(credential_id: &str) -> Result<()> {
 /// # Returns
 /// `true` if a password is saved and retrievable, `false` otherwise.
 #[must_use]
+#[cfg(feature = "credential_store")]
 pub fn has_password(credential_id: &str) -> bool {
     get_password(credential_id).is_some()
+}
+
+//
+// Stub implementations when feature is disabled (no keyring access)
+//
+
+/// No-op stub: Always returns Ok when credential store is disabled
+#[cfg(not(feature = "credential_store"))]
+pub fn save_password(_credential_id: &str, _password: &str) -> Result<()> {
+    Ok(())
+}
+
+/// No-op stub: Always returns None when credential store is disabled
+#[must_use]
+#[cfg(not(feature = "credential_store"))]
+pub fn get_password(_credential_id: &str) -> Option<Zeroizing<String>> {
+    None
+}
+
+/// No-op stub: Always returns Ok when credential store is disabled
+#[cfg(not(feature = "credential_store"))]
+pub fn forget_password(_credential_id: &str) -> Result<()> {
+    Ok(())
+}
+
+/// No-op stub: Always returns false when credential store is disabled
+#[must_use]
+#[cfg(not(feature = "credential_store"))]
+pub fn has_password(_credential_id: &str) -> bool {
+    false
 }
