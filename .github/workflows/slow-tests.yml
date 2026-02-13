@@ -34,10 +34,6 @@ jobs:
     - name: Build Rust minisign
       run: cargo build --release
 
-    - name: Run slow/ignored tests
-      run: cargo test --release -- --ignored --nocapture
+    - name: Run slow cross-binary tests
+      run: cargo test --release --test cross_binary_test -- --ignored --test-threads=1 --nocapture
       timeout-minutes: 30
-
-    - name: Run cross-binary tests
-      run: cargo test --release --test cross_binary_test -- --test-threads=1 --nocapture
-      timeout-minutes: 15
