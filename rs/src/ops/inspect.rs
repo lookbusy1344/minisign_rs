@@ -199,10 +199,7 @@ pub fn inspect_with_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
 ///
 /// Returns an error if:
 /// - For encrypted keys: password is incorrect or decryption fails
-pub fn inspect_private_with_key(
-    seckey: &SeckeyStruct,
-    password: &[u8],
-) -> Result<InspectResult> {
+pub fn inspect_private_with_key(seckey: &SeckeyStruct, password: &[u8]) -> Result<InspectResult> {
     if !seckey.is_encrypted() {
         // Unencrypted secret key - behave like regular inspect
         return inspect_secret_key(seckey);
