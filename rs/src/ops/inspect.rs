@@ -160,6 +160,67 @@ pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
     ))
 }
 
+/// Inspect a pre-loaded secret key
+///
+/// This variant accepts a pre-loaded `SeckeyStruct` to avoid redundant file I/O
+/// when the key is already loaded. For encrypted keys, shows the encrypted keynum
+/// placeholder. Use `inspect_private_with_key` to decrypt and show the real keynum.
+///
+/// # Arguments
+///
+/// * `seckey` - Pre-loaded secret key structure
+///
+/// # Returns
+///
+/// An `InspectResult` containing key information
+///
+/// # Errors
+///
+/// Returns an error if the KDF parameters cannot be parsed
+pub fn inspect_with_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
+    inspect_secret_key(seckey)
+}
+
+/// Inspect a pre-loaded secret key by decrypting it first (if encrypted)
+///
+/// This variant accepts a pre-loaded `SeckeyStruct` and decrypts it to retrieve
+/// the real key ID. For unencrypted keys, it behaves identically to `inspect_with_key`.
+///
+/// # Arguments
+///
+/// * `seckey` - Pre-loaded secret key structure
+/// * `password` - Password to decrypt the key (if encrypted)
+///
+/// # Returns
+///
+/// An `InspectResult` containing key information with real keynum
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - For encrypted keys: password is incorrect or decryption fails
+pub fn inspect_private_with_key(
+    seckey: &SeckeyStruct,
+    password: &[u8],
+) -> Result<InspectResult> {
+    if !seckey.is_encrypted() {
+        // Unencrypted secret key - behave like regular inspect
+        return inspect_secret_key(seckey);
+    }
+
+    // Encrypted - decrypt to get the real keynum
+    let (_secret_key, decrypted_keynum) = seckey.decrypt(password)?;
+
+    // Get the base inspection result
+    let mut result = inspect_secret_key(seckey)?;
+
+    // Update with the real keynum
+    result.key_id = decrypted_keynum.to_key_id();
+    result.key_id_words = crate::wordlist::keynum_to_words(&decrypted_keynum);
+
+    Ok(result)
+}
+
 /// Inspect a public key from base64 string
 ///
 /// # Errors
