@@ -6,8 +6,14 @@
 //! - Windows: Credential Manager
 //! - Linux: Secret Service (via libsecret/gnome-keyring)
 //!
-//! Passwords are keyed by the key ID (8-byte hex string) rather than file path,
-//! so credential associations survive key file moves.
+//! Passwords are keyed by the credential ID rather than file path, so credential
+//! associations survive key file moves. The credential ID is:
+//! - For encrypted keys: hex of the encrypted keynum bytes (deterministic, available
+//!   without decryption)
+//! - For unencrypted keys: the key ID (plaintext keynum hex)
+//!
+//! This ensures credentials can be looked up before password prompting, even when
+//! the key is encrypted and the real keynum is unknown.
 
 use crate::{Error, Result};
 use zeroize::Zeroizing;
@@ -15,18 +21,18 @@ use zeroize::Zeroizing;
 /// Service name for all minisign credential store entries
 const SERVICE_NAME: &str = "minisign";
 
-/// Save a password for a key ID in the OS credential store
+/// Save a password for a credential ID in the OS credential store
 ///
 /// # Arguments
-/// * `key_id` - The key ID hex string (e.g., "a1b2c3d4e5f6g7h8")
+/// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
 /// * `password` - The password to save
 ///
 /// # Errors
 /// Returns `CredentialStoreError` if the credential store is unavailable or
 /// the save operation fails. This error should be reported to the user but
 /// should never prevent the primary operation from succeeding.
-pub fn save_password(key_id: &str, password: &str) -> Result<()> {
-    let entry = keyring::Entry::new(SERVICE_NAME, key_id)
+pub fn save_password(credential_id: &str, password: &str) -> Result<()> {
+    let entry = keyring::Entry::new(SERVICE_NAME, credential_id)
         .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
 
     entry
@@ -36,33 +42,33 @@ pub fn save_password(key_id: &str, password: &str) -> Result<()> {
     Ok(())
 }
 
-/// Retrieve a saved password for a key ID
+/// Retrieve a saved password for a credential ID
 ///
 /// # Arguments
-/// * `key_id` - The key ID hex string
+/// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
 ///
 /// # Returns
 /// `Some(Zeroizing<String>)` if a password is saved, `None` otherwise.
 /// Returns `None` on any error (missing entry, no backend, etc.) to ensure
 /// credential store failures never block operations.
 #[must_use]
-pub fn get_password(key_id: &str) -> Option<Zeroizing<String>> {
-    let entry = keyring::Entry::new(SERVICE_NAME, key_id).ok()?;
+pub fn get_password(credential_id: &str) -> Option<Zeroizing<String>> {
+    let entry = keyring::Entry::new(SERVICE_NAME, credential_id).ok()?;
     let password = entry.get_password().ok()?;
     Some(Zeroizing::new(password))
 }
 
-/// Remove a saved password for a key ID
+/// Remove a saved password for a credential ID
 ///
 /// # Arguments
-/// * `key_id` - The key ID hex string
+/// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
 ///
 /// # Errors
 /// Returns `CredentialStoreError` if the credential store is unavailable or
 /// the delete operation fails. This error should be reported to the user.
 /// Attempting to delete a non-existent entry is not an error (idempotent).
-pub fn forget_password(key_id: &str) -> Result<()> {
-    let entry = keyring::Entry::new(SERVICE_NAME, key_id)
+pub fn forget_password(credential_id: &str) -> Result<()> {
+    let entry = keyring::Entry::new(SERVICE_NAME, credential_id)
         .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
 
     // delete_credential is idempotent - deleting a non-existent entry succeeds
@@ -75,14 +81,14 @@ pub fn forget_password(key_id: &str) -> Result<()> {
     }
 }
 
-/// Check if a password is saved for a key ID
+/// Check if a password is saved for a credential ID
 ///
 /// # Arguments
-/// * `key_id` - The key ID hex string
+/// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
 ///
 /// # Returns
 /// `true` if a password is saved and retrievable, `false` otherwise.
 #[must_use]
-pub fn has_password(key_id: &str) -> bool {
-    get_password(key_id).is_some()
+pub fn has_password(credential_id: &str) -> bool {
+    get_password(credential_id).is_some()
 }
