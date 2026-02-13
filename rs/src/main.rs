@@ -7,10 +7,10 @@ use minisign::{
     Error, Result,
     cli::{Action, Cli},
     ops::{
-        ChangeOptions, GenerateOptions, InspectOptions, InspectPrivateOptions, InspectResult,
-        KeyType, PublicKeySource, RecreateOptions, SecurityLevel, SignOptions,
-        SignatureInspectResult, VerifyOptions, change, generate, inspect, inspect_base64,
-        inspect_private, inspect_signature, recreate, sign_with_key, verify,
+        ChangeOptions, GenerateOptions, InspectOptions, InspectResult, KeyType, PublicKeySource,
+        RecreateOptions, SecurityLevel, SignOptions, SignatureInspectResult, VerifyOptions, change,
+        generate, inspect, inspect_base64, inspect_private_with_key, inspect_signature,
+        recreate_with_key, sign_with_key, verify,
     },
 };
 use std::io::IsTerminal;
@@ -494,7 +494,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
         cli.force,
     );
 
-    let result = recreate(&options, password.as_ref().map(|p| p.as_bytes()))?;
+    let result = recreate_with_key(&seckey, &options, password.as_ref().map(|p| p.as_bytes()))?;
 
     if !cli.quiet {
         println!(
@@ -785,8 +785,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
                 prompt_password("Password: ", cli.password_file.as_deref())?
             };
 
-        let options = InspectPrivateOptions::new(path);
-        result = inspect_private(&options, password.as_bytes())?;
+        result = inspect_private_with_key(&seckey, password.as_bytes())?;
         decrypted = true;
     }
 
