@@ -542,13 +542,12 @@ fn handle_change(cli: &Cli) -> Result<()> {
         None
     };
 
-    // Prompt for new password based on -W flag
+    // Prompt for new password with confirmation based on -W flag
     // -W means "don't use a new password" (remove encryption)
     let new_password = if cli.no_password {
         None
     } else {
-        Some(prompt_password(
-            "New password: ",
+        Some(prompt_password_with_confirmation(
             cli.password_file.as_deref(),
         )?)
     };
