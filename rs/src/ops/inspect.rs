@@ -324,7 +324,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
             security_level: Some(SecurityLevel::None),
             kdf_info: None,
             password_saved,
-            credential_id: None,
+            credential_id: Some(credential_id),
         });
     }
 
@@ -366,7 +366,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
             weakness_multiplier,
         }),
         password_saved,
-        credential_id: None,
+        credential_id: Some(credential_id),
     })
 }
 
