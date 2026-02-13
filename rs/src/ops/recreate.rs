@@ -3,7 +3,12 @@
 //! This module implements recreating a public key file from a secret key file.
 
 use super::file_utils::{load_secret_key, write_public_key_file};
-use crate::{Result, crypto::PublicKey, errors::Error, keys::PubkeyStruct};
+use crate::{
+    Result,
+    crypto::PublicKey,
+    errors::Error,
+    keys::{PubkeyStruct, SeckeyStruct},
+};
 use std::path::{Path, PathBuf};
 
 /// Options for recreating a public key
@@ -99,6 +104,62 @@ pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Resul
     // Load the secret key
     let seckey = load_secret_key(options.secret_key_file())?;
 
+    // Decrypt if necessary and get the keynum
+    let (secret_key, keynum) = if seckey.is_encrypted() {
+        let pwd = password.ok_or(Error::PasswordRequired)?;
+        seckey.decrypt(pwd)?
+    } else {
+        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
+    };
+
+    // Extract public key from secret key
+    // Ed25519 secret keys contain the public key in the second half (bytes 32-64)
+    let public_key = extract_public_key_from_secret(&secret_key);
+
+    // Create public key structure
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    // Generate comment
+    let keynum_hex = keynum.to_key_id();
+    let default_comment = format!("minisign public key {keynum_hex}");
+    let comment = options.comment().unwrap_or(&default_comment);
+
+    // Write the public key file with atomic creation
+    let pubkey_contents = pubkey.to_file_contents(comment);
+    write_public_key_file(options.public_key_file(), &pubkey_contents, options.force())?;
+
+    Ok(RecreateResult {
+        public_key_file: options.public_key_file().to_path_buf(),
+        keynum_hex,
+    })
+}
+
+/// Recreate a public key from a pre-loaded secret key
+///
+/// This variant accepts a pre-loaded `SeckeyStruct` to avoid redundant file I/O
+/// when the key is already loaded (e.g., for credential store lookups).
+///
+/// # Arguments
+///
+/// * `seckey` - Pre-loaded secret key structure
+/// * `options` - Recreation options (public key file path, comment, force flag)
+/// * `password` - Password to decrypt the secret key (if encrypted)
+///
+/// # Returns
+///
+/// A `RecreateResult` containing the public key file path and keynum
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The secret key cannot be decrypted (wrong password or corrupted)
+/// - The public key file already exists (unless force is true)
+/// - File I/O operations fail
+pub fn recreate_with_key(
+    seckey: &SeckeyStruct,
+    options: &RecreateOptions<'_>,
+    password: Option<&[u8]>,
+) -> Result<RecreateResult> {
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = if seckey.is_encrypted() {
         let pwd = password.ok_or(Error::PasswordRequired)?;

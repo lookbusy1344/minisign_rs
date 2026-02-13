@@ -17,6 +17,6 @@ pub use inspect::{
     InspectOptions, InspectPrivateOptions, InspectResult, KeyType, SecurityLevel,
     SignatureInspectResult, inspect, inspect_base64, inspect_private, inspect_signature,
 };
-pub use recreate::{RecreateOptions, RecreateResult, recreate};
+pub use recreate::{RecreateOptions, RecreateResult, recreate, recreate_with_key};
 pub use sign::{SignOptions, SignResult, sign};
 pub use verify::{PublicKeySource, VerifyOptions, VerifyResult, verify};
