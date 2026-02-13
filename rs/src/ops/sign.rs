@@ -7,6 +7,7 @@ use crate::{
     Result,
     crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
     errors::Error,
+    keys::SeckeyStruct,
     signature::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
@@ -371,6 +372,47 @@ pub fn sign_single_file(
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
     let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password)?;
+    sign_file_with_key(message_file, &secret_key, keynum, options)
+}
+
+/// Sign a file with a pre-loaded secret key
+///
+/// This variant accepts a pre-loaded `SeckeyStruct` to avoid redundant file I/O
+/// when the key is already loaded (e.g., for credential store lookups).
+///
+/// # Arguments
+///
+/// * `message_file` - Path to the message file to sign
+/// * `seckey` - Pre-loaded secret key structure
+/// * `options` - Signing options (signature file, comments, prehashed mode, etc.)
+/// * `password` - Password to decrypt the secret key (if encrypted)
+///
+/// # Returns
+///
+/// A `SignResult` containing the signature file path and trusted comment
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The secret key cannot be decrypted (wrong password or corrupted)
+/// - The message file cannot be read
+/// - The signature file already exists (unless force is true)
+/// - File I/O operations fail
+pub fn sign_with_key(
+    message_file: &Path,
+    seckey: &SeckeyStruct,
+    options: &SignOptions<'_>,
+    password: Option<&[u8]>,
+) -> Result<SignResult> {
+    // Decrypt the key if needed
+    let (secret_key, keynum) = if seckey.is_encrypted() {
+        let pwd = password.ok_or(Error::PasswordRequired)?;
+        seckey.decrypt(pwd)?
+    } else {
+        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
+    };
+
+    // Sign the file using the existing helper
     sign_file_with_key(message_file, &secret_key, keynum, options)
 }
 
