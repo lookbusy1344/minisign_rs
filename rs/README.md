@@ -397,6 +397,23 @@ minisign_rs -I -s mykey.key
 # Example output shows "Password saved: Yes" or "Password saved: No"
 ```
 
+#### Cleanup utility
+
+For managing credential store entries during development, use the cleanup utility script:
+
+```bash
+# Interactive cleanup - list and select entries to delete
+python3 scripts/cleanup_credentials.py
+
+# Delete all credential store entries
+python3 scripts/cleanup_credentials.py --all
+
+# Preview what would be deleted (dry run)
+python3 scripts/cleanup_credentials.py --dry-run
+```
+
+See [scripts/README.md](scripts/README.md) for complete documentation.
+
 #### Security model
 
 **What's protected**:
