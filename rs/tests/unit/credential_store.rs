@@ -44,7 +44,7 @@ fn test_key_id(suffix: &str) -> String {
 
 #[test]
 #[serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_save_retrieve_forget_round_trip() -> Result<()> {
     let guard = CredentialGuard::new(test_key_id("round_trip"));
     let key_id = guard.key_id();
@@ -76,7 +76,7 @@ fn test_save_retrieve_forget_round_trip() -> Result<()> {
 
 #[test]
 #[serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_get_password_returns_none_for_missing_entry() {
     let guard = CredentialGuard::new(test_key_id("missing_entry"));
     let key_id = guard.key_id();
@@ -90,7 +90,7 @@ fn test_get_password_returns_none_for_missing_entry() {
 
 #[test]
 #[serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_forget_password_is_idempotent() -> Result<()> {
     let guard = CredentialGuard::new(test_key_id("idempotent"));
     let key_id = guard.key_id();
@@ -113,7 +113,7 @@ fn test_forget_password_is_idempotent() -> Result<()> {
 
 #[test]
 #[serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_password_is_zeroized() -> Result<()> {
     let guard = CredentialGuard::new(test_key_id("zeroize"));
     let key_id = guard.key_id();
@@ -139,7 +139,7 @@ fn test_password_is_zeroized() -> Result<()> {
 
 #[test]
 #[serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_multiple_keys_independent() -> Result<()> {
     let guard_1 = CredentialGuard::new(test_key_id("multi_1"));
     let guard_2 = CredentialGuard::new(test_key_id("multi_2"));
@@ -178,7 +178,7 @@ fn test_multiple_keys_independent() -> Result<()> {
 
 #[test]
 #[serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_update_password() -> Result<()> {
     let guard = CredentialGuard::new(test_key_id("update"));
     let key_id = guard.key_id();

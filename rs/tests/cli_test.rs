@@ -2105,7 +2105,7 @@ fn get_credential_id_from_file(sk_path: &std::path::Path) -> String {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_save_password_flag_with_generate() {
     use minisign::credential_store;
 
@@ -2188,7 +2188,7 @@ fn test_save_password_flag_with_generate() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_save_password_short_flag() {
     use minisign::credential_store;
 
@@ -2248,7 +2248,7 @@ fn test_save_password_short_flag() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_forget_password_standalone() {
     use minisign::credential_store;
 
@@ -2316,7 +2316,7 @@ fn test_forget_password_standalone() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_forget_password_short_flag() {
     use minisign::credential_store;
 
@@ -2377,7 +2377,7 @@ fn test_forget_password_short_flag() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_inspect_shows_password_saved_status() {
     use minisign::credential_store;
 
@@ -2457,7 +2457,7 @@ fn test_inspect_shows_password_saved_status() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_forget_password_is_idempotent() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -2544,7 +2544,7 @@ fn generate_key_with_saved_password(
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_sign_uses_saved_password_from_credential_store() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -2594,7 +2594,7 @@ fn test_sign_uses_saved_password_from_credential_store() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_sign_multiple_files_uses_saved_password() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -2651,7 +2651,7 @@ fn test_sign_multiple_files_uses_saved_password() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_save_password_on_sign_then_reuse() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -2739,7 +2739,7 @@ fn test_save_password_on_sign_then_reuse() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_inspect_uses_saved_password_for_decryption() {
     use minisign::credential_store;
 
@@ -2808,7 +2808,7 @@ fn test_inspect_uses_saved_password_for_decryption() {
 
 #[test]
 #[serial_test::serial]
-#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+#[cfg(feature = "credential_store_tests")]
 fn test_change_password_with_credential_store() {
     use minisign::credential_store;
 
