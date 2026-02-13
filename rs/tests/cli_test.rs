@@ -2805,3 +2805,119 @@ fn test_inspect_uses_saved_password_for_decryption() {
         "Should show decrypted key ID. Output:\n{stdout_str}"
     );
 }
+
+#[test]
+#[serial_test::serial]
+#[cfg_attr(not(feature = "credential_store_tests"), ignore)]
+fn test_change_password_with_credential_store() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let message_file = temp_dir.path().join("message.txt");
+    let sig_file = temp_dir.path().join("message.txt.minisig");
+
+    let old_password = "old_password_test";
+    let new_password = "new_password_test";
+    let old_password_file = temp_dir.path().join("old_password.txt");
+    let new_password_file = temp_dir.path().join("new_password.txt");
+
+    fs::write(&old_password_file, old_password).unwrap();
+    fs::write(&new_password_file, new_password).unwrap();
+    fs::write(&message_file, "test message").unwrap();
+
+    // Generate key with old password and save to credential store
+    minisign_cmd()
+        .arg("-G")
+        .arg("-f")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&old_password_file)
+        .arg("--save-password")
+        .arg("--force-weak-kdf")
+        .assert()
+        .success();
+
+    // Get old credential_id
+    let old_credential_id = get_credential_id_from_file(&sk_path);
+
+    // Verify old password is saved
+    assert!(
+        credential_store::has_password(&old_credential_id),
+        "Old password should be saved in credential store"
+    );
+
+    // Change password with --save-password for new password
+    // The old password will be retrieved from credential store
+    // The new password will be read from --password-file
+    minisign_cmd()
+        .arg("-K")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&new_password_file)
+        .arg("--save-password")
+        .arg("--force-weak-kdf")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Using saved password from credential store",
+        ));
+
+    // Get new credential_id (should be different after password change)
+    let new_credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&new_credential_id);
+
+    // Verify credential_id changed
+    assert_ne!(
+        old_credential_id, new_credential_id,
+        "Credential ID should change after password change"
+    );
+
+    // Verify old credential_id no longer has a password
+    assert!(
+        !credential_store::has_password(&old_credential_id),
+        "Old credential should be removed from credential store"
+    );
+
+    // Verify new credential_id has the new password saved
+    assert!(
+        credential_store::has_password(&new_credential_id),
+        "New password should be saved in credential store"
+    );
+
+    // Verify signing works without password prompt (uses saved password)
+    // This confirms the saved password is correct and functional
+    minisign_cmd()
+        .arg("-S")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Using saved password from credential store",
+        ));
+
+    // Verify the signature is valid
+    minisign_cmd()
+        .arg("-V")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-x")
+        .arg(&sig_file)
+        .assert()
+        .success();
+
+    // Guard will clean up new credential on drop
+}
