@@ -661,6 +661,11 @@ fn display_inspect_result(result: &InspectResult) {
         println!("├─ Key ID (words): {}", result.key_id_words);
     }
 
+    // Display credential ID for secret keys
+    if let Some(ref credential_id) = result.credential_id {
+        println!("├─ Credential ID: {credential_id}");
+    }
+
     match result.key_type {
         KeyType::SecretEncrypted => {
             println!("├─ Encrypted: Yes");

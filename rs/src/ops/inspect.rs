@@ -294,7 +294,7 @@ pub fn inspect_private(
                 weakness_multiplier,
             }),
             password_saved,
-            credential_id: None,
+            credential_id: Some(credential_id),
         });
     }
 
