@@ -127,6 +127,71 @@ def find_minisign_entries() -> List[CredentialEntry]:
     return entries
 
 
+def select_entries(entries: List[CredentialEntry], select_all: bool) -> List[CredentialEntry]:
+    """
+    Select which entries to delete.
+
+    Args:
+        entries: Available credential entries
+        select_all: If True, return all entries without prompting
+
+    Returns:
+        List of selected entries (may be empty if user quits)
+    """
+    if select_all:
+        return entries
+
+    # Interactive selection
+    print("\nEnter selection (numbers separated by spaces, ranges like 1-3, 'all', 'q' or empty to quit)")
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            user_input = input("Selection: ").strip()
+        except EOFError:
+            # Handle ctrl-D
+            return []
+
+        if not user_input or user_input.lower() == 'q':
+            return []
+
+        if user_input.lower() == 'all':
+            return entries
+
+        # Parse selection
+        try:
+            selected_indices = set()
+            parts = user_input.split()
+
+            for part in parts:
+                if '-' in part:
+                    # Range like "1-3"
+                    start_str, end_str = part.split('-', 1)
+                    start = int(start_str)
+                    end = int(end_str)
+                    if start < 1 or end > len(entries) or start > end:
+                        raise ValueError(f"Invalid range: {part}")
+                    selected_indices.update(range(start, end + 1))
+                else:
+                    # Single number
+                    num = int(part)
+                    if num < 1 or num > len(entries):
+                        raise ValueError(f"Number out of range: {num}")
+                    selected_indices.add(num)
+
+            # Convert indices to entries (indices are 1-based)
+            selected = [entries[i - 1] for i in sorted(selected_indices)]
+            return selected
+
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            if attempt < max_retries - 1:
+                print(f"Please try again ({max_retries - attempt - 1} attempts remaining)")
+            else:
+                print("Too many invalid attempts. Exiting.")
+                return []
+
+
 def main():
     """Main entry point."""
     check_platform()
@@ -148,7 +213,22 @@ def main():
     for i, entry in enumerate(entries, 1):
         print(f"  {i}. {entry}")
 
-    print("\nTODO: Implement selection and deletion")
+    # Selection phase
+    selected = select_entries(entries, args.all)
+
+    if not selected:
+        print("No entries selected. Exiting.")
+        sys.exit(0)
+
+    print(f"\nSelected {len(selected)} entries for deletion:")
+    for entry in selected:
+        print(f"  - {entry}")
+
+    if args.dry_run:
+        print("\nDry run mode - nothing was deleted")
+        sys.exit(0)
+
+    print("\nTODO: Implement deletion")
 
 
 if __name__ == "__main__":
