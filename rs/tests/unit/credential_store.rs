@@ -9,9 +9,9 @@
 //! Tests use RAII cleanup guards to ensure credentials are removed even if tests panic.
 
 #[cfg(feature = "credential_store_tests")]
-use minisign::credential_store;
-#[cfg(feature = "credential_store_tests")]
 use minisign::Result;
+#[cfg(feature = "credential_store_tests")]
+use minisign::credential_store;
 #[cfg(feature = "credential_store_tests")]
 use serial_test::serial;
 
