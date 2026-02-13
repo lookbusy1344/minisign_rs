@@ -111,6 +111,8 @@ pub struct InspectResult {
     pub kdf_info: Option<KdfInfo>,
     /// Whether a password is saved in the OS credential store for this key
     pub password_saved: bool,
+    /// Credential ID used for keychain lookups (None for public keys)
+    pub credential_id: Option<String>,
 }
 
 /// Type of key being inspected
@@ -292,6 +294,7 @@ pub fn inspect_private(
                 weakness_multiplier,
             }),
             password_saved,
+            credential_id: None,
         });
     }
 
@@ -321,6 +324,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
             security_level: Some(SecurityLevel::None),
             kdf_info: None,
             password_saved,
+            credential_id: None,
         });
     }
 
@@ -362,6 +366,7 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
             weakness_multiplier,
         }),
         password_saved,
+        credential_id: None,
     })
 }
 
@@ -377,6 +382,7 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
         security_level: None,
         kdf_info: None,
         password_saved: false, // Public keys don't have passwords
+        credential_id: None,
     }
 }
 

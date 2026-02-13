@@ -598,3 +598,39 @@ fn test_inspect_signature_nonexistent_file() {
     let result = inspect_signature(Path::new("/nonexistent/signature.minisig"));
     assert!(result.is_err());
 }
+
+#[test]
+fn test_inspect_result_includes_credential_id() {
+    // Create an encrypted key
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    let kdf_opslimit = 33_554_432;
+    let kdf_memlimit = 1_073_741_824;
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        kdf_opslimit,
+        kdf_memlimit,
+        false,
+    )
+    .unwrap();
+
+    let file_contents = seckey.to_file_contents("test key");
+    let temp_file = create_temp_key_file(&file_contents);
+    let options = InspectOptions::new(temp_file.path());
+    let result = inspect(&options).unwrap();
+
+    // Verify credential_id is present for secret keys
+    assert!(result.credential_id.is_some());
+    let credential_id = result.credential_id.unwrap();
+
+    // Verify it matches the seckey's credential_id
+    let expected_credential_id = seckey.credential_id();
+    assert_eq!(credential_id, expected_credential_id);
+}
