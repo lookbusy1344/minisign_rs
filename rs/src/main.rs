@@ -10,7 +10,7 @@ use minisign::{
         ChangeOptions, GenerateOptions, InspectOptions, InspectPrivateOptions, InspectResult,
         KeyType, PublicKeySource, RecreateOptions, SecurityLevel, SignOptions,
         SignatureInspectResult, VerifyOptions, change, generate, inspect, inspect_base64,
-        inspect_private, inspect_signature, recreate, sign, verify,
+        inspect_private, inspect_signature, recreate, sign_with_key, verify,
     },
 };
 use std::io::IsTerminal;
@@ -215,6 +215,7 @@ fn save_password_to_credential_store(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_sign(cli: &Cli) -> Result<()> {
     let message_files = cli.all_message_files();
 
@@ -287,7 +288,13 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
         let options = builder.build();
 
-        let result = sign(&options, password.as_ref().map(|p| p.as_bytes()))?;
+        // Use sign_with_key to avoid redundant file load
+        let result = sign_with_key(
+            message_file,
+            &seckey,
+            &options,
+            password.as_ref().map(|p| p.as_bytes()),
+        )?;
 
         save_password_to_credential_store(
             &credential_id,
