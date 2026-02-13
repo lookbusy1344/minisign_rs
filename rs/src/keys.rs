@@ -803,7 +803,7 @@ impl SeckeyStruct {
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
-            keynum,           // Contains encrypted keynum if encrypted, plaintext if not
+            keynum, // Zeroed if encrypted (real keynum recovered on decrypt), plaintext if not
             encrypted_keynum, // Stores encrypted keynum for roundtrip serialization
             secret_key_encrypted,
             checksum,
