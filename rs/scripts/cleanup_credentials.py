@@ -192,6 +192,36 @@ def select_entries(entries: List[CredentialEntry], select_all: bool) -> List[Cre
                 return []
 
 
+def delete_entry(entry: CredentialEntry) -> tuple[bool, str]:
+    """
+    Delete a single credential entry from the keychain.
+
+    Args:
+        entry: The credential entry to delete
+
+    Returns:
+        (success: bool, error_message: str or empty)
+    """
+    try:
+        subprocess.run(
+            [
+                "security",
+                "delete-generic-password",
+                "-s", "minisign",
+                "-a", entry.credential_id,
+                entry.keychain_path
+            ],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return (True, "")
+    except subprocess.CalledProcessError as e:
+        # Extract meaningful error message
+        error_msg = e.stderr.strip() if e.stderr else str(e)
+        return (False, error_msg)
+
+
 def main():
     """Main entry point."""
     check_platform()
@@ -228,7 +258,29 @@ def main():
         print("\nDry run mode - nothing was deleted")
         sys.exit(0)
 
-    print("\nTODO: Implement deletion")
+    # Deletion phase
+    print("\nDeleting entries...")
+    successes = []
+    failures = []
+
+    for entry in selected:
+        success, error = delete_entry(entry)
+        if success:
+            successes.append(entry)
+            print(f"  ✓ Deleted {entry.credential_id}")
+        else:
+            failures.append((entry, error))
+            print(f"  ✗ Failed to delete {entry.credential_id}: {error}")
+
+    # Summary
+    print(f"\n{'='*60}")
+    print(f"Deleted {len(successes)} entries successfully")
+    if failures:
+        entry_word = "entry" if len(failures) == 1 else "entries"
+        print(f"Failed to delete {len(failures)} {entry_word}:")
+        for entry, error in failures:
+            print(f"  - {entry.credential_id}: {error}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
