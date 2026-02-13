@@ -65,6 +65,16 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     // Get comment
     let comment = cli.untrusted_comment.as_deref();
 
+    // Fail fast if output files exist (before expensive password prompt + scrypt)
+    if !cli.force {
+        if secret_key_file.exists() {
+            return Err(Error::FileExists(secret_key_file.into()));
+        }
+        if public_key_file.exists() {
+            return Err(Error::FileExists(public_key_file.into()));
+        }
+    }
+
     // Get password with confirmation (unless -W was specified)
     let password = if cli.no_password {
         None
@@ -125,7 +135,10 @@ fn handle_generate(cli: &Cli) -> Result<()> {
             match minisign::credential_store::save_password(result.credential_id(), pwd) {
                 Ok(()) => {
                     if !cli.quiet {
-                        eprintln!("Password saved to OS credential store");
+                        eprintln!(
+                            "Password saved to OS credential store (credential: {})",
+                            result.credential_id()
+                        );
                     }
                 }
                 Err(e) => {
@@ -139,6 +152,11 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     }
 
     if !cli.quiet {
+        println!(
+            "Key ID: {} ({})",
+            result.keynum_hex(),
+            result.keynum_words()
+        );
         println!(
             "The secret key was saved as {} - Keep it secret!",
             result.secret_key_file().display()

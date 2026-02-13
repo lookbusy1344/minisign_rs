@@ -68,8 +68,17 @@ fn test_help_shows_correct_app_name() {
 
 #[test]
 fn test_generate_missing_arguments() {
+    let dir = TempDir::new().unwrap();
+    let sk = dir.path().join("test.key");
+    let pk = dir.path().join("test.pub");
+
+    // Non-interactive: should fail because it can't prompt for a password
     minisign_cmd()
         .arg("-G")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
         .assert()
         .failure()
         .stderr(predicate::str::contains("password"));

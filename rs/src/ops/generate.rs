@@ -184,6 +184,8 @@ pub struct GenerateResult {
     public_key_file: PathBuf,
     /// The keynum in hexadecimal format
     keynum_hex: String,
+    /// The keynum in PGP Word List format (human-readable)
+    keynum_words: String,
     /// The full public key in base64 format (for -P flag)
     public_key_base64: String,
     /// Credential store lookup key (for --save-password)
@@ -207,6 +209,12 @@ impl GenerateResult {
     #[must_use]
     pub fn keynum_hex(&self) -> &str {
         &self.keynum_hex
+    }
+
+    /// Get the keynum in PGP Word List format (human-readable)
+    #[must_use]
+    pub fn keynum_words(&self) -> &str {
+        &self.keynum_words
     }
 
     /// Get the full public key in base64 format (for -P flag)
@@ -336,8 +344,9 @@ pub fn generate_with_log_n(
     // Capture credential ID for credential store
     let credential_id = seckey.credential_id();
 
-    // Generate comments
+    // Generate key ID display formats
     let keynum_hex = keynum.to_key_id();
+    let keynum_words = crate::wordlist::keynum_to_words(&keynum);
     let default_comment = format!("minisign public key {keynum_hex}");
     let comment = options.comment.unwrap_or(&default_comment);
 
@@ -366,6 +375,7 @@ pub fn generate_with_log_n(
         secret_key_file: options.secret_key_file.to_path_buf(),
         public_key_file: options.public_key_file.to_path_buf(),
         keynum_hex,
+        keynum_words,
         public_key_base64,
         credential_id,
     })
