@@ -617,14 +617,10 @@ impl SeckeyStruct {
     #[must_use]
     pub fn credential_id(&self) -> String {
         if self.encrypted {
-            // Use encrypted keynum bytes — available without decryption
-            use std::fmt::Write;
-            self.encrypted_keynum
-                .iter()
-                .fold(String::new(), |mut s, b| {
-                    let _ = write!(s, "{b:02X}");
-                    s
-                })
+            // Use encrypted keynum bytes interpreted as little-endian u64
+            // This matches the encoding used by to_key_id() for consistency
+            let value = u64::from_le_bytes(self.encrypted_keynum);
+            format!("{value:016X}")
         } else {
             self.keynum.to_key_id()
         }

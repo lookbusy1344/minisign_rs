@@ -851,7 +851,6 @@ fn test_decrypt_weak_kdf_key() {
 #[test]
 fn test_credential_id_for_encrypted_key() {
     use minisign::crypto::generate_keypair;
-    use std::fmt::Write;
 
     // Generate a test keypair
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
@@ -893,14 +892,10 @@ fn test_credential_id_for_encrypted_key() {
     // Should NOT be all zeros (encrypted keynum is not zero)
     assert_ne!(credential_id, "0000000000000000");
 
-    // Should match the hex of encrypted_keynum
-    let expected = seckey
-        .encrypted_keynum()
-        .iter()
-        .fold(String::new(), |mut s, b| {
-            let _ = write!(s, "{b:02X}");
-            s
-        });
+    // Should match the hex of encrypted_keynum interpreted as little-endian u64
+    // This matches the encoding used by to_key_id() for consistency
+    let value = u64::from_le_bytes(*seckey.encrypted_keynum());
+    let expected = format!("{value:016X}");
     assert_eq!(credential_id, expected);
 }
 
