@@ -8,15 +8,20 @@
 //!
 //! Tests use RAII cleanup guards to ensure credentials are removed even if tests panic.
 
-use minisign::Result;
+#[cfg(feature = "credential_store_tests")]
 use minisign::credential_store;
+#[cfg(feature = "credential_store_tests")]
+use minisign::Result;
+#[cfg(feature = "credential_store_tests")]
 use serial_test::serial;
 
 /// RAII guard that ensures credential cleanup on drop, even if test panics
+#[cfg(feature = "credential_store_tests")]
 struct CredentialGuard {
     key_id: String,
 }
 
+#[cfg(feature = "credential_store_tests")]
 impl CredentialGuard {
     fn new(key_id: impl Into<String>) -> Self {
         let key_id = key_id.into();
@@ -30,6 +35,7 @@ impl CredentialGuard {
     }
 }
 
+#[cfg(feature = "credential_store_tests")]
 impl Drop for CredentialGuard {
     fn drop(&mut self) {
         // Ensure cleanup happens even if test panics
@@ -38,6 +44,7 @@ impl Drop for CredentialGuard {
 }
 
 /// Helper to generate unique test key IDs to avoid collisions between tests
+#[cfg(feature = "credential_store_tests")]
 fn test_key_id(suffix: &str) -> String {
     format!("test_minisign_key_{suffix}")
 }

@@ -2096,6 +2096,7 @@ fn test_recreate_rejects_w_flag() {
 // Removed is_keyring_available_for_cli_tests - tests now use feature flag instead
 
 /// Helper to get `credential_id` from a secret key file
+#[cfg(feature = "credential_store_tests")]
 fn get_credential_id_from_file(sk_path: &std::path::Path) -> String {
     use minisign::keys::SeckeyStruct;
     let contents = fs::read_to_string(sk_path).expect("Failed to read secret key file");
@@ -2499,6 +2500,7 @@ fn test_forget_password_is_idempotent() {
 
 /// Helper: generate a key with --save-password, return the key ID string.
 /// Leaves the password saved in the credential store for subsequent test steps.
+#[cfg(feature = "credential_store_tests")]
 fn generate_key_with_saved_password(
     sk_path: &std::path::Path,
     pk_path: &std::path::Path,
