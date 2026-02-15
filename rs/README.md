@@ -369,6 +369,9 @@ You can also save a password after successfully using it:
 # Sign and save password on successful decrypt
 minisign_rs -S -m file.txt --save-password
 
+# Inspect and save password on successful decrypt
+minisign_rs -I -s mykey.key --save-password
+
 # Change password and save the new password
 minisign_rs -K --save-password
 ```
