@@ -40,6 +40,18 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - Use `Cow<T>` for conditional ownership
 - Only clone when required (threading, owned returns, API constraints)
 
+## API Design & Encapsulation
+- **Favor private fields** for:
+  - Security-sensitive types (keys, signatures, secrets)
+  - Types with invariants to maintain
+  - Public API surfaces that may need future flexibility
+- Provide constructors (`new()`) and getters instead of public fields
+- Getters should:
+  - Return references (`&Path`, `&str`, `&[T]`) not owned types (`&PathBuf`, `&String`)
+  - Use `#[must_use]` attribute
+  - Avoid `get_` prefix (Rust convention)
+- **Prefer builder pattern** for structs with 3+ params or multiple booleans (saved 452 lines in commit 17c648d)
+- Never use `#[allow(clippy::fn_params_excessive_bools)]` - use builder instead
 
 ## Pre-Commit Checklist
 **ALWAYS run in this exact order before committing:**
@@ -60,6 +72,10 @@ Install with: `cargo install cargo-audit`
 
 After dependency updates, always run full test suite and audit.
 
+## Refactoring Tools
+**Available tools for code refactoring:**
+- `rust-analyzer` - Installed via `rustup component add rust-analyzer`
+- `ast-grep` - Installed via `cargo install ast-grep`
 
 ## Testing
 
