@@ -2811,6 +2811,93 @@ fn test_inspect_uses_saved_password_for_decryption() {
 #[test]
 #[serial_test::serial]
 #[cfg(feature = "credential_store_tests")]
+fn test_inspect_save_password_flag() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "inspect_save_test";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key WITHOUT --save-password
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    #[allow(unused_variables)]
+    let credential_id = get_credential_id_from_file(&sk_path);
+    #[cfg(feature = "credential_store_tests")]
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    // Verify password not saved yet
+    assert!(
+        !credential_store::has_password(&credential_id),
+        "Password should not be saved yet"
+    );
+
+    // First inspect WITH --password-file AND --save-password
+    // This should save the password to the credential store
+    let first_inspect = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("--save-password")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr_str = String::from_utf8_lossy(&first_inspect.stderr);
+    eprintln!("First inspect stderr: {stderr_str}");
+
+    // Should show "Password saved to OS credential store" in stderr
+    assert!(
+        stderr_str.contains("Password saved to OS credential store"),
+        "Inspect should save password when --save-password is used. Stderr:\n{stderr_str}"
+    );
+
+    // Verify password is now saved
+    assert!(
+        credential_store::has_password(&credential_id),
+        "Password should be saved after --save-password flag"
+    );
+
+    // Second inspect WITHOUT --password-file
+    // This should auto-retrieve the saved password from credential store
+    let second_inspect = minisign_cmd()
+        .arg("-I")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    let stderr_str2 = String::from_utf8_lossy(&second_inspect.stderr);
+    eprintln!("Second inspect stderr: {stderr_str2}");
+
+    // Should show "Using saved password from credential store"
+    assert!(
+        stderr_str2.contains("Using saved password from credential store"),
+        "Second inspect should use saved password. Stderr:\n{stderr_str2}"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg(feature = "credential_store_tests")]
 fn test_change_password_with_credential_store() {
     use minisign::credential_store;
 

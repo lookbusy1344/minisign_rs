@@ -792,6 +792,14 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
 
         result = inspect_private_with_key(&seckey, password.as_bytes())?;
         decrypted = true;
+
+        // Save password to credential store if requested
+        save_password_to_credential_store(
+            &credential_id,
+            Some(&password),
+            cli.save_password,
+            cli.quiet,
+        );
     }
 
     // Display the source
