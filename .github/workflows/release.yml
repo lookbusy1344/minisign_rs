@@ -72,6 +72,7 @@ jobs:
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('rs/Cargo.lock') }}
 
     - name: Build release binary
+      shell: bash
       run: |
         if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
           cargo build --release --target ${{ matrix.target }} --no-default-features
