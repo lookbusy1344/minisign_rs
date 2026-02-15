@@ -11,7 +11,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ## Project Status
 
-**Version 1.2.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
+**Version 1.3.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
@@ -32,7 +32,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **492 total tests** covering all operations and CLI behavior
+- **478 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Credential store tests (skip gracefully when OS keyring unavailable)
@@ -42,16 +42,16 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (481 tests) using optimized scrypt parameters (~10 seconds)
+- **Fast test suite** (467 tests) using optimized scrypt parameters (~10 seconds)
 - **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **3,862 lines** of production code in `src/` (6,530 total with comments)
-- **9,034 lines** of test code in `tests/` (12,513 total with comments)
-- **Test-to-code ratio**: 2.34:1 demonstrating thorough test coverage
+- **4,231 lines** of production code in `src/` (7,160 total with comments)
+- **10,042 lines** of test code in `tests/` (13,847 total with comments)
+- **Test-to-code ratio**: 2.37:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
