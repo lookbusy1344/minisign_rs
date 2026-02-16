@@ -73,15 +73,6 @@ pub enum Error {
     #[error("decryption failed: wrong password")]
     DecryptionFailed,
 
-    #[error("unsupported signature algorithm: {0}")]
-    UnsupportedSigAlg(String),
-
-    #[error("unsupported KDF algorithm: {0}")]
-    UnsupportedKdfAlg(String),
-
-    #[error("unsupported checksum algorithm: {0}")]
-    UnsupportedChkAlg(String),
-
     // Credential store errors
     #[error("credential store operation failed: {0}")]
     CredentialStoreError(String),
