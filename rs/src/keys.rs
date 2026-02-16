@@ -518,6 +518,34 @@ impl SeckeyStruct {
         }
     }
 
+    /// Extract the secret key and keynum, decrypting if necessary
+    ///
+    /// This is a convenience method that handles both encrypted and unencrypted keys,
+    /// eliminating the need for repeated if/else patterns throughout the codebase.
+    ///
+    /// # Arguments
+    ///
+    /// * `password` - Optional password for decryption (required if key is encrypted, ignored otherwise)
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(SecretKey, KeyNum)`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Key is encrypted but no password provided
+    /// - Key derivation fails
+    /// - Checksum validation fails
+    pub fn extract_key(&self, password: Option<&[u8]>) -> Result<(SecretKey, KeyNum)> {
+        if self.is_encrypted() {
+            let pwd = password.ok_or(Error::PasswordRequired)?;
+            self.decrypt(pwd)
+        } else {
+            Ok((self.get_unencrypted_secret_key()?, *self.keynum()))
+        }
+    }
+
     /// Get the unencrypted secret key (only works for unencrypted keys)
     ///
     /// # Errors

@@ -192,12 +192,7 @@ pub fn change_with_log_n(
     let seckey = load_secret_key(options.secret_key_file)?;
 
     // Decrypt the secret key
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = old_password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(old_password)?;
 
     // Create new secret key structure with new password (or remove password)
     let new_seckey = if options.remove_password {

@@ -3,12 +3,7 @@
 //! This module implements recreating a public key file from a secret key file.
 
 use super::file_utils::{load_secret_key, write_public_key_file};
-use crate::{
-    Result,
-    crypto::PublicKey,
-    errors::Error,
-    keys::{PubkeyStruct, SeckeyStruct},
-};
+use crate::{Result, crypto::PublicKey, keys::{PubkeyStruct, SeckeyStruct}};
 use std::path::{Path, PathBuf};
 
 /// Options for recreating a public key
@@ -105,12 +100,7 @@ pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Resul
     let seckey = load_secret_key(options.secret_key_file())?;
 
     // Decrypt if necessary and get the keynum
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(password)?;
 
     // Extract public key from secret key
     // Ed25519 secret keys contain the public key in the second half (bytes 32-64)
@@ -161,12 +151,7 @@ pub fn recreate_with_key(
     password: Option<&[u8]>,
 ) -> Result<RecreateResult> {
     // Decrypt if necessary and get the keynum
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(password)?;
 
     // Extract public key from secret key
     // Ed25519 secret keys contain the public key in the second half (bytes 32-64)

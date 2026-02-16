@@ -298,13 +298,7 @@ fn load_and_decrypt_key(
     password: Option<&[u8]>,
 ) -> Result<(SecretKey, crate::crypto::KeyNum)> {
     let seckey = load_secret_key(secret_key_file)?;
-
-    if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)
-    } else {
-        Ok((seckey.get_unencrypted_secret_key()?, *seckey.keynum()))
-    }
+    seckey.extract_key(password)
 }
 
 /// Sign a single file with an already-loaded secret key
@@ -405,12 +399,7 @@ pub fn sign_with_key(
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
     // Decrypt the key if needed
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(password)?;
 
     // Sign the file using the existing helper
     sign_file_with_key(message_file, &secret_key, keynum, options)
