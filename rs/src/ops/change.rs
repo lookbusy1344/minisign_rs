@@ -92,41 +92,6 @@ impl<'a> ChangeOptions<'a> {
     pub const fn builder(secret_key_file: &'a Path) -> ChangeOptionsBuilder<'a> {
         ChangeOptionsBuilder::new(secret_key_file)
     }
-
-    /// Create new change options (deprecated, use `builder()` instead)
-    ///
-    /// # Arguments
-    ///
-    /// * `secret_key_file` - Path to the secret key file
-    /// * `remove_password` - Remove password (make unencrypted)
-    /// * `allow_kdf_fallback` - Allow KDF parameter fallback (LESS SECURE, opt-in only)
-    /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
-    #[deprecated(
-        since = "1.3.0",
-        note = "use `builder()` instead for better API clarity"
-    )]
-    #[allow(clippy::fn_params_excessive_bools)]
-    #[must_use]
-    pub const fn new(
-        secret_key_file: &'a Path,
-        remove_password: bool,
-        allow_kdf_fallback: bool,
-        force_weak_kdf: bool,
-    ) -> Self {
-        // In release builds, force_weak_kdf must always be false
-        #[cfg(not(debug_assertions))]
-        assert!(
-            !force_weak_kdf,
-            "force_weak_kdf must be false in release builds"
-        );
-
-        Self {
-            secret_key_file,
-            remove_password,
-            allow_kdf_fallback,
-            force_weak_kdf,
-        }
-    }
 }
 
 /// Result of password change operation

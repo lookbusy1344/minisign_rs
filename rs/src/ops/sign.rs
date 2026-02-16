@@ -179,10 +179,6 @@ impl<'a> SignOptions<'a> {
     /// ```
     /// # use minisign::ops::sign::SignOptions;
     /// # use std::path::Path;
-    /// // Old way (deprecated)
-    /// // let options = SignOptions::new(..., true, None, None, false, false);
-    ///
-    /// // New way (recommended)
     /// let options = SignOptions::builder(
     ///     Path::new("secret.key"),
     ///     Path::new("message.txt")
@@ -190,34 +186,6 @@ impl<'a> SignOptions<'a> {
     /// .prehashed(true)
     /// .build();
     /// ```
-    #[deprecated(
-        since = "1.3.0",
-        note = "use `builder()` instead to avoid excessive booleans"
-    )]
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub const fn new(
-        secret_key_file: &'a Path,
-        message_file: &'a Path,
-        signature_file: Option<&'a Path>,
-        prehashed: bool,
-        trusted_comment: Option<&'a str>,
-        untrusted_comment: Option<&'a str>,
-        force: bool,
-        quiet: bool,
-    ) -> Self {
-        Self {
-            secret_key_file,
-            message_file,
-            signature_file,
-            prehashed,
-            trusted_comment,
-            untrusted_comment,
-            force,
-            quiet,
-        }
-    }
-
     /// Get the secret key file path
     #[must_use]
     pub const fn secret_key_file(&self) -> &Path {
@@ -452,16 +420,9 @@ pub fn sign_with_key(
 /// let message_file = Path::new("file.txt");
 /// let password = Some(b"my_password".as_ref());
 ///
-/// let options = SignOptions::new(
-///     secret_key_path,
-///     message_file,
-///     None,        // signature_path (defaults to message_file.minisig)
-///     true,        // prehashed (default mode)
-///     None,        // trusted_comment
-///     None,        // untrusted_comment
-///     false,       // force
-///     false,       // quiet
-/// );
+/// let options = SignOptions::builder(secret_key_path, message_file)
+///     .prehashed(true)
+///     .build();
 ///
 /// let result = sign(&options, password)?;
 /// println!("File signed: {}", result.signature_file().display());
