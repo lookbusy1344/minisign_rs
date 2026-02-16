@@ -159,6 +159,8 @@ Additional flags not in C minisign:
 
 - **`-I/--inspect`** - Audit key security parameters and KDF strength (see [Inspecting Key Security](#inspecting-key-security))
 - **`--no-decrypt`** - Skip password prompt for encrypted keys during inspection (non-interactive mode)
+- **`--save-password/--sp`** - Save password to OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service) after successful use
+- **`--forget-password/--fp`** - Remove saved password from OS credential store (see [Password Storage in OS Keychain](#password-storage-in-os-keychain))
 - **`--password-file <FILE>`** - Read password from file (testing only, insecure)
 - **`--allow-kdf-fallback`** - Allow weak KDF on low-memory systems (opt-in, reduces security)
 - **`--force-weak-kdf`** - Create intentionally weak keys (debug builds only, testing)
