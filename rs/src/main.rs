@@ -210,7 +210,6 @@ fn save_password_to_credential_store(
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn handle_sign(cli: &Cli) -> Result<()> {
     let message_files = cli.all_message_files();
 
@@ -258,95 +257,123 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     }
 
     if message_files.len() == 1 {
-        // Single file path - preserve original behavior and output format
-        let message_file = &message_files[0];
-
-        let default_signature = Cli::default_signature_path(message_file)?;
-        let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
-
-        let mut builder = SignOptions::builder(secret_key_file, message_file)
-            .signature_file(signature_file)
-            .prehashed(prehashed);
-
-        if let Some(comment) = cli.trusted_comment.as_deref() {
-            builder = builder.trusted_comment(comment);
-        }
-        if let Some(comment) = cli.untrusted_comment.as_deref() {
-            builder = builder.untrusted_comment(comment);
-        }
-        if cli.force {
-            builder = builder.force(true);
-        }
-        if cli.quiet {
-            builder = builder.quiet(true);
-        }
-
-        let options = builder.build();
-
-        // Use sign_with_key to avoid redundant file load
-        let result = sign_with_key(
-            message_file,
+        handle_sign_single(
+            cli,
+            &message_files[0],
+            secret_key_file,
+            prehashed,
             &seckey,
-            &options,
-            password.as_ref().map(|p| p.as_bytes()),
-        )?;
-
-        save_password_to_credential_store(
             &credential_id,
             password.as_ref(),
-            cli.save_password,
-            cli.quiet,
-            None,
-        );
-
-        if !cli.quiet {
-            println!(
-                "Signing with key: {} ({})",
-                result.key_id, result.key_id_words
-            );
-            println!("Signature written to {}", result.signature_file.display());
-        }
+        )?;
     } else {
-        // Multiple files path - use multi-file API
-        if cli.signature_file.is_some() {
-            return Err(Error::Usage(
-                "Custom signature file (-x) not supported with multiple message files".into(),
-            ));
-        }
-
-        let mut builder =
-            SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(prehashed);
-
-        if let Some(comment) = cli.trusted_comment.as_deref() {
-            builder = builder.trusted_comment(comment);
-        }
-        if let Some(comment) = cli.untrusted_comment.as_deref() {
-            builder = builder.untrusted_comment(comment);
-        }
-        if cli.force {
-            builder = builder.force(true);
-        }
-        if cli.quiet {
-            builder = builder.quiet(true);
-        }
-
-        let options = builder.build();
-
-        sign_multiple_files(
+        handle_sign_multiple(
+            cli,
             message_files.into_owned(),
-            &options,
-            password.as_ref().map(|p| p.as_bytes()),
-            cli.sequential,
-        )?;
-
-        save_password_to_credential_store(
+            secret_key_file,
+            prehashed,
             &credential_id,
             password.as_ref(),
-            cli.save_password,
-            cli.quiet,
-            None,
-        );
+        )?;
     }
+
+    Ok(())
+}
+
+/// Handle signing a single file
+fn handle_sign_single(
+    cli: &Cli,
+    message_file: &std::path::Path,
+    secret_key_file: &std::path::Path,
+    prehashed: bool,
+    seckey: &minisign::keys::SeckeyStruct,
+    credential_id: &str,
+    password: Option<&Zeroizing<String>>,
+) -> Result<()> {
+    let default_signature = Cli::default_signature_path(message_file)?;
+    let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
+
+    let mut builder = SignOptions::builder(secret_key_file, message_file)
+        .signature_file(signature_file)
+        .prehashed(prehashed);
+
+    if let Some(comment) = cli.trusted_comment.as_deref() {
+        builder = builder.trusted_comment(comment);
+    }
+    if let Some(comment) = cli.untrusted_comment.as_deref() {
+        builder = builder.untrusted_comment(comment);
+    }
+    if cli.force {
+        builder = builder.force(true);
+    }
+    if cli.quiet {
+        builder = builder.quiet(true);
+    }
+
+    let options = builder.build();
+
+    // Use sign_with_key to avoid redundant file load
+    let result = sign_with_key(
+        message_file,
+        seckey,
+        &options,
+        password.map(|p| p.as_bytes()),
+    )?;
+
+    save_password_to_credential_store(credential_id, password, cli.save_password, cli.quiet, None);
+
+    if !cli.quiet {
+        println!(
+            "Signing with key: {} ({})",
+            result.key_id, result.key_id_words
+        );
+        println!("Signature written to {}", result.signature_file.display());
+    }
+
+    Ok(())
+}
+
+/// Handle signing multiple files
+fn handle_sign_multiple(
+    cli: &Cli,
+    message_files: Vec<std::path::PathBuf>,
+    secret_key_file: &std::path::Path,
+    prehashed: bool,
+    credential_id: &str,
+    password: Option<&Zeroizing<String>>,
+) -> Result<()> {
+    if cli.signature_file.is_some() {
+        return Err(Error::Usage(
+            "Custom signature file (-x) not supported with multiple message files".into(),
+        ));
+    }
+
+    let mut builder =
+        SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(prehashed);
+
+    if let Some(comment) = cli.trusted_comment.as_deref() {
+        builder = builder.trusted_comment(comment);
+    }
+    if let Some(comment) = cli.untrusted_comment.as_deref() {
+        builder = builder.untrusted_comment(comment);
+    }
+    if cli.force {
+        builder = builder.force(true);
+    }
+    if cli.quiet {
+        builder = builder.quiet(true);
+    }
+
+    let options = builder.build();
+
+    sign_multiple_files(
+        message_files,
+        &options,
+        password.map(|p| p.as_bytes()),
+        cli.sequential,
+    )?;
+
+    save_password_to_credential_store(credential_id, password, cli.save_password, cli.quiet, None);
 
     Ok(())
 }
