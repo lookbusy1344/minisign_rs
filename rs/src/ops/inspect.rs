@@ -253,49 +253,7 @@ pub fn inspect_private(
 
     // Try to parse as secret key first
     if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
-        if !seckey.is_encrypted() {
-            // Unencrypted secret key - behave like regular inspect
-            return inspect_secret_key(&seckey);
-        }
-
-        // Encrypted - decrypt to get the real keynum
-        let (_secret_key, decrypted_keynum) = seckey.decrypt(password)?;
-
-        // Get KDF info for security analysis
-        let opslimit = seckey.kdf_opslimit();
-        let memlimit = seckey.kdf_memlimit();
-        let (log_n, r, p) = opslimit_memlimit_to_params(opslimit, memlimit)?;
-
-        let is_fallback = opslimit < PRODUCTION_OPSLIMIT || memlimit < PRODUCTION_MEMLIMIT;
-        let weakness_multiplier = if is_fallback {
-            Some(PRODUCTION_MEMLIMIT / memlimit)
-        } else {
-            None
-        };
-
-        let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
-
-        let key_id = decrypted_keynum.to_key_id();
-        let credential_id = seckey.credential_id();
-        let password_saved = crate::credential_store::has_password(&credential_id);
-
-        return Ok(InspectResult {
-            key_id,
-            key_id_words: crate::wordlist::keynum_to_words(&decrypted_keynum),
-            key_type: KeyType::SecretEncrypted,
-            security_level: Some(security_level),
-            kdf_info: Some(KdfInfo {
-                opslimit,
-                memlimit,
-                log_n,
-                r,
-                p,
-                is_fallback,
-                weakness_multiplier,
-            }),
-            password_saved,
-            credential_id: Some(credential_id),
-        });
+        return inspect_private_with_key(&seckey, password);
     }
 
     // Try to parse as public key
