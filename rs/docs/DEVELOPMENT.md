@@ -144,10 +144,11 @@ cargo install cargo-audit
 
 - `keyring` - OS credential store integration (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 - `clap` - CLI argument parsing
+- `git-version` - Embed git version info at compile time
 - `rayon` - Parallel file operations
 - `thiserror` - Error type definitions
 - `base64` - Base64 encoding/decoding
-- `rand` - Cryptographic random number generation
+- `rand_core` - Cryptographic random number generation (OS entropy)
 - `rpassword` - Secure password input
 - `dirs` - Cross-platform directory discovery
 
@@ -157,7 +158,9 @@ cargo install cargo-audit
 - `predicates` - Test assertions
 - `tempfile` - Temporary file handling
 - `proptest` - Property-based testing
+- `rand` - Random number generation for tests
 - `hex` - Hex encoding for tests
+- `serial_test` - Sequential test execution for credential store tests
 
 ## CI/CD
 
@@ -185,10 +188,10 @@ Runs weekly and on every push:
 #### 3. **release.yml** - Binary Releases
 
 Triggers on version tags (`v*`):
-- Builds for 5 targets:
+- Builds for 6 targets:
   - Linux x86_64 (glibc and musl)
   - macOS x86_64 and ARM64
-  - Windows x86_64
+  - Windows x86_64 and ARM64
 - Creates GitHub releases with checksums
 - Strips binaries for minimal size
 - Uploads artifacts

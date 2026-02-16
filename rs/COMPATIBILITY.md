@@ -134,7 +134,7 @@ These differences exist but do **not** affect compatibility or behavior:
    - **Benefit:** Eliminates entire classes of security vulnerabilities
 
 2. **Modern Rust Edition** - Uses Rust 2024 edition
-   - **Impact:** Requires Rust 1.90+ to build
+   - **Impact:** Requires Rust 1.93+ to build
    - **Benefit:** Access to latest language improvements
 
 ## Testing Strategy
@@ -194,12 +194,12 @@ cargo run --bin minisign_rs -- -V -m message.txt -p c.pub
 
 ## Regression Testing
 
-The CI pipeline (`/.github/workflows/rust.yml`) runs on every commit:
+The CI pipeline (`.github/workflows/rust.yml`) runs on every commit:
 
 - **Platforms:** Linux, macOS, Windows
-- **Tests:** 103 unit tests + 5 compatibility tests
-- **Coverage:** All cryptographic operations and file formats
-- **Duration:** ~6 seconds (using fast scrypt parameters)
+- **Tests:** 479 tests (468 fast + 11 slow) covering all operations
+- **Coverage:** All cryptographic operations, file formats, and CLI behavior
+- **Duration:** ~9 seconds fast suite, ~11 seconds slow suite
 
 ## Security Audit Results
 
@@ -288,6 +288,6 @@ Users can switch between implementations transparently without any migration or 
 
 ---
 
-**Last Updated:** 2026-01-24
-**minisign-rs Version:** 0.12.0
+**Last Updated:** 2026-02-16
+**minisign-rs Version:** 1.3.1
 **C minisign Compatibility:** 0.11+

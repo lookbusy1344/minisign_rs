@@ -16,7 +16,7 @@ Minisign-rs has a comprehensive test suite ensuring cryptographic correctness, C
 
 ### Test Coverage Statistics
 
-- **478 total tests** covering all operations and CLI behavior
+- **479 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Credential store tests (skip gracefully when OS keyring unavailable)
@@ -26,7 +26,7 @@ Minisign-rs has a comprehensive test suite ensuring cryptographic correctness, C
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (453 tests) using optimized scrypt parameters (~3-6 seconds)
+- **Fast test suite** (468 tests) using optimized scrypt parameters (~3-6 seconds)
 - **Slow test suite** (11 tests) with production scrypt parameters (~10 seconds)
 
 ## Test Categories
@@ -35,7 +35,7 @@ Minisign-rs organizes tests into three main categories: fast tests, slow tests, 
 
 ### Fast Tests
 
-**Count:** 453 tests (+ 14 doc tests = 467 total)
+**Count:** 454 tests (+ 14 doc tests = 468 total)
 **Runtime:** ~3-6 seconds
 **Scrypt parameters:** N=2^14 (optimized for speed)
 
@@ -206,8 +206,8 @@ The `run_all_tests.sh` script provides convenient test execution:
 
 **For full test suite:**
 - **C minisign** (for compatibility and cross-binary tests): `brew install minisign`
-  - Without C minisign: ~460 tests run (skips 18 cross-binary tests)
-  - With C minisign: All 478 tests run
+  - Without C minisign: ~461 tests run (skips 18 cross-binary tests)
+  - With C minisign: All 479 tests run
 
 ### Credential Store Feature
 
@@ -229,11 +229,17 @@ The `credential_store` feature controls OS keyring integration (macOS Keychain, 
 tests/
 ├── cli_test.rs           # CLI integration tests
 ├── compatibility.rs      # C minisign cross-tests
+├── concurrent_access.rs  # Multi-process safety tests
 ├── cross_binary_test.rs  # C/Rust interop tests
-└── fixtures/            # Test fixtures
-    ├── keys/            # Key pairs (public + secret)
-    ├── messages/        # Test message files
-    └── signatures/      # Pre-generated signatures
+├── edge_cases.rs         # Unicode, symlinks, large files
+├── fuzzing.rs            # Property-based testing with proptest
+├── security_attacks.rs   # Security attack vector tests
+├── unit.rs               # Unit test harness
+├── unit/                 # Unit test modules
+└── fixtures/             # Test fixtures
+    ├── keys/             # Key pairs (public + secret)
+    ├── messages/         # Test message files
+    └── signatures/       # Pre-generated signatures
 ```
 
 ## C Minisign Compatibility Testing
@@ -284,7 +290,7 @@ fn test_cross_something() {
 }
 ```
 
-**Result:** Without C minisign, ~460 tests run (skips 18 cross-binary tests). With C minisign, all 478 tests run.
+**Result:** Without C minisign, ~461 tests run (skips 18 cross-binary tests). With C minisign, all 479 tests run.
 
 ## Adding New Tests
 
@@ -551,10 +557,10 @@ While we don't enforce specific coverage percentages, comprehensive testing is e
 
 ## Summary
 
-- **478 total tests** with ~9 second fast suite and ~16 second slow suite
+- **479 total tests** with ~9 second fast suite and ~11 second slow suite
 - Use `--no-default-features` to avoid keychain popups during development
 - Use `./run_all_tests.sh` for convenient test execution
-- C minisign required for full compatibility testing (18 cross-binary tests)
+- C minisign required for full compatibility testing (~18 cross-binary tests)
 - All tests in `tests/` directory for proper CI/CD integration
 - Mark slow tests with `#[ignore]` for production scrypt parameters
 - Credential store tests are completely separate to avoid accidental prompts

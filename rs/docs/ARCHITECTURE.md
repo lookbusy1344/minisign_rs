@@ -28,6 +28,7 @@ src/
 ├── credential_store.rs # OS credential store integration
 ├── formats.rs          # Binary and base64 encoding/decoding
 ├── validation.rs       # Comment and input validation (C compatibility)
+├── wordlist.rs         # PGP Word List for human-readable key IDs
 ├── errors.rs           # Error types with thiserror
 └── ops/                # High-level operations
     ├── generate.rs    # Key generation
@@ -171,7 +172,7 @@ All cryptographic operations are delegated to audited pure-Rust libraries:
 - **Ed25519 signatures**: `ed25519-dalek` (pure Rust, no unsafe code)
 - **Blake2b hashing**: `blake2` (RustCrypto)
 - **Scrypt KDF**: `scrypt` (RustCrypto)
-- **Random generation**: `rand` with `OsRng` (OS entropy source)
+- **Random generation**: `rand_core` with `OsRng` (OS entropy source)
 
 ### Secure Defaults
 
@@ -260,11 +261,12 @@ When the `credential_store` feature is disabled (default for tests), all credent
 
 - `rayon` - Data-parallel iteration for multi-file signing/verification
 - `base64` - Base64 encoding/decoding
-- `rand` - Cryptographic random number generation
+- `rand_core` - Cryptographic random number generation (OS entropy)
 - `thiserror` - Library error types
 - `rpassword` - Secure password input
 - `dirs` - Cross-platform directory discovery
 - `clap` - CLI argument parsing
+- `git-version` - Embed git version info at compile time
 
 ### Development
 
@@ -272,7 +274,9 @@ When the `credential_store` feature is disabled (default for tests), all credent
 - `predicates` - Test assertions
 - `tempfile` - Temporary file handling
 - `proptest` - Property-based testing
+- `rand` - Random number generation for tests
 - `hex` - Hex encoding for tests
+- `serial_test` - Sequential test execution for credential store tests
 
 ## Performance Considerations
 
@@ -394,8 +398,8 @@ See [TESTING.md](TESTING.md) for comprehensive testing documentation.
 Key testing principles:
 
 - **TDD required** - tests before implementation
-- **Fast test suite** (~420 tests, ~9s) with reduced scrypt parameters
-- **Slow security tests** (~10 tests, ~16s) with production scrypt parameters
+- **Fast test suite** (~468 tests, ~9s) with reduced scrypt parameters
+- **Slow security tests** (11 tests, ~11s) with production scrypt parameters
 - **Compatibility tests** with C minisign for binary format verification
 - **Property-based tests** with proptest for fuzzing-style validation
 - **All tests in `tests/` directory** for proper CodeQL analysis exclusions
