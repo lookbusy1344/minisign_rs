@@ -214,10 +214,11 @@ pub enum PublicKeySource<'a> {
 }
 
 /// Result of signature verification
+///
+/// Note: If you receive this struct, the verification succeeded.
+/// Failures return `Err` instead.
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
-    /// Whether the signature is valid
-    pub valid: bool,
     /// The trusted comment from the signature
     pub trusted_comment: String,
     /// The untrusted comment from the signature
@@ -302,7 +303,6 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
 
     Ok(VerifyResult {
-        valid: true,
         trusted_comment: sig_box.trusted_comment().to_string(),
         untrusted_comment: sig_box.untrusted_comment().to_string(),
         key_id,
@@ -432,7 +432,6 @@ fn verify_file_with_key(
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
 
     Ok(VerifyResult {
-        valid: true,
         trusted_comment: sig_box.trusted_comment().to_string(),
         untrusted_comment: sig_box.untrusted_comment().to_string(),
         key_id,
