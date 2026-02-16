@@ -134,7 +134,7 @@ impl std::fmt::Debug for Signature {
 /// plaintext in signature files and are not secret, the verification path uses
 /// constant-time comparison to prevent potential timing side-channels during
 /// signature validation.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Zeroize)]
 pub struct KeyNum([u8; KEYNUM_BYTES]);
 
 // H5: Implement ConstantTimeEq for KeyNum to enable constant-time comparison

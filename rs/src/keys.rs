@@ -37,7 +37,7 @@ use crate::crypto::{
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64, read_u64_le, write_u64_le};
 use subtle::ConstantTimeEq;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 /// Size of the public key structure in bytes
 pub const PUBKEY_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + PUBLIC_KEY_BYTES; // 42 bytes
@@ -259,7 +259,13 @@ impl std::fmt::Debug for PubkeyStruct {
 ///
 /// For encrypted keys, `keynum`/`secret_key`/checksum fields store the encrypted versions.
 /// The plaintext keynum is recovered during decryption.
-#[derive(Clone)]
+///
+/// # Security
+///
+/// This struct implements `Zeroize` and `ZeroizeOnDrop` to ensure that sensitive key material
+/// is securely cleared from memory when the struct is dropped. The struct intentionally does
+/// not implement `Clone` to prevent uncontrolled copies of sensitive data.
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SeckeyStruct {
     encrypted: bool,
     kdf_salt: [u8; KDF_SALT_BYTES],
