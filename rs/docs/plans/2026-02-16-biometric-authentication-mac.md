@@ -421,6 +421,19 @@ mod biometric_stub_tests {
 
 To use the `--biometric` flag, the minisign_rs binary must be code-signed with a provisioning profile.
 
+### Prerequisite: Paid Apple Developer Program ($99/year)
+
+Biometric-protected keychain items use the Apple **Data Protection Keychain** (iOS-style), which requires the `com.apple.application-identifier` entitlement. This entitlement is only available through a **provisioning profile**, which in turn requires enrollment in the [Apple Developer Program](https://developer.apple.com/programs/) at $99/year.
+
+**Free alternatives do not work:**
+- **Ad-hoc signing** (`codesign -s -`): Does not provide a provisioning profile or the required entitlement. `SecItemAdd` returns error `-34018`.
+- **Free Apple ID signing** (Xcode personal team): Only supports iOS development, not Developer ID distribution for macOS CLI tools.
+- **Self-signed certificates**: Do not include the entitlement infrastructure that Apple's provisioning system provides.
+
+This is the same constraint faced by other CLI tools that support Touch ID, such as [Teleport](https://github.com/gravitational/teleport/blob/master/rfd/0054-passwordless-macos.md), which packages its CLI as a `.app` bundle with Developer ID signing.
+
+**If you don't have a paid Apple Developer account**, the `--biometric` flag will fail gracefully and fall back to the standard credential store (no Touch ID, but passwords still saved and retrieved normally).
+
 ### Option 1: Developer ID (outside App Store)
 
 ```bash
