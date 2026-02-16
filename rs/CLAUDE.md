@@ -1,4 +1,4 @@
-# Claude Code - Minisign Rust Project
+# Minisign Rust Project
 
 ## What This Is
 Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. Must be 100% compatible with C version.

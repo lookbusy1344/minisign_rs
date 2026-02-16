@@ -11,7 +11,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ## Project Status
 
-**Version 1.3.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
+**Version 1.3.1 Release** - Production-ready Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
