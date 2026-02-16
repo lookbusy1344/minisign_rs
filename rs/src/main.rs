@@ -831,10 +831,15 @@ fn prompt_password(
         eprintln!(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
-        let password = std::fs::read_to_string(path)
-            .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
-        // Trim trailing newline if present and wrap in Zeroizing
-        return Ok(Zeroizing::new(password.trim_end().to_string()));
+        // Wrap password in Zeroizing immediately to prevent leakage
+        let mut password = Zeroizing::new(
+            std::fs::read_to_string(path)
+                .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?,
+        );
+        // Trim trailing newline in place
+        let trimmed_len = password.trim_end().len();
+        password.truncate(trimmed_len);
+        return Ok(password);
     }
 
     // Check if we're in an interactive environment
