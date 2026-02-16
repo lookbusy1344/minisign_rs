@@ -76,9 +76,23 @@ impl<'a> RecreateOptions<'a> {
 #[derive(Debug, Clone)]
 pub struct RecreateResult {
     /// Path where the public key was written
-    pub public_key_file: PathBuf,
+    public_key_file: PathBuf,
     /// The keynum in hexadecimal format
-    pub keynum_hex: String,
+    keynum_hex: String,
+}
+
+impl RecreateResult {
+    /// Get the path where the public key was written
+    #[must_use]
+    pub fn public_key_file(&self) -> &Path {
+        &self.public_key_file
+    }
+
+    /// Get the keynum in hexadecimal format
+    #[must_use]
+    pub fn keynum_hex(&self) -> &str {
+        &self.keynum_hex
+    }
 }
 
 /// Recreate a public key file from a secret key file

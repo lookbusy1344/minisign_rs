@@ -220,13 +220,39 @@ pub enum PublicKeySource<'a> {
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
     /// The trusted comment from the signature
-    pub trusted_comment: String,
+    trusted_comment: String,
     /// The untrusted comment from the signature
-    pub untrusted_comment: String,
+    untrusted_comment: String,
     /// Key ID in base64 format
-    pub key_id: String,
+    key_id: String,
     /// Key ID in PGP Word List format (human-readable)
-    pub key_id_words: String,
+    key_id_words: String,
+}
+
+impl VerifyResult {
+    /// Get the trusted comment from the signature
+    #[must_use]
+    pub fn trusted_comment(&self) -> &str {
+        &self.trusted_comment
+    }
+
+    /// Get the untrusted comment from the signature
+    #[must_use]
+    pub fn untrusted_comment(&self) -> &str {
+        &self.untrusted_comment
+    }
+
+    /// Get the key ID in base64 format
+    #[must_use]
+    pub fn key_id(&self) -> &str {
+        &self.key_id
+    }
+
+    /// Get the key ID in PGP Word List format (human-readable)
+    #[must_use]
+    pub fn key_id_words(&self) -> &str {
+        &self.key_id_words
+    }
 }
 
 /// Result of a single file verification operation (for batch processing)
@@ -277,7 +303,7 @@ pub struct FileVerifyResult {
 /// );
 ///
 /// let result = verify(&options)?;
-/// println!("Signature verified: {}", result.trusted_comment);
+/// println!("Signature verified: {}", result.trusted_comment());
 /// # Ok::<(), minisign::Error>(())
 /// ```
 pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
@@ -470,9 +496,9 @@ pub fn verify_multiple_files(
             println!(
                 "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
                 files[0].display(),
-                result.trusted_comment,
-                result.key_id,
-                result.key_id_words
+                result.trusted_comment(),
+                result.key_id(),
+                result.key_id_words()
             );
         }
         return Ok(());

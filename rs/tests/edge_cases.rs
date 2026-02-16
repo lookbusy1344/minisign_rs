@@ -114,8 +114,8 @@ fn test_unicode_in_trusted_comment() {
         .quiet(true)
         .build();
     let result = sign(&sign_opts, None).expect("Should sign with Unicode comments");
-    assert!(result.trusted_comment.contains("🔐"));
-    assert!(result.trusted_comment.contains("签名"));
+    assert!(result.trusted_comment().contains("🔐"));
+    assert!(result.trusted_comment().contains("签名"));
 
     // Verify signature with Unicode comments
     let verify_opts = VerifyOptions::builder(
@@ -125,7 +125,7 @@ fn test_unicode_in_trusted_comment() {
     )
     .build();
     let result = verify(&verify_opts).expect("Should verify signature with Unicode");
-    assert!(result.trusted_comment.contains("🔐"));
+    assert!(result.trusted_comment().contains("🔐"));
 }
 
 /// Test signing with Unicode (non-ASCII) in untrusted comment
@@ -164,7 +164,7 @@ fn test_unicode_in_untrusted_comment() {
     )
     .build();
     let result = verify(&verify_opts).expect("Should verify");
-    assert!(result.untrusted_comment.contains("Файл"));
+    assert!(result.untrusted_comment().contains("Файл"));
 }
 
 /// Test signing a large file with prehashed mode
@@ -536,7 +536,7 @@ fn test_trusted_comment_max_valid_length() {
         .build();
 
     let result = sign(&sign_opts, None).expect("Should sign with max valid trusted comment");
-    assert_eq!(result.trusted_comment, max_valid_trusted);
+    assert_eq!(result.trusted_comment(), max_valid_trusted);
 
     // Verify signature
     let verify_opts = VerifyOptions::builder(
@@ -843,7 +843,7 @@ fn test_unicode_zero_width_joiners() {
         .build();
 
     let result = sign(&sign_opts, None).expect("Should sign with ZWJ in comment");
-    assert!(result.trusted_comment.contains('\u{200D}'));
+    assert!(result.trusted_comment().contains('\u{200D}'));
 }
 
 /// Test comments with right-to-left (RTL) override characters
@@ -878,7 +878,7 @@ fn test_unicode_rtl_override() {
         .build();
 
     let result = sign(&sign_opts, None).expect("Should sign with RTL override");
-    assert!(result.trusted_comment.contains('\u{202E}'));
+    assert!(result.trusted_comment().contains('\u{202E}'));
 
     // Verify signature works despite RTL
     let verify_opts = VerifyOptions::builder(
@@ -926,9 +926,9 @@ fn test_unicode_homoglyphs() {
     let result = sign(&sign_opts, None).expect("Should sign with homoglyphs");
 
     // Verify exact preservation (no Unicode normalization)
-    assert_eq!(result.trusted_comment, homoglyph_comment);
-    assert!(result.trusted_comment.contains('а')); // Cyrillic а
-    assert!(result.trusted_comment.contains('ο')); // Greek ο
+    assert_eq!(result.trusted_comment(), homoglyph_comment);
+    assert!(result.trusted_comment().contains('а')); // Cyrillic а
+    assert!(result.trusted_comment().contains('ο')); // Greek ο
 }
 
 /// Test multi-byte characters at exact byte limit
@@ -975,7 +975,7 @@ fn test_unicode_multibyte_at_byte_limit() {
         .build();
 
     let result = sign(&sign_opts, None).expect("Should sign with multi-byte char at byte limit");
-    assert_eq!(result.trusted_comment, comment_with_multibyte);
+    assert_eq!(result.trusted_comment(), comment_with_multibyte);
 }
 
 /// Test comment that exceeds byte limit when last character is multi-byte

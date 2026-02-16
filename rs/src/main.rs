@@ -325,9 +325,10 @@ fn handle_sign_single(
     if !cli.quiet {
         println!(
             "Signing with key: {} ({})",
-            result.key_id, result.key_id_words
+            result.key_id(),
+            result.key_id_words()
         );
-        println!("Signature written to {}", result.signature_file.display());
+        println!("Signature written to {}", result.signature_file().display());
     }
 
     Ok(())
@@ -432,15 +433,16 @@ fn handle_verify(cli: &Cli) -> Result<()> {
                 .map_err(|e| Error::Io(format!("failed to write to stdout: {e}")))?;
         } else if cli.pretty_quiet {
             // -Q: Only show trusted comment
-            println!("{}", result.trusted_comment);
+            println!("{}", result.trusted_comment());
         } else if !cli.quiet {
             // Normal output
             println!(
                 "Verified with key: {} ({})",
-                result.key_id, result.key_id_words
+                result.key_id(),
+                result.key_id_words()
             );
             println!("Signature and comment signature verified");
-            println!("Trusted comment: {}", result.trusted_comment);
+            println!("Trusted comment: {}", result.trusted_comment());
         }
     } else {
         // Multiple files path - use multi-file API
@@ -521,7 +523,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     if !cli.quiet {
         println!(
             "Public key recreated as {}",
-            result.public_key_file.display()
+            result.public_key_file().display()
         );
     }
 
@@ -614,14 +616,14 @@ fn handle_change(cli: &Cli) -> Result<()> {
     )?;
 
     // Delete old credential entry if password changed (credential_id changes with new password)
-    if seckey.is_encrypted() && old_credential_id != result.credential_id {
+    if seckey.is_encrypted() && old_credential_id != result.credential_id() {
         let _ = minisign::credential_store::forget_password(&old_credential_id);
     }
 
     // Save new password to credential store if requested
     if cli.save_password {
         if let Some(pwd) = &new_password {
-            match minisign::credential_store::save_password(&result.credential_id, pwd) {
+            match minisign::credential_store::save_password(result.credential_id(), pwd) {
                 Ok(()) => {
                     if !cli.quiet {
                         eprintln!("Password saved to OS credential store");
@@ -637,7 +639,10 @@ fn handle_change(cli: &Cli) -> Result<()> {
     }
 
     if !cli.quiet {
-        println!("Password changed for {}", result.secret_key_file.display());
+        println!(
+            "Password changed for {}",
+            result.secret_key_file().display()
+        );
     }
 
     Ok(())

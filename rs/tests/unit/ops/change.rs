@@ -45,8 +45,8 @@ fn test_change_password_fast() {
     let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
         .expect("password change should succeed");
 
-    assert_eq!(result.secret_key_file, sk_path);
-    assert!(result.encrypted);
+    assert_eq!(result.secret_key_file(), sk_path);
+    assert!(result.encrypted());
 
     // Verify can decrypt with new password
     let sk_contents = fs::read_to_string(&sk_path).unwrap();
@@ -98,8 +98,8 @@ fn test_remove_password_from_encrypted_key() {
     let result = change_with_log_n(&options, Some(password), None, 14)
         .expect("password removal should succeed");
 
-    assert_eq!(result.secret_key_file, sk_path);
-    assert!(!result.encrypted);
+    assert_eq!(result.secret_key_file(), sk_path);
+    assert!(!result.encrypted());
 
     // Verify key is now unencrypted
     let sk_contents = fs::read_to_string(&sk_path).unwrap();
@@ -128,7 +128,7 @@ fn test_add_password_to_unencrypted_key() {
     let result = change_with_log_n(&options, None, Some(new_password), 14)
         .expect("adding password should succeed");
 
-    assert!(result.encrypted);
+    assert!(result.encrypted());
 
     // Verify key is now encrypted
     let sk_contents = fs::read_to_string(&sk_path).unwrap();
@@ -296,7 +296,7 @@ fn test_change_password_with_force_weak_kdf() {
     let result = change_with_log_n(&options, Some(old_password), Some(new_password), 20)
         .expect("password change should succeed");
 
-    assert!(result.encrypted);
+    assert!(result.encrypted());
 
     // Verify the key now has weak parameters
     let sk_contents = fs::read_to_string(&sk_path).unwrap();

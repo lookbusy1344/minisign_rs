@@ -271,13 +271,39 @@ impl<'a> SignOptions<'a> {
 #[derive(Debug, Clone)]
 pub struct SignResult {
     /// Path where the signature was written
-    pub signature_file: PathBuf,
+    signature_file: PathBuf,
     /// The trusted comment used
-    pub trusted_comment: String,
+    trusted_comment: String,
     /// Key ID in base64 format
-    pub key_id: String,
+    key_id: String,
     /// Key ID in PGP Word List format (human-readable)
-    pub key_id_words: String,
+    key_id_words: String,
+}
+
+impl SignResult {
+    /// Get the path where the signature was written
+    #[must_use]
+    pub fn signature_file(&self) -> &Path {
+        &self.signature_file
+    }
+
+    /// Get the trusted comment used
+    #[must_use]
+    pub fn trusted_comment(&self) -> &str {
+        &self.trusted_comment
+    }
+
+    /// Get the key ID in base64 format
+    #[must_use]
+    pub fn key_id(&self) -> &str {
+        &self.key_id
+    }
+
+    /// Get the key ID in PGP Word List format (human-readable)
+    #[must_use]
+    pub fn key_id_words(&self) -> &str {
+        &self.key_id_words
+    }
 }
 
 /// Result of a single file signing operation (for batch processing)
@@ -438,7 +464,7 @@ pub fn sign_with_key(
 /// );
 ///
 /// let result = sign(&options, password)?;
-/// println!("File signed: {}", result.signature_file.display());
+/// println!("File signed: {}", result.signature_file().display());
 /// # Ok::<(), minisign::Error>(())
 /// ```
 ///

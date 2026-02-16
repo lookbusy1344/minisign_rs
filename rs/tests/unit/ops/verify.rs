@@ -29,8 +29,8 @@ fn test_verify_c_generated_signature() {
 
     let result = verify(&options).expect("verification should succeed");
     // Note: If verify() succeeds, the signature is valid (failures return Err)
-    assert_eq!(result.trusted_comment, "Signed with Rust test key");
-    assert_eq!(result.untrusted_comment, "Test signature");
+    assert_eq!(result.trusted_comment(), "Signed with Rust test key");
+    assert_eq!(result.untrusted_comment(), "Test signature");
 }
 
 #[test]

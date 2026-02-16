@@ -31,8 +31,8 @@ fn test_recreate_from_unencrypted_key() {
 
     // Verify public key file was created
     assert!(pk_path.exists());
-    assert_eq!(result.public_key_file, pk_path);
-    assert_eq!(result.keynum_hex, keynum.to_key_id());
+    assert_eq!(result.public_key_file(), pk_path);
+    assert_eq!(result.keynum_hex(), keynum.to_key_id());
 
     // Verify the public key contents
     let pk_contents = fs::read_to_string(&pk_path).unwrap();
@@ -82,7 +82,7 @@ fn test_recreate_from_encrypted_key_fast() {
 
     // Verify public key file was created
     assert!(pk_path.exists());
-    assert_eq!(result.keynum_hex, keynum.to_key_id());
+    assert_eq!(result.keynum_hex(), keynum.to_key_id());
 }
 
 #[test]

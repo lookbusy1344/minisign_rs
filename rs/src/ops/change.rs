@@ -133,11 +133,31 @@ impl<'a> ChangeOptions<'a> {
 #[derive(Debug, Clone)]
 pub struct ChangeResult {
     /// Path to the secret key file that was modified
-    pub secret_key_file: PathBuf,
+    secret_key_file: PathBuf,
     /// Whether the key is now encrypted
-    pub encrypted: bool,
+    encrypted: bool,
     /// New credential store lookup key (after password change)
-    pub credential_id: String,
+    credential_id: String,
+}
+
+impl ChangeResult {
+    /// Get the path to the secret key file that was modified
+    #[must_use]
+    pub fn secret_key_file(&self) -> &Path {
+        &self.secret_key_file
+    }
+
+    /// Check whether the key is now encrypted
+    #[must_use]
+    pub const fn encrypted(&self) -> bool {
+        self.encrypted
+    }
+
+    /// Get the new credential store lookup key
+    #[must_use]
+    pub fn credential_id(&self) -> &str {
+        &self.credential_id
+    }
 }
 
 /// Change or remove the password on a secret key
