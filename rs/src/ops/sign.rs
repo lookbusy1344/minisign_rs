@@ -179,10 +179,6 @@ impl<'a> SignOptions<'a> {
     /// ```
     /// # use minisign::ops::sign::SignOptions;
     /// # use std::path::Path;
-    /// // Old way (deprecated)
-    /// // let options = SignOptions::new(..., true, None, None, false, false);
-    ///
-    /// // New way (recommended)
     /// let options = SignOptions::builder(
     ///     Path::new("secret.key"),
     ///     Path::new("message.txt")
@@ -190,34 +186,6 @@ impl<'a> SignOptions<'a> {
     /// .prehashed(true)
     /// .build();
     /// ```
-    #[deprecated(
-        since = "1.3.0",
-        note = "use `builder()` instead to avoid excessive booleans"
-    )]
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub const fn new(
-        secret_key_file: &'a Path,
-        message_file: &'a Path,
-        signature_file: Option<&'a Path>,
-        prehashed: bool,
-        trusted_comment: Option<&'a str>,
-        untrusted_comment: Option<&'a str>,
-        force: bool,
-        quiet: bool,
-    ) -> Self {
-        Self {
-            secret_key_file,
-            message_file,
-            signature_file,
-            prehashed,
-            trusted_comment,
-            untrusted_comment,
-            force,
-            quiet,
-        }
-    }
-
     /// Get the secret key file path
     #[must_use]
     pub const fn secret_key_file(&self) -> &Path {
@@ -271,13 +239,39 @@ impl<'a> SignOptions<'a> {
 #[derive(Debug, Clone)]
 pub struct SignResult {
     /// Path where the signature was written
-    pub signature_file: PathBuf,
+    signature_file: PathBuf,
     /// The trusted comment used
-    pub trusted_comment: String,
+    trusted_comment: String,
     /// Key ID in base64 format
-    pub key_id: String,
+    key_id: String,
     /// Key ID in PGP Word List format (human-readable)
-    pub key_id_words: String,
+    key_id_words: String,
+}
+
+impl SignResult {
+    /// Get the path where the signature was written
+    #[must_use]
+    pub fn signature_file(&self) -> &Path {
+        &self.signature_file
+    }
+
+    /// Get the trusted comment used
+    #[must_use]
+    pub fn trusted_comment(&self) -> &str {
+        &self.trusted_comment
+    }
+
+    /// Get the key ID in base64 format
+    #[must_use]
+    pub fn key_id(&self) -> &str {
+        &self.key_id
+    }
+
+    /// Get the key ID in PGP Word List format (human-readable)
+    #[must_use]
+    pub fn key_id_words(&self) -> &str {
+        &self.key_id_words
+    }
 }
 
 /// Result of a single file signing operation (for batch processing)
@@ -298,13 +292,7 @@ fn load_and_decrypt_key(
     password: Option<&[u8]>,
 ) -> Result<(SecretKey, crate::crypto::KeyNum)> {
     let seckey = load_secret_key(secret_key_file)?;
-
-    if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)
-    } else {
-        Ok((seckey.get_unencrypted_secret_key()?, *seckey.keynum()))
-    }
+    seckey.extract_key(password)
 }
 
 /// Sign a single file with an already-loaded secret key
@@ -405,12 +393,7 @@ pub fn sign_with_key(
     password: Option<&[u8]>,
 ) -> Result<SignResult> {
     // Decrypt the key if needed
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(password)?;
 
     // Sign the file using the existing helper
     sign_file_with_key(message_file, &secret_key, keynum, options)
@@ -437,19 +420,12 @@ pub fn sign_with_key(
 /// let message_file = Path::new("file.txt");
 /// let password = Some(b"my_password".as_ref());
 ///
-/// let options = SignOptions::new(
-///     secret_key_path,
-///     message_file,
-///     None,        // signature_path (defaults to message_file.minisig)
-///     true,        // prehashed (default mode)
-///     None,        // trusted_comment
-///     None,        // untrusted_comment
-///     false,       // force
-///     false,       // quiet
-/// );
+/// let options = SignOptions::builder(secret_key_path, message_file)
+///     .prehashed(true)
+///     .build();
 ///
 /// let result = sign(&options, password)?;
-/// println!("File signed: {}", result.signature_file.display());
+/// println!("File signed: {}", result.signature_file().display());
 /// # Ok::<(), minisign::Error>(())
 /// ```
 ///

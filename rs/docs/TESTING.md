@@ -25,9 +25,9 @@ Minisign-rs has a comprehensive test suite ensuring cryptographic correctness, C
 - Edge case tests for unicode, symlinks, and large files
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
-- **10 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (~420 tests) using optimized scrypt parameters (~9 seconds)
-- **Slow test suite** (~10 tests) with production scrypt parameters (~16 seconds)
+- **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
+- **Fast test suite** (453 tests) using optimized scrypt parameters (~3-6 seconds)
+- **Slow test suite** (11 tests) with production scrypt parameters (~10 seconds)
 
 ## Test Categories
 
@@ -35,8 +35,8 @@ Minisign-rs organizes tests into three main categories: fast tests, slow tests, 
 
 ### Fast Tests
 
-**Count:** ~420 tests
-**Runtime:** ~9 seconds
+**Count:** 453 tests (+ 14 doc tests = 467 total)
+**Runtime:** ~3-6 seconds
 **Scrypt parameters:** N=2^14 (optimized for speed)
 
 Fast tests are the primary development test suite, using reduced scrypt parameters (N=2^14 instead of production N=2^20) to enable rapid iteration. These tests verify:
@@ -61,8 +61,8 @@ cargo test
 
 ### Slow Tests
 
-**Count:** ~10 tests
-**Runtime:** ~16 seconds
+**Count:** 11 tests
+**Runtime:** ~10 seconds
 **Scrypt parameters:** N=2^20 (production strength)
 
 Slow tests use production scrypt parameters to verify security properties and C minisign compatibility with real-world KDF settings. These tests are marked with `#[ignore]` and run separately.

@@ -3,6 +3,7 @@ use minisign::errors::Error;
 use minisign::keys::{PubkeyStruct, SeckeyStruct};
 use minisign::ops::file_utils::write_public_key_file;
 use minisign::ops::recreate::{RecreateOptions, extract_public_key_from_secret, recreate};
+use rand::Rng;
 use std::fs;
 use tempfile::TempDir;
 
@@ -31,8 +32,8 @@ fn test_recreate_from_unencrypted_key() {
 
     // Verify public key file was created
     assert!(pk_path.exists());
-    assert_eq!(result.public_key_file, pk_path);
-    assert_eq!(result.keynum_hex, keynum.to_key_id());
+    assert_eq!(result.public_key_file(), pk_path);
+    assert_eq!(result.keynum_hex(), keynum.to_key_id());
 
     // Verify the public key contents
     let pk_contents = fs::read_to_string(&pk_path).unwrap();
@@ -52,7 +53,7 @@ fn test_recreate_from_encrypted_key_fast() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -82,7 +83,7 @@ fn test_recreate_from_encrypted_key_fast() {
 
     // Verify public key file was created
     assert!(pk_path.exists());
-    assert_eq!(result.keynum_hex, keynum.to_key_id());
+    assert_eq!(result.keynum_hex(), keynum.to_key_id());
 }
 
 #[test]
@@ -93,7 +94,7 @@ fn test_recreate_without_password_fails() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -130,7 +131,7 @@ fn test_recreate_wrong_password_fails() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"correctpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;

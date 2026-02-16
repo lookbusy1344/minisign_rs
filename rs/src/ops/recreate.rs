@@ -6,7 +6,6 @@ use super::file_utils::{load_secret_key, write_public_key_file};
 use crate::{
     Result,
     crypto::PublicKey,
-    errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
 };
 use std::path::{Path, PathBuf};
@@ -77,9 +76,23 @@ impl<'a> RecreateOptions<'a> {
 #[derive(Debug, Clone)]
 pub struct RecreateResult {
     /// Path where the public key was written
-    pub public_key_file: PathBuf,
+    public_key_file: PathBuf,
     /// The keynum in hexadecimal format
-    pub keynum_hex: String,
+    keynum_hex: String,
+}
+
+impl RecreateResult {
+    /// Get the path where the public key was written
+    #[must_use]
+    pub fn public_key_file(&self) -> &Path {
+        &self.public_key_file
+    }
+
+    /// Get the keynum in hexadecimal format
+    #[must_use]
+    pub fn keynum_hex(&self) -> &str {
+        &self.keynum_hex
+    }
 }
 
 /// Recreate a public key file from a secret key file
@@ -105,12 +118,7 @@ pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Resul
     let seckey = load_secret_key(options.secret_key_file())?;
 
     // Decrypt if necessary and get the keynum
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(password)?;
 
     // Extract public key from secret key
     // Ed25519 secret keys contain the public key in the second half (bytes 32-64)
@@ -161,12 +169,7 @@ pub fn recreate_with_key(
     password: Option<&[u8]>,
 ) -> Result<RecreateResult> {
     // Decrypt if necessary and get the keynum
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(password)?;
 
     // Extract public key from secret key
     // Ed25519 secret keys contain the public key in the second half (bytes 32-64)

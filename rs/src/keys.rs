@@ -37,7 +37,7 @@ use crate::crypto::{
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64, read_u64_le, write_u64_le};
 use subtle::ConstantTimeEq;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 /// Size of the public key structure in bytes
 pub const PUBKEY_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + PUBLIC_KEY_BYTES; // 42 bytes
@@ -259,7 +259,13 @@ impl std::fmt::Debug for PubkeyStruct {
 ///
 /// For encrypted keys, `keynum`/`secret_key`/checksum fields store the encrypted versions.
 /// The plaintext keynum is recovered during decryption.
-#[derive(Clone)]
+///
+/// # Security
+///
+/// This struct implements `Zeroize` and `ZeroizeOnDrop` to ensure that sensitive key material
+/// is securely cleared from memory when the struct is dropped. The struct intentionally does
+/// not implement `Clone` to prevent uncontrolled copies of sensitive data.
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct SeckeyStruct {
     encrypted: bool,
     kdf_salt: [u8; KDF_SALT_BYTES],
@@ -509,6 +515,34 @@ impl SeckeyStruct {
             Ok((SecretKey::from_bytes(secret_key_bytes), decrypted_keynum))
         } else {
             Err(Error::ChecksumFailed)
+        }
+    }
+
+    /// Extract the secret key and keynum, decrypting if necessary
+    ///
+    /// This is a convenience method that handles both encrypted and unencrypted keys,
+    /// eliminating the need for repeated if/else patterns throughout the codebase.
+    ///
+    /// # Arguments
+    ///
+    /// * `password` - Optional password for decryption (required if key is encrypted, ignored otherwise)
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(SecretKey, KeyNum)`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Key is encrypted but no password provided
+    /// - Key derivation fails
+    /// - Checksum validation fails
+    pub fn extract_key(&self, password: Option<&[u8]>) -> Result<(SecretKey, KeyNum)> {
+        if self.is_encrypted() {
+            let pwd = password.ok_or(Error::PasswordRequired)?;
+            self.decrypt(pwd)
+        } else {
+            Ok((self.get_unencrypted_secret_key()?, *self.keynum()))
         }
     }
 

@@ -130,26 +130,13 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     }
 
     // Save password to credential store if requested
-    if cli.save_password {
-        if let Some(pwd) = &password {
-            match minisign::credential_store::save_password(result.credential_id(), pwd) {
-                Ok(()) => {
-                    if !cli.quiet {
-                        eprintln!(
-                            "Password saved to OS credential store (credential: {})",
-                            result.credential_id()
-                        );
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to save password to credential store: {e}");
-                    eprintln!("The key was still created successfully.");
-                }
-            }
-        } else {
-            eprintln!("Warning: --save-password ignored (key has no password)");
-        }
-    }
+    save_password_to_credential_store(
+        result.credential_id(),
+        password.as_ref(),
+        cli.save_password,
+        cli.quiet,
+        Some("The key was still created successfully."),
+    );
 
     if !cli.quiet {
         println!(
@@ -191,11 +178,16 @@ fn get_password_with_credential_store(
 }
 
 /// Save password to credential store if requested
+///
+/// # Arguments
+///
+/// * `extra_context_on_error` - Optional message to print after credential store save failure
 fn save_password_to_credential_store(
     key_id: &str,
     password: Option<&Zeroizing<String>>,
     save_password: bool,
     quiet: bool,
+    extra_context_on_error: Option<&str>,
 ) {
     if save_password {
         if let Some(pwd) = password {
@@ -207,6 +199,9 @@ fn save_password_to_credential_store(
                 }
                 Err(e) => {
                     eprintln!("Warning: Failed to save password to credential store: {e}");
+                    if let Some(msg) = extra_context_on_error {
+                        eprintln!("{msg}");
+                    }
                 }
             }
         } else {
@@ -215,7 +210,6 @@ fn save_password_to_credential_store(
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn handle_sign(cli: &Cli) -> Result<()> {
     let message_files = cli.all_message_files();
 
@@ -263,93 +257,124 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     }
 
     if message_files.len() == 1 {
-        // Single file path - preserve original behavior and output format
-        let message_file = &message_files[0];
-
-        let default_signature = Cli::default_signature_path(message_file)?;
-        let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
-
-        let mut builder = SignOptions::builder(secret_key_file, message_file)
-            .signature_file(signature_file)
-            .prehashed(prehashed);
-
-        if let Some(comment) = cli.trusted_comment.as_deref() {
-            builder = builder.trusted_comment(comment);
-        }
-        if let Some(comment) = cli.untrusted_comment.as_deref() {
-            builder = builder.untrusted_comment(comment);
-        }
-        if cli.force {
-            builder = builder.force(true);
-        }
-        if cli.quiet {
-            builder = builder.quiet(true);
-        }
-
-        let options = builder.build();
-
-        // Use sign_with_key to avoid redundant file load
-        let result = sign_with_key(
-            message_file,
+        handle_sign_single(
+            cli,
+            &message_files[0],
+            secret_key_file,
+            prehashed,
             &seckey,
-            &options,
-            password.as_ref().map(|p| p.as_bytes()),
-        )?;
-
-        save_password_to_credential_store(
             &credential_id,
             password.as_ref(),
-            cli.save_password,
-            cli.quiet,
-        );
-
-        if !cli.quiet {
-            println!(
-                "Signing with key: {} ({})",
-                result.key_id, result.key_id_words
-            );
-            println!("Signature written to {}", result.signature_file.display());
-        }
+        )?;
     } else {
-        // Multiple files path - use multi-file API
-        if cli.signature_file.is_some() {
-            return Err(Error::Usage(
-                "Custom signature file (-x) not supported with multiple message files".into(),
-            ));
-        }
-
-        let mut builder =
-            SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(prehashed);
-
-        if let Some(comment) = cli.trusted_comment.as_deref() {
-            builder = builder.trusted_comment(comment);
-        }
-        if let Some(comment) = cli.untrusted_comment.as_deref() {
-            builder = builder.untrusted_comment(comment);
-        }
-        if cli.force {
-            builder = builder.force(true);
-        }
-        if cli.quiet {
-            builder = builder.quiet(true);
-        }
-
-        let options = builder.build();
-
-        sign_multiple_files(
+        handle_sign_multiple(
+            cli,
             message_files.into_owned(),
-            &options,
-            password.as_ref().map(|p| p.as_bytes()),
-            cli.sequential,
-        )?;
-
-        save_password_to_credential_store(
+            secret_key_file,
+            prehashed,
             &credential_id,
             password.as_ref(),
-            cli.save_password,
-            cli.quiet,
-        );
+        )?;
     }
+
+    Ok(())
+}
+
+/// Handle signing a single file
+fn handle_sign_single(
+    cli: &Cli,
+    message_file: &std::path::Path,
+    secret_key_file: &std::path::Path,
+    prehashed: bool,
+    seckey: &minisign::keys::SeckeyStruct,
+    credential_id: &str,
+    password: Option<&Zeroizing<String>>,
+) -> Result<()> {
+    let default_signature = Cli::default_signature_path(message_file)?;
+    let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
+
+    let mut builder = SignOptions::builder(secret_key_file, message_file)
+        .signature_file(signature_file)
+        .prehashed(prehashed);
+
+    if let Some(comment) = cli.trusted_comment.as_deref() {
+        builder = builder.trusted_comment(comment);
+    }
+    if let Some(comment) = cli.untrusted_comment.as_deref() {
+        builder = builder.untrusted_comment(comment);
+    }
+    if cli.force {
+        builder = builder.force(true);
+    }
+    if cli.quiet {
+        builder = builder.quiet(true);
+    }
+
+    let options = builder.build();
+
+    // Use sign_with_key to avoid redundant file load
+    let result = sign_with_key(
+        message_file,
+        seckey,
+        &options,
+        password.map(|p| p.as_bytes()),
+    )?;
+
+    save_password_to_credential_store(credential_id, password, cli.save_password, cli.quiet, None);
+
+    if !cli.quiet {
+        println!(
+            "Signing with key: {} ({})",
+            result.key_id(),
+            result.key_id_words()
+        );
+        println!("Signature written to {}", result.signature_file().display());
+    }
+
+    Ok(())
+}
+
+/// Handle signing multiple files
+fn handle_sign_multiple(
+    cli: &Cli,
+    message_files: Vec<std::path::PathBuf>,
+    secret_key_file: &std::path::Path,
+    prehashed: bool,
+    credential_id: &str,
+    password: Option<&Zeroizing<String>>,
+) -> Result<()> {
+    if cli.signature_file.is_some() {
+        return Err(Error::Usage(
+            "Custom signature file (-x) not supported with multiple message files".into(),
+        ));
+    }
+
+    let mut builder =
+        SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(prehashed);
+
+    if let Some(comment) = cli.trusted_comment.as_deref() {
+        builder = builder.trusted_comment(comment);
+    }
+    if let Some(comment) = cli.untrusted_comment.as_deref() {
+        builder = builder.untrusted_comment(comment);
+    }
+    if cli.force {
+        builder = builder.force(true);
+    }
+    if cli.quiet {
+        builder = builder.quiet(true);
+    }
+
+    let options = builder.build();
+
+    sign_multiple_files(
+        message_files,
+        &options,
+        password.map(|p| p.as_bytes()),
+        cli.sequential,
+    )?;
+
+    save_password_to_credential_store(credential_id, password, cli.save_password, cli.quiet, None);
 
     Ok(())
 }
@@ -390,14 +415,11 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         let default_signature = Cli::default_signature_path(message_file)?;
         let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-        let options = VerifyOptions::new(
-            public_key,
-            signature_file,
-            message_file,
-            cli.output,
-            cli.quiet,
-            cli.prehashed,
-        );
+        let options = VerifyOptions::builder(public_key, signature_file, message_file)
+            .output(cli.output)
+            .quiet(cli.quiet)
+            .force_prehashed(cli.prehashed)
+            .build();
 
         let result = verify(&options)?;
 
@@ -411,15 +433,16 @@ fn handle_verify(cli: &Cli) -> Result<()> {
                 .map_err(|e| Error::Io(format!("failed to write to stdout: {e}")))?;
         } else if cli.pretty_quiet {
             // -Q: Only show trusted comment
-            println!("{}", result.trusted_comment);
+            println!("{}", result.trusted_comment());
         } else if !cli.quiet {
             // Normal output
             println!(
                 "Verified with key: {} ({})",
-                result.key_id, result.key_id_words
+                result.key_id(),
+                result.key_id_words()
             );
             println!("Signature and comment signature verified");
-            println!("Trusted comment: {}", result.trusted_comment);
+            println!("Trusted comment: {}", result.trusted_comment());
         }
     } else {
         // Multiple files path - use multi-file API
@@ -435,14 +458,15 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             ));
         }
 
-        let options = VerifyOptions::new(
+        let options = VerifyOptions::builder(
             public_key,
             std::path::Path::new(""),
             std::path::Path::new(""),
-            cli.output,
-            cli.quiet,
-            cli.prehashed,
-        );
+        )
+        .output(cli.output)
+        .quiet(cli.quiet)
+        .force_prehashed(cli.prehashed)
+        .build();
 
         verify_multiple_files(message_files.into_owned(), &options, cli.sequential)?;
     }
@@ -499,7 +523,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     if !cli.quiet {
         println!(
             "Public key recreated as {}",
-            result.public_key_file.display()
+            result.public_key_file().display()
         );
     }
 
@@ -592,14 +616,14 @@ fn handle_change(cli: &Cli) -> Result<()> {
     )?;
 
     // Delete old credential entry if password changed (credential_id changes with new password)
-    if seckey.is_encrypted() && old_credential_id != result.credential_id {
+    if seckey.is_encrypted() && old_credential_id != result.credential_id() {
         let _ = minisign::credential_store::forget_password(&old_credential_id);
     }
 
     // Save new password to credential store if requested
     if cli.save_password {
         if let Some(pwd) = &new_password {
-            match minisign::credential_store::save_password(&result.credential_id, pwd) {
+            match minisign::credential_store::save_password(result.credential_id(), pwd) {
                 Ok(()) => {
                     if !cli.quiet {
                         eprintln!("Password saved to OS credential store");
@@ -615,7 +639,10 @@ fn handle_change(cli: &Cli) -> Result<()> {
     }
 
     if !cli.quiet {
-        println!("Password changed for {}", result.secret_key_file.display());
+        println!(
+            "Password changed for {}",
+            result.secret_key_file().display()
+        );
     }
 
     Ok(())
@@ -799,6 +826,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             Some(&password),
             cli.save_password,
             cli.quiet,
+            None,
         );
     }
 
@@ -831,10 +859,15 @@ fn prompt_password(
         eprintln!(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
-        let password = std::fs::read_to_string(path)
-            .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
-        // Trim trailing newline if present and wrap in Zeroizing
-        return Ok(Zeroizing::new(password.trim_end().to_string()));
+        // Wrap password in Zeroizing immediately to prevent leakage
+        let mut password = Zeroizing::new(
+            std::fs::read_to_string(path)
+                .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?,
+        );
+        // Trim trailing newline in place
+        let trimmed_len = password.trim_end().len();
+        password.truncate(trimmed_len);
+        return Ok(password);
     }
 
     // Check if we're in an interactive environment

@@ -17,6 +17,7 @@ use minisign::{
     },
     signature::{SigStruct, SignatureBox},
 };
+use rand::Rng;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -41,8 +42,8 @@ fn test_sign_unencrypted_key() {
     .build();
 
     let result = sign(&options, None).expect("signing should succeed");
-    assert_eq!(result.signature_file, sig_path);
-    assert_eq!(result.trusted_comment, "Test signature");
+    assert_eq!(result.signature_file(), sig_path);
+    assert_eq!(result.trusted_comment(), "Test signature");
 
     // Verify the signature file was created
     assert!(sig_path.exists());
@@ -89,7 +90,7 @@ fn test_sign_encrypted_key() {
     let password = b"test";
     let result = sign(&options, Some(password)).expect("signing should succeed");
     assert!(sig_path.exists());
-    assert!(result.trusted_comment.starts_with("timestamp:"));
+    assert!(result.trusted_comment().starts_with("timestamp:"));
 }
 
 #[test]
@@ -101,7 +102,7 @@ fn test_sign_encrypted_key_fast() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpass";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     // Use N=2^14 for fast testing (~50ms)
     let n = 1u64 << 14;
@@ -138,7 +139,7 @@ fn test_sign_encrypted_key_fast() {
 
     let result = sign(&options, Some(password)).expect("signing should succeed");
     assert!(sig_path.exists());
-    assert_eq!(result.trusted_comment, "Fast test");
+    assert_eq!(result.trusted_comment(), "Fast test");
 }
 
 #[test]
@@ -588,7 +589,7 @@ fn test_sign_single_file_success() {
     assert!(result.is_ok());
 
     let sign_result = result.unwrap();
-    assert_eq!(sign_result.trusted_comment, "Test");
+    assert_eq!(sign_result.trusted_comment(), "Test");
 
     // Signature file should exist
     let sig_path = format!("{}.minisig", message_path.display());

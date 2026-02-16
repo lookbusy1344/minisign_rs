@@ -134,7 +134,7 @@ impl std::fmt::Debug for Signature {
 /// plaintext in signature files and are not secret, the verification path uses
 /// constant-time comparison to prevent potential timing side-channels during
 /// signature validation.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Zeroize)]
 pub struct KeyNum([u8; KEYNUM_BYTES]);
 
 // H5: Implement ConstantTimeEq for KeyNum to enable constant-time comparison
@@ -158,8 +158,10 @@ impl KeyNum {
     ///
     /// Returns an error if the system random number generator fails
     pub fn generate() -> Result<Self> {
+        use rand_core::RngCore;
+
         let mut bytes = [0u8; KEYNUM_BYTES];
-        getrandom::fill(&mut bytes).map_err(|e| Error::RngError(e.to_string()))?;
+        OsRng.fill_bytes(&mut bytes);
         Ok(Self(bytes))
     }
 

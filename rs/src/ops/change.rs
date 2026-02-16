@@ -92,52 +92,37 @@ impl<'a> ChangeOptions<'a> {
     pub const fn builder(secret_key_file: &'a Path) -> ChangeOptionsBuilder<'a> {
         ChangeOptionsBuilder::new(secret_key_file)
     }
-
-    /// Create new change options (deprecated, use `builder()` instead)
-    ///
-    /// # Arguments
-    ///
-    /// * `secret_key_file` - Path to the secret key file
-    /// * `remove_password` - Remove password (make unencrypted)
-    /// * `allow_kdf_fallback` - Allow KDF parameter fallback (LESS SECURE, opt-in only)
-    /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
-    #[deprecated(
-        since = "1.3.0",
-        note = "use `builder()` instead for better API clarity"
-    )]
-    #[allow(clippy::fn_params_excessive_bools)]
-    #[must_use]
-    pub const fn new(
-        secret_key_file: &'a Path,
-        remove_password: bool,
-        allow_kdf_fallback: bool,
-        force_weak_kdf: bool,
-    ) -> Self {
-        // In release builds, force_weak_kdf must always be false
-        #[cfg(not(debug_assertions))]
-        assert!(
-            !force_weak_kdf,
-            "force_weak_kdf must be false in release builds"
-        );
-
-        Self {
-            secret_key_file,
-            remove_password,
-            allow_kdf_fallback,
-            force_weak_kdf,
-        }
-    }
 }
 
 /// Result of password change operation
 #[derive(Debug, Clone)]
 pub struct ChangeResult {
     /// Path to the secret key file that was modified
-    pub secret_key_file: PathBuf,
+    secret_key_file: PathBuf,
     /// Whether the key is now encrypted
-    pub encrypted: bool,
+    encrypted: bool,
     /// New credential store lookup key (after password change)
-    pub credential_id: String,
+    credential_id: String,
+}
+
+impl ChangeResult {
+    /// Get the path to the secret key file that was modified
+    #[must_use]
+    pub fn secret_key_file(&self) -> &Path {
+        &self.secret_key_file
+    }
+
+    /// Check whether the key is now encrypted
+    #[must_use]
+    pub const fn encrypted(&self) -> bool {
+        self.encrypted
+    }
+
+    /// Get the new credential store lookup key
+    #[must_use]
+    pub fn credential_id(&self) -> &str {
+        &self.credential_id
+    }
 }
 
 /// Change or remove the password on a secret key
@@ -192,24 +177,21 @@ pub fn change_with_log_n(
     let seckey = load_secret_key(options.secret_key_file)?;
 
     // Decrypt the secret key
-    let (secret_key, keynum) = if seckey.is_encrypted() {
-        let pwd = old_password.ok_or(Error::PasswordRequired)?;
-        seckey.decrypt(pwd)?
-    } else {
-        (seckey.get_unencrypted_secret_key()?, *seckey.keynum())
-    };
+    let (secret_key, keynum) = seckey.extract_key(old_password)?;
 
     // Create new secret key structure with new password (or remove password)
     let new_seckey = if options.remove_password {
         // Remove encryption
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
+        use rand_core::{OsRng, RngCore};
+
         // Re-encrypt with new password
         let new_pwd = new_password.ok_or(Error::PasswordRequired)?;
 
         // Generate new salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
+        OsRng.fill_bytes(&mut kdf_salt);
 
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;

@@ -30,8 +30,114 @@ pub struct VerifyOptions<'a> {
     force_prehashed: bool,
 }
 
+/// Builder for `VerifyOptions`
+#[derive(Debug, Clone)]
+pub struct VerifyOptionsBuilder<'a> {
+    public_key: PublicKeySource<'a>,
+    signature_file: &'a Path,
+    message_file: &'a Path,
+    output: bool,
+    quiet: bool,
+    force_prehashed: bool,
+}
+
+impl<'a> VerifyOptionsBuilder<'a> {
+    /// Create a new builder with required fields
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - Public key (either from file or provided directly)
+    /// * `signature_file` - Path to the signature file
+    /// * `message_file` - Path to the message file
+    #[must_use]
+    pub const fn new(
+        public_key: PublicKeySource<'a>,
+        signature_file: &'a Path,
+        message_file: &'a Path,
+    ) -> Self {
+        Self {
+            public_key,
+            signature_file,
+            message_file,
+            output: false,
+            quiet: false,
+            force_prehashed: false,
+        }
+    }
+
+    /// Enable output mode (write verification result to stdout)
+    #[must_use]
+    pub const fn output(mut self, output: bool) -> Self {
+        self.output = output;
+        self
+    }
+
+    /// Enable quiet mode (suppress output)
+    #[must_use]
+    pub const fn quiet(mut self, quiet: bool) -> Self {
+        self.quiet = quiet;
+        self
+    }
+
+    /// Require prehashed signatures (reject legacy signatures)
+    #[must_use]
+    pub const fn force_prehashed(mut self, force_prehashed: bool) -> Self {
+        self.force_prehashed = force_prehashed;
+        self
+    }
+
+    /// Build the `VerifyOptions`
+    #[must_use]
+    pub const fn build(self) -> VerifyOptions<'a> {
+        VerifyOptions {
+            public_key: self.public_key,
+            signature_file: self.signature_file,
+            message_file: self.message_file,
+            output: self.output,
+            quiet: self.quiet,
+            force_prehashed: self.force_prehashed,
+        }
+    }
+}
+
 impl<'a> VerifyOptions<'a> {
+    /// Create a builder for `VerifyOptions`
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - Public key (either from file or provided directly)
+    /// * `signature_file` - Path to the signature file
+    /// * `message_file` - Path to the message file
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use minisign::ops::verify::{VerifyOptions, PublicKeySource};
+    /// # use std::path::Path;
+    /// let options = VerifyOptions::builder(
+    ///     PublicKeySource::File(Path::new("key.pub")),
+    ///     Path::new("message.txt.sig"),
+    ///     Path::new("message.txt")
+    /// )
+    /// .output(true)
+    /// .force_prehashed(true)
+    /// .build();
+    /// ```
+    #[must_use]
+    pub const fn builder(
+        public_key: PublicKeySource<'a>,
+        signature_file: &'a Path,
+        message_file: &'a Path,
+    ) -> VerifyOptionsBuilder<'a> {
+        VerifyOptionsBuilder::new(public_key, signature_file, message_file)
+    }
+
     /// Create new verify options
+    ///
+    /// # Deprecated
+    ///
+    /// Use [`VerifyOptions::builder`] instead for better ergonomics and to avoid
+    /// excessive boolean parameters.
     ///
     /// # Arguments
     ///
@@ -41,6 +147,7 @@ impl<'a> VerifyOptions<'a> {
     /// * `output` - Output verification result to stdout
     /// * `quiet` - Quiet mode (no output)
     /// * `force_prehashed` - Require prehashed signatures (reject legacy)
+    #[deprecated(since = "1.3.0", note = "Use VerifyOptions::builder instead")]
     #[must_use]
     pub const fn new(
         public_key: PublicKeySource<'a>,
@@ -107,18 +214,45 @@ pub enum PublicKeySource<'a> {
 }
 
 /// Result of signature verification
+///
+/// Note: If you receive this struct, the verification succeeded.
+/// Failures return `Err` instead.
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
-    /// Whether the signature is valid
-    pub valid: bool,
     /// The trusted comment from the signature
-    pub trusted_comment: String,
+    trusted_comment: String,
     /// The untrusted comment from the signature
-    pub untrusted_comment: String,
+    untrusted_comment: String,
     /// Key ID in base64 format
-    pub key_id: String,
+    key_id: String,
     /// Key ID in PGP Word List format (human-readable)
-    pub key_id_words: String,
+    key_id_words: String,
+}
+
+impl VerifyResult {
+    /// Get the trusted comment from the signature
+    #[must_use]
+    pub fn trusted_comment(&self) -> &str {
+        &self.trusted_comment
+    }
+
+    /// Get the untrusted comment from the signature
+    #[must_use]
+    pub fn untrusted_comment(&self) -> &str {
+        &self.untrusted_comment
+    }
+
+    /// Get the key ID in base64 format
+    #[must_use]
+    pub fn key_id(&self) -> &str {
+        &self.key_id
+    }
+
+    /// Get the key ID in PGP Word List format (human-readable)
+    #[must_use]
+    pub fn key_id_words(&self) -> &str {
+        &self.key_id_words
+    }
 }
 
 /// Result of a single file verification operation (for batch processing)
@@ -169,7 +303,7 @@ pub struct FileVerifyResult {
 /// );
 ///
 /// let result = verify(&options)?;
-/// println!("Signature verified: {}", result.trusted_comment);
+/// println!("Signature verified: {}", result.trusted_comment());
 /// # Ok::<(), minisign::Error>(())
 /// ```
 pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
@@ -195,7 +329,6 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
 
     Ok(VerifyResult {
-        valid: true,
         trusted_comment: sig_box.trusted_comment().to_string(),
         untrusted_comment: sig_box.untrusted_comment().to_string(),
         key_id,
@@ -325,7 +458,6 @@ fn verify_file_with_key(
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
 
     Ok(VerifyResult {
-        valid: true,
         trusted_comment: sig_box.trusted_comment().to_string(),
         untrusted_comment: sig_box.untrusted_comment().to_string(),
         key_id,
@@ -364,9 +496,9 @@ pub fn verify_multiple_files(
             println!(
                 "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
                 files[0].display(),
-                result.trusted_comment,
-                result.key_id,
-                result.key_id_words
+                result.trusted_comment(),
+                result.key_id(),
+                result.key_id_words()
             );
         }
         return Ok(());

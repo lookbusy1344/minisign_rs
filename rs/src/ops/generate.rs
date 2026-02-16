@@ -128,51 +128,6 @@ impl<'a> GenerateOptions<'a> {
     ) -> GenerateOptionsBuilder<'a> {
         GenerateOptionsBuilder::new(secret_key_file, public_key_file)
     }
-
-    /// Create new generate options (deprecated, use `builder()` instead)
-    ///
-    /// # Arguments
-    ///
-    /// * `secret_key_file` - Path to write the secret key file
-    /// * `public_key_file` - Path to write the public key file
-    /// * `comment` - Optional comment for the key files
-    /// * `force` - Force overwrite existing files
-    /// * `no_password` - Create unencrypted key (no password)
-    /// * `allow_kdf_fallback` - Allow KDF parameter fallback (LESS SECURE, opt-in only)
-    /// * `force_weak_kdf` - Force weak KDF parameters for testing (DEBUG ONLY, ignored in release builds)
-    #[deprecated(
-        since = "1.3.0",
-        note = "use `builder()` instead to avoid excessive booleans"
-    )]
-    #[allow(clippy::fn_params_excessive_bools)]
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub const fn new(
-        secret_key_file: &'a Path,
-        public_key_file: &'a Path,
-        comment: Option<&'a str>,
-        force: bool,
-        no_password: bool,
-        allow_kdf_fallback: bool,
-        force_weak_kdf: bool,
-    ) -> Self {
-        // In release builds, force_weak_kdf must always be false
-        #[cfg(not(debug_assertions))]
-        assert!(
-            !force_weak_kdf,
-            "force_weak_kdf must be false in release builds"
-        );
-
-        Self {
-            secret_key_file,
-            public_key_file,
-            comment,
-            force,
-            no_password,
-            allow_kdf_fallback,
-            force_weak_kdf,
-        }
-    }
 }
 
 /// Result of key generation
@@ -251,15 +206,8 @@ impl GenerateResult {
 /// let public_key_path = Path::new("~/.minisign/minisign.pub");
 /// let password = Some(b"my_secure_password".as_ref());
 ///
-/// let options = GenerateOptions::new(
-///     secret_key_path,
-///     public_key_path,
-///     None,   // comment
-///     false,  // force
-///     false,  // no_password
-///     false,  // allow_kdf_fallback
-///     false,  // force_weak_kdf
-/// );
+/// let options = GenerateOptions::builder(secret_key_path, public_key_path)
+///     .build();
 ///
 /// let result = generate(&options, password)?;
 /// println!("Key pair generated successfully");
@@ -317,11 +265,13 @@ pub fn generate_with_log_n(
     let seckey = if options.no_password {
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
+        use rand_core::{OsRng, RngCore};
+
         let pwd = password.ok_or(Error::PasswordRequired)?;
 
         // Generate random salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
+        OsRng.fill_bytes(&mut kdf_salt);
 
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
