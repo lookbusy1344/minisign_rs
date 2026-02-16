@@ -390,14 +390,11 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         let default_signature = Cli::default_signature_path(message_file)?;
         let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-        let options = VerifyOptions::new(
-            public_key,
-            signature_file,
-            message_file,
-            cli.output,
-            cli.quiet,
-            cli.prehashed,
-        );
+        let options = VerifyOptions::builder(public_key, signature_file, message_file)
+            .output(cli.output)
+            .quiet(cli.quiet)
+            .force_prehashed(cli.prehashed)
+            .build();
 
         let result = verify(&options)?;
 
@@ -435,14 +432,15 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             ));
         }
 
-        let options = VerifyOptions::new(
+        let options = VerifyOptions::builder(
             public_key,
             std::path::Path::new(""),
             std::path::Path::new(""),
-            cli.output,
-            cli.quiet,
-            cli.prehashed,
-        );
+        )
+        .output(cli.output)
+        .quiet(cli.quiet)
+        .force_prehashed(cli.prehashed)
+        .build();
 
         verify_multiple_files(message_files.into_owned(), &options, cli.sequential)?;
     }

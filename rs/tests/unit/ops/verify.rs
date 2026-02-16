@@ -20,14 +20,12 @@ use tempfile::TempDir;
 
 #[test]
 fn test_verify_c_generated_signature() {
-    let options = VerifyOptions::new(
+    let options = VerifyOptions::builder(
         PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
         Path::new("tests/fixtures/signatures/hello.txt.minisig"),
         Path::new("tests/fixtures/messages/hello.txt"),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify(&options).expect("verification should succeed");
     assert!(result.valid);
@@ -42,14 +40,12 @@ fn test_verify_wrong_message_fails() {
     let wrong_message_path = temp_dir.path().join("wrong.txt");
     fs::write(&wrong_message_path, b"Wrong message").unwrap();
 
-    let options = VerifyOptions::new(
+    let options = VerifyOptions::builder(
         PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
         Path::new("tests/fixtures/signatures/hello.txt.minisig"),
         wrong_message_path.as_path(),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify(&options);
     assert!(result.is_err(), "should fail with wrong message");
@@ -57,14 +53,12 @@ fn test_verify_wrong_message_fails() {
 
 #[test]
 fn test_verify_wrong_key_fails() {
-    let options = VerifyOptions::new(
+    let options = VerifyOptions::builder(
         PublicKeySource::File(Path::new("tests/fixtures/keys/test.pub")),
         Path::new("tests/fixtures/signatures/hello.txt.minisig"),
         Path::new("tests/fixtures/messages/hello.txt"),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify(&options);
     assert!(result.is_err(), "should fail with wrong public key");
@@ -72,14 +66,12 @@ fn test_verify_wrong_key_fails() {
 
 #[test]
 fn test_verify_nonexistent_file() {
-    let options = VerifyOptions::new(
+    let options = VerifyOptions::builder(
         PublicKeySource::File(Path::new("tests/fixtures/keys/unencrypted.pub")),
         Path::new("tests/fixtures/signatures/hello.txt.minisig"),
         Path::new("nonexistent.txt"),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify(&options);
     assert!(result.is_err(), "should fail with nonexistent message file");
@@ -159,14 +151,12 @@ fn test_verify_with_wrong_keynum() {
     sign(&sign_opts, None).expect("sign should succeed");
 
     // Try to verify with key 2 (different keynum) - should fail
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(wrong_pubkey_file.as_path()),
         sig_file.as_path(),
         message_file.as_path(),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify(&verify_opts);
     assert!(result.is_err(), "Should fail when keynum doesn't match");
@@ -218,14 +208,12 @@ fn test_verify_file_too_large_fails() {
     sign(&sign_opts, None).expect("signing should succeed");
 
     // Verify with small file should succeed
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         sig_path.as_path(),
         message_path.as_path(),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     verify(&verify_opts).expect("verification should succeed with small file");
 
@@ -261,14 +249,12 @@ fn test_verify_prehashed_mode_no_size_limit() {
     sign(&sign_opts, None).expect("signing large file in prehashed mode should succeed");
 
     // Verify should succeed with prehashed mode (streaming)
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         sig_path.as_path(),
         message_path.as_path(),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     verify(&verify_opts).expect("verification should succeed with prehashed large file");
 }
@@ -308,14 +294,12 @@ fn test_verify_multiple_files_sequential() {
 
     // Now verify multiple files
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_ok(), "verification should succeed for all files");
@@ -358,14 +342,12 @@ fn test_verify_multiple_files_parallel() {
     sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
 
     // Now verify multiple files in parallel
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify_multiple_files(paths.clone(), &verify_opts, false);
     assert!(result.is_ok(), "verification should succeed for all files");
@@ -417,14 +399,12 @@ fn test_verify_multiple_files_partial_failure() {
 
     // Try to verify all files - should get partial failure
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
 
@@ -488,14 +468,12 @@ fn test_verify_multiple_files_all_attempted() {
         file4.clone(),
         file5.clone(),
     ];
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
 
@@ -540,14 +518,13 @@ fn test_verify_multiple_files_quiet_mode() {
 
     // Verify with quiet mode (should suppress output)
     let verify_paths = vec![file1.clone(), file2.clone()];
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
-        false,
-        true,
-        false,
-    );
+    )
+    .quiet(true)
+    .build();
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_ok(), "verification should succeed");
@@ -608,14 +585,12 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
 
     // Try to verify with wrong key - all should fail
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         Path::new(""),
         Path::new(""),
-        false,
-        false,
-        false,
-    );
+    )
+    .build();
 
     let result = verify_multiple_files(verify_paths, &verify_opts, true);
     assert!(result.is_err());
@@ -652,14 +627,13 @@ fn test_verify_rejects_legacy_with_force_prehashed() {
     sign(&sign_opts, None).expect("signing should succeed");
 
     // Try to verify with force_prehashed=true - should REJECT legacy signature
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         sig_path.as_path(),
         message_path.as_path(),
-        false,
-        false,
-        true, // force_prehashed=true
-    );
+    )
+    .force_prehashed(true)
+    .build();
 
     let result = verify(&verify_opts);
     assert!(
@@ -703,14 +677,12 @@ fn test_verify_accepts_legacy_without_force_prehashed() {
     sign(&sign_opts, None).expect("signing should succeed");
 
     // Verify with force_prehashed=false - should ACCEPT legacy signature
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         sig_path.as_path(),
         message_path.as_path(),
-        false,
-        false,
-        false, // force_prehashed=false
-    );
+    )
+    .build(); // force_prehashed=false (default)
 
     let result = verify(&verify_opts);
     assert!(
@@ -746,14 +718,13 @@ fn test_verify_accepts_prehashed_with_force_prehashed() {
     sign(&sign_opts, None).expect("signing should succeed");
 
     // Verify with force_prehashed=true - should ACCEPT prehashed signature
-    let verify_opts = VerifyOptions::new(
+    let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         sig_path.as_path(),
         message_path.as_path(),
-        false,
-        false,
-        true, // force_prehashed=true
-    );
+    )
+    .force_prehashed(true)
+    .build();
 
     let result = verify(&verify_opts);
     assert!(
