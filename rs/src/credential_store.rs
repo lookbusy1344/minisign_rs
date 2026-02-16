@@ -116,6 +116,10 @@ pub fn has_password(credential_id: &str) -> bool {
 //
 
 /// No-op stub: Always returns Ok when credential store is disabled
+///
+/// # Errors
+///
+/// This function never returns an error when the credential store feature is disabled.
 #[cfg(not(feature = "credential_store"))]
 pub fn save_password(_credential_id: &str, _password: &str) -> Result<()> {
     Ok(())
@@ -129,6 +133,10 @@ pub fn get_password(_credential_id: &str) -> Option<Zeroizing<String>> {
 }
 
 /// No-op stub: Always returns Ok when credential store is disabled
+///
+/// # Errors
+///
+/// This function never returns an error when the credential store feature is disabled.
 #[cfg(not(feature = "credential_store"))]
 pub fn forget_password(_credential_id: &str) -> Result<()> {
     Ok(())
