@@ -250,6 +250,17 @@ Key Information:
 
 **Note:** Public keys show only key ID and type. KDF parameters are only in secret key files.
 
+### Password Storage in OS Keychain
+
+When you save a password to the OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service), two identifiers are involved:
+
+- **Key ID**: The cryptographic identifier of your signing key (e.g., `31FCAABFDC95A530`).
+- **Credential ID**: The identifier used to store/retrieve passwords from the OS keychain.
+
+For **encrypted keys**, the credential ID must be different from the key ID because the key ID is encrypted inside the secret key file. The credential ID can be computed from the encrypted file without decryption, avoiding the chicken-and-egg problem of needing the password to get the key ID to retrieve the password.
+
+For **unencrypted keys**, the credential ID and key ID are the same since there's no decryption barrier.
+
 ## Performance & Memory
 
 **Performance:** Within 6% of C minisign across all operations. See [Performance Benchmark Report](docs/benchmark-report.md).
