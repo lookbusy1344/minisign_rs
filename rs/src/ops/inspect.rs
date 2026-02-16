@@ -50,7 +50,7 @@ impl SecurityLevel {
 #[derive(Debug, Clone)]
 pub struct InspectOptions<'a> {
     /// Path to the key file (can be secret or public key)
-    key_file: &'a std::path::Path,
+    key_file: &'a Path,
 }
 
 impl<'a> InspectOptions<'a> {
@@ -60,13 +60,13 @@ impl<'a> InspectOptions<'a> {
     ///
     /// * `key_file` - Path to the key file (can be secret or public key)
     #[must_use]
-    pub const fn new(key_file: &'a std::path::Path) -> Self {
+    pub const fn new(key_file: &'a Path) -> Self {
         Self { key_file }
     }
 
     /// Get the key file path
     #[must_use]
-    pub const fn key_file(&self) -> &std::path::Path {
+    pub const fn key_file(&self) -> &Path {
         self.key_file
     }
 }
@@ -75,7 +75,7 @@ impl<'a> InspectOptions<'a> {
 #[derive(Debug, Clone)]
 pub struct InspectPrivateOptions<'a> {
     /// Path to the secret key file
-    key_file: &'a std::path::Path,
+    key_file: &'a Path,
 }
 
 impl<'a> InspectPrivateOptions<'a> {
@@ -85,13 +85,13 @@ impl<'a> InspectPrivateOptions<'a> {
     ///
     /// * `key_file` - Path to the secret key file
     #[must_use]
-    pub const fn new(key_file: &'a std::path::Path) -> Self {
+    pub const fn new(key_file: &'a Path) -> Self {
         Self { key_file }
     }
 
     /// Get the key file path
     #[must_use]
-    pub const fn key_file(&self) -> &std::path::Path {
+    pub const fn key_file(&self) -> &Path {
         self.key_file
     }
 }
@@ -365,7 +365,7 @@ pub struct SignatureInspectResult {
 pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult> {
     use crate::signature::SignatureBox;
 
-    let contents = std::fs::read_to_string(signature_file)
+    let contents = fs::read_to_string(signature_file)
         .map_err(|e| Error::Io(format!("Failed to read signature file: {e}")))?;
 
     let sig_box = SignatureBox::from_file_contents(&contents)?;

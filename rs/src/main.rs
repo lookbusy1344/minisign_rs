@@ -428,7 +428,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             // -o: Output file content to stdout after verification
             let content =
                 std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
-            std::io::stdout()
+            io::stdout()
                 .write_all(&content)
                 .map_err(|e| Error::Io(format!("failed to write to stdout: {e}")))?;
         } else if cli.pretty_quiet {
@@ -542,7 +542,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
     // Handle --forget-password (standalone usage)
     if cli.forget_password {
         let had_password = minisign::credential_store::has_password(&old_credential_id);
-        match minisign::credential_store::forget_password(&old_credential_id) {
+        return match minisign::credential_store::forget_password(&old_credential_id) {
             Ok(()) => {
                 if !cli.quiet {
                     if had_password {
@@ -551,14 +551,12 @@ fn handle_change(cli: &Cli) -> Result<()> {
                         println!("No saved password found for this key");
                     }
                 }
-                return Ok(());
+                Ok(())
             }
-            Err(e) => {
-                return Err(Error::CredentialStoreError(format!(
-                    "Failed to remove password: {e}"
-                )));
-            }
-        }
+            Err(e) => Err(Error::CredentialStoreError(format!(
+                "Failed to remove password: {e}"
+            ))),
+        };
     }
 
     // Get current password: check credential store first, then prompt if needed
