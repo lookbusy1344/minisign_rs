@@ -130,26 +130,13 @@ fn handle_generate(cli: &Cli) -> Result<()> {
     }
 
     // Save password to credential store if requested
-    if cli.save_password {
-        if let Some(pwd) = &password {
-            match minisign::credential_store::save_password(result.credential_id(), pwd) {
-                Ok(()) => {
-                    if !cli.quiet {
-                        eprintln!(
-                            "Password saved to OS credential store (credential: {})",
-                            result.credential_id()
-                        );
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to save password to credential store: {e}");
-                    eprintln!("The key was still created successfully.");
-                }
-            }
-        } else {
-            eprintln!("Warning: --save-password ignored (key has no password)");
-        }
-    }
+    save_password_to_credential_store(
+        result.credential_id(),
+        password.as_ref(),
+        cli.save_password,
+        cli.quiet,
+        Some("The key was still created successfully."),
+    );
 
     if !cli.quiet {
         println!(
@@ -191,11 +178,16 @@ fn get_password_with_credential_store(
 }
 
 /// Save password to credential store if requested
+///
+/// # Arguments
+///
+/// * `extra_context_on_error` - Optional message to print after credential store save failure
 fn save_password_to_credential_store(
     key_id: &str,
     password: Option<&Zeroizing<String>>,
     save_password: bool,
     quiet: bool,
+    extra_context_on_error: Option<&str>,
 ) {
     if save_password {
         if let Some(pwd) = password {
@@ -207,6 +199,9 @@ fn save_password_to_credential_store(
                 }
                 Err(e) => {
                     eprintln!("Warning: Failed to save password to credential store: {e}");
+                    if let Some(msg) = extra_context_on_error {
+                        eprintln!("{msg}");
+                    }
                 }
             }
         } else {
@@ -301,6 +296,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             password.as_ref(),
             cli.save_password,
             cli.quiet,
+            None,
         );
 
         if !cli.quiet {
@@ -348,6 +344,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             password.as_ref(),
             cli.save_password,
             cli.quiet,
+            None,
         );
     }
 
@@ -797,6 +794,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             Some(&password),
             cli.save_password,
             cli.quiet,
+            None,
         );
     }
 

@@ -3,7 +3,11 @@
 //! This module implements recreating a public key file from a secret key file.
 
 use super::file_utils::{load_secret_key, write_public_key_file};
-use crate::{Result, crypto::PublicKey, keys::{PubkeyStruct, SeckeyStruct}};
+use crate::{
+    Result,
+    crypto::PublicKey,
+    keys::{PubkeyStruct, SeckeyStruct},
+};
 use std::path::{Path, PathBuf};
 
 /// Options for recreating a public key
