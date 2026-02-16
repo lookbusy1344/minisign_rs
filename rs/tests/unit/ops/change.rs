@@ -6,6 +6,7 @@ use minisign::{
     keys::SeckeyStruct,
     ops::change::{ChangeOptions, change_with_log_n},
 };
+use rand::Rng;
 use std::fs;
 use tempfile::TempDir;
 
@@ -17,7 +18,7 @@ fn test_change_password_fast() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let old_password = b"oldpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -69,7 +70,7 @@ fn test_remove_password_from_encrypted_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"password";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -147,7 +148,7 @@ fn test_change_without_old_password_fails() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"password";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -183,7 +184,7 @@ fn test_change_with_wrong_old_password_fails() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"correctpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -272,7 +273,7 @@ fn test_change_password_with_force_weak_kdf() {
 
     // Create a normal production-strength key
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
     let seckey = SeckeyStruct::new_encrypted(
         keynum,
         &secret_key,

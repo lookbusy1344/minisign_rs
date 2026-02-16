@@ -381,7 +381,7 @@ fn test_scrypt_fallback_with_moderate_parameters() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    getrandom::fill(&mut salt).expect("RNG should work");
+    rand::thread_rng().fill(&mut salt);
 
     let encrypted = SeckeyStruct::new_encrypted(
         keynum,
@@ -443,7 +443,7 @@ fn test_encryption_stores_successful_parameters() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    getrandom::fill(&mut salt).expect("RNG should work");
+    rand::thread_rng().fill(&mut salt);
 
     let encrypted = SeckeyStruct::new_encrypted(
         keynum,
@@ -481,7 +481,7 @@ fn test_new_encrypted_rejects_fallback_when_not_allowed() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    getrandom::fill(&mut salt).expect("RNG should work");
+    rand::thread_rng().fill(&mut salt);
 
     // With allow_fallback=false, should succeed on systems with sufficient memory
     // This test primarily validates that the API signature exists and works
@@ -517,7 +517,7 @@ fn test_new_encrypted_allows_fallback_when_enabled() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    getrandom::fill(&mut salt).expect("RNG should work");
+    rand::thread_rng().fill(&mut salt);
 
     // With allow_fallback=true, should succeed (either directly or via fallback)
     let result = SeckeyStruct::new_encrypted(
@@ -856,7 +856,7 @@ fn test_credential_id_for_encrypted_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"test_password";
     let mut kdf_salt = [0u8; KDF_SALT_BYTES];
-    getrandom::fill(&mut kdf_salt).expect("RNG should work");
+    rand::thread_rng().fill(&mut kdf_salt);
 
     // Use weak parameters for faster test execution (N=2^14)
     let kdf_opslimit = 524_288;

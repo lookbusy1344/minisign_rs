@@ -3,6 +3,7 @@ use minisign::errors::Error;
 use minisign::keys::{PubkeyStruct, SeckeyStruct};
 use minisign::ops::file_utils::write_public_key_file;
 use minisign::ops::recreate::{RecreateOptions, extract_public_key_from_secret, recreate};
+use rand::Rng;
 use std::fs;
 use tempfile::TempDir;
 
@@ -52,7 +53,7 @@ fn test_recreate_from_encrypted_key_fast() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -93,7 +94,7 @@ fn test_recreate_without_password_fails() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;
@@ -130,7 +131,7 @@ fn test_recreate_wrong_password_fails() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"correctpassword";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     let n = 1u64 << 14;
     let r = 8u64;

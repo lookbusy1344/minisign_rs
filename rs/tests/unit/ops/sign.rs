@@ -17,6 +17,7 @@ use minisign::{
     },
     signature::{SigStruct, SignatureBox},
 };
+use rand::Rng;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -101,7 +102,7 @@ fn test_sign_encrypted_key_fast() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpass";
     let mut kdf_salt = [0u8; 32];
-    getrandom::fill(&mut kdf_salt).unwrap();
+    rand::thread_rng().fill(&mut kdf_salt);
 
     // Use N=2^14 for fast testing (~50ms)
     let n = 1u64 << 14;

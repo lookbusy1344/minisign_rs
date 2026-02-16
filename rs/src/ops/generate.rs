@@ -317,11 +317,13 @@ pub fn generate_with_log_n(
     let seckey = if options.no_password {
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
+        use rand_core::{OsRng, RngCore};
+
         let pwd = password.ok_or(Error::PasswordRequired)?;
 
         // Generate random salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
+        OsRng.fill_bytes(&mut kdf_salt);
 
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;

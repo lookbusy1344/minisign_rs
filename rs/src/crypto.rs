@@ -158,8 +158,10 @@ impl KeyNum {
     ///
     /// Returns an error if the system random number generator fails
     pub fn generate() -> Result<Self> {
+        use rand_core::RngCore;
+
         let mut bytes = [0u8; KEYNUM_BYTES];
-        getrandom::fill(&mut bytes).map_err(|e| Error::RngError(e.to_string()))?;
+        OsRng.fill_bytes(&mut bytes);
         Ok(Self(bytes))
     }
 

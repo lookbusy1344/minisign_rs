@@ -219,12 +219,14 @@ pub fn change_with_log_n(
         // Remove encryption
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
+        use rand_core::{OsRng, RngCore};
+
         // Re-encrypt with new password
         let new_pwd = new_password.ok_or(Error::PasswordRequired)?;
 
         // Generate new salt (cryptographically secure)
         let mut kdf_salt = [0u8; 32];
-        getrandom::fill(&mut kdf_salt).map_err(|e| Error::RngError(e.to_string()))?;
+        OsRng.fill_bytes(&mut kdf_salt);
 
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;

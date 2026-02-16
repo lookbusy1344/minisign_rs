@@ -976,7 +976,6 @@ dependencies = [
  "clap",
  "dirs",
  "ed25519-dalek",
- "getrandom 0.3.4",
  "git-version",
  "hex",
  "keyring",
