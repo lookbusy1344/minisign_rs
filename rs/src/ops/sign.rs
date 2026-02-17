@@ -515,14 +515,11 @@ pub fn sign_multiple_files(
             .collect()
     } else {
         files
-            .par_iter()
+            .into_par_iter()
             .map(|file| {
-                let result = sign_file_with_key(file, &secret_key, keynum, options);
-                report_file_result(file, &result, options);
-                FileSignResult {
-                    file: file.clone(),
-                    result,
-                }
+                let result = sign_file_with_key(&file, &secret_key, keynum, options);
+                report_file_result(&file, &result, options);
+                FileSignResult { file, result }
             })
             .collect()
     };
@@ -626,23 +623,30 @@ pub fn create_signature(
 
     // Now that validation is complete, proceed with file I/O and crypto operations
 
-    // Determine what data to sign
-    let data_to_sign = if prehashed {
+    // Determine what data to sign.
+    // Avoid heap allocation on the prehash path: blake2b_512_stream returns [u8; 64]
+    // (stack-allocated), so we hold both possible backing stores as separate bindings and
+    // coerce whichever one is initialised into a &[u8] slice.
+    let hash_buf;
+    let file_buf;
+    let data_to_sign: &[u8] = if prehashed {
         // Open file and stream hash
         let file =
             std::fs::File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
-        blake2b_512_stream(file)?.to_vec()
+        hash_buf = blake2b_512_stream(file)?;
+        &hash_buf
     } else {
         // For non-prehashed mode, check file size limit first
         check_file_size_limit(message_file)?;
 
         // For non-prehashed mode, we need the full message in memory
         // (Ed25519 requires the full message for signing)
-        std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?
+        file_buf = std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        &file_buf
     };
 
     // Sign the message
-    let signature = crypto_sign(secret_key, &data_to_sign)?;
+    let signature = crypto_sign(secret_key, data_to_sign)?;
 
     // Create the SigStruct
     let sig_struct = SigStruct::new(keynum, signature, prehashed);

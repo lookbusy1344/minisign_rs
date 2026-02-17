@@ -12,6 +12,7 @@
 //! - <https://philzimmermann.com/docs/PGP_word_list.pdf>
 
 use crate::crypto::KeyNum;
+use itertools::Itertools;
 
 /// PGP Word List for even byte positions (two-syllable words)
 ///
@@ -573,7 +574,6 @@ pub fn bytes_to_words(bytes: &[u8]) -> String {
                 ODD_WORDS[usize::from(byte)]
             }
         })
-        .collect::<Vec<&str>>()
         .join(" ")
 }
 
@@ -604,4 +604,38 @@ pub fn bytes_to_words(bytes: &[u8]) -> String {
 #[must_use]
 pub fn keynum_to_words(keynum: &KeyNum) -> String {
     bytes_to_words(keynum.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bytes_to_words_no_intermediate_vec() {
+        // Verify correctness of the existing function — the refactor must not change output.
+        // Two bytes: position 0 (even) -> EVEN_WORDS[0], position 1 (odd) -> ODD_WORDS[0]
+        let result = bytes_to_words(&[0x00, 0x01]);
+        let parts: Vec<&str> = result.split(' ').collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], EVEN_WORDS[0]);
+        assert_eq!(parts[1], ODD_WORDS[1]);
+    }
+
+    #[test]
+    fn bytes_to_words_empty() {
+        assert_eq!(bytes_to_words(&[]), "");
+    }
+
+    #[test]
+    fn bytes_to_words_single_even() {
+        let result = bytes_to_words(&[0x00]);
+        assert_eq!(result, EVEN_WORDS[0]);
+    }
+
+    #[test]
+    fn bytes_to_words_single_odd_at_pos_one() {
+        // Single byte at index 1 would be odd, but with only one byte it's at index 0 (even)
+        let result = bytes_to_words(&[0xFF]);
+        assert_eq!(result, EVEN_WORDS[255]);
+    }
 }
