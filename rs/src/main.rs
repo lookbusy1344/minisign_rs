@@ -19,6 +19,13 @@ use std::process;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
+/// Minimum number of characters recommended for a new password.
+///
+/// Passwords shorter than this generate a warning during interactive key
+/// generation and password-change operations. The scrypt parameters are strong,
+/// but a very short password drastically reduces the effective security.
+const MIN_RECOMMENDED_PASSWORD_LEN: usize = 8;
+
 fn main() {
     let result = run();
     match result {
@@ -908,6 +915,12 @@ fn prompt_password_with_confirmation(
     let passwords_match: bool = password1.as_bytes().ct_eq(password2.as_bytes()).into();
     if !passwords_match {
         return Err(Error::PasswordMismatch);
+    }
+
+    if password1.len() < MIN_RECOMMENDED_PASSWORD_LEN {
+        eprintln!(
+            "Warning: short password. Consider using at least {MIN_RECOMMENDED_PASSWORD_LEN} characters."
+        );
     }
 
     Ok(password1)

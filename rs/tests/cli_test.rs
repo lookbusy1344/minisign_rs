@@ -3010,3 +3010,61 @@ fn test_change_password_with_credential_store() {
 
     // Guard will clean up new credential on drop
 }
+
+// ============================================================================
+// Short password warning (Recommendation 2 from 2026-02-17 security audit)
+// ============================================================================
+
+/// Password-file keygen does NOT emit the short-password warning (non-interactive path).
+///
+/// The warning is only relevant for interactive terminal input; suppressing it for
+/// `--password-file` avoids noisy output in CI automation.
+#[test]
+#[cfg(debug_assertions)]
+fn test_short_password_file_no_warning() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let pw_file = temp_dir.path().join("pw.txt");
+
+    // Deliberately short password via file (CI automation scenario)
+    fs::write(&pw_file, "abc").unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--force-weak-kdf")
+        .arg("--password-file")
+        .arg(&pw_file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("short password").not());
+}
+
+/// Password-file keygen with a long password also produces no short-password warning.
+#[test]
+#[cfg(debug_assertions)]
+fn test_long_password_file_no_warning() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let pw_file = temp_dir.path().join("pw.txt");
+
+    fs::write(&pw_file, "this-is-a-very-long-password").unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--force-weak-kdf")
+        .arg("--password-file")
+        .arg(&pw_file)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("short password").not());
+}

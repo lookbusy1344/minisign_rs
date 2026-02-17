@@ -7,13 +7,15 @@ license = "ISC"
 description = "A dead simple Rust tool to sign files and verify signatures"
 
 [dependencies]
-# Cryptographic dependencies
-ed25519-dalek = { version = "2.2", features = ["rand_core"] }
-blake2 = "0.10"
-scrypt = "0.11"
-zeroize = { version = "1.8", features = ["derive"] }
-subtle = "2.6"
-rand_core = "0.6"
+# Cryptographic dependencies — pinned to exact versions for supply-chain auditability.
+# To upgrade: verify the new release, update Cargo.lock, run cargo audit, run full test suite,
+# then update the pinned version here.
+ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }
+blake2 = "=0.10.6"
+scrypt = "=0.11.0"
+zeroize = { version = "=1.8.2", features = ["derive"] }
+subtle = "=2.6.1"
+rand_core = "=0.6.4"
 
 # Other dependencies
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"], optional = true }

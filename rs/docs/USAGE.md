@@ -351,6 +351,51 @@ See [scripts/README.md](scripts/README.md) for complete documentation.
 - CI/CD pipelines (use `--password-file` or unencrypted keys)
 - Untrusted environments or systems without disk encryption
 
+## Using `--password-file` Securely
+
+`--password-file` reads the key password from a file instead of prompting interactively. It is intended for CI/CD automation where a terminal is unavailable. **It is not a replacement for strong password practices.**
+
+> **Warning:** A password file is only as secure as the filesystem it lives on. An interactive password is never written to disk; a password file is.
+
+### Security checklist
+
+1. **Restrict file permissions to `0600`**
+
+   The file must be readable only by the owning user:
+
+   ```bash
+   chmod 600 /path/to/password.txt
+   ```
+
+   Anyone who can read the file can decrypt your secret key.
+
+2. **Keep it off shared and network filesystems**
+
+   Do not place password files on NFS mounts, SMB shares, or any volume accessible to other OS users. Prefer a tmpfs/RAM-backed path or a secrets manager (e.g., HashiCorp Vault, AWS Secrets Manager) that writes to a private tempfile.
+
+3. **Delete the file after use in CI**
+
+   If a CI step writes the password to disk, delete it in a subsequent step — even if earlier steps fail:
+
+   ```yaml
+   # GitHub Actions example
+   - name: Write password
+     run: echo "${{ secrets.SIGN_PASS }}" > /tmp/sign.pass && chmod 600 /tmp/sign.pass
+
+   - name: Sign release
+     run: minisign_rs -S -m release.tar.gz --password-file /tmp/sign.pass
+
+   - name: Remove password file
+     if: always()
+     run: rm -f /tmp/sign.pass
+   ```
+
+4. **Prefer unencrypted keys or OS credential store for CI**
+
+   - **Unencrypted key + tight ACLs** on the CI runner is often simpler: no password to manage, and key file permissions protect the secret.
+   - **OS credential store** (`--save-password`) works on macOS runners and Windows agents with persistent keychain access.
+   - `--password-file` is the right choice when neither of the above is available and the secret must be injected at runtime.
+
 ## Signature File Format
 
 Minisign creates `.minisig` files with 4 lines:

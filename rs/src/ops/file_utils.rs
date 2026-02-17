@@ -12,7 +12,37 @@ use std::path::Path;
 #[cfg(unix)]
 const SECRET_KEY_FILE_PERMISSIONS: u32 = 0o600;
 
+/// Returns true if the file at `path` has permissions accessible by group or others.
+///
+/// Used to warn users about secret key files that may be readable by other OS users.
+/// Returns `false` if the file metadata cannot be read.
+#[cfg(unix)]
+#[must_use]
+pub fn has_lax_permissions(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|m| m.permissions().mode() & 0o077 != 0)
+        .unwrap_or(false)
+}
+
+/// Emit a warning to stderr if `path` has group- or world-accessible permissions.
+#[cfg(unix)]
+fn check_secret_key_permissions(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(metadata) = std::fs::metadata(path) {
+        let mode = metadata.permissions().mode();
+        if mode & 0o077 != 0 {
+            let display = path.display();
+            eprintln!("Warning: {display} is accessible to other users (mode {mode:o})");
+            eprintln!("Consider running: chmod 600 {display}");
+        }
+    }
+}
+
 /// Load a secret key from a file
+///
+/// On Unix systems, emits a warning to stderr if the file is readable by
+/// group or others (permissions wider than `0600`).
 ///
 /// # Errors
 ///
@@ -21,6 +51,8 @@ const SECRET_KEY_FILE_PERMISSIONS: u32 = 0o600;
 /// - The file contents cannot be parsed as a secret key
 pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
     let path = path.as_ref();
+    #[cfg(unix)]
+    check_secret_key_permissions(path);
     let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
     SeckeyStruct::from_file_contents(&contents)
 }
