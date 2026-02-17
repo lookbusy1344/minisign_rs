@@ -289,6 +289,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and guid
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development workflow
 - [COMPATIBILITY.md](COMPATIBILITY.md) - C/Rust compatibility proof
 - [docs/benchmark-report.md](docs/benchmark-report.md) - Performance comparison
+- [docs/rsign2-comparison.md](docs/rsign2-comparison.md) - Comparison with rsign2
 - [CLAUDE.md](CLAUDE.md) - Quick reference for AI assistants
 
 ## License
