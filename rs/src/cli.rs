@@ -231,7 +231,7 @@ impl Cli {
             .file_name()
             .ok_or_else(|| Error::InvalidPath(message_file.to_path_buf()))?;
 
-        let mut file_name_string = file_name.to_string_lossy().to_string();
+        let mut file_name_string = file_name.to_string_lossy().into_owned();
         file_name_string.push_str(".minisig");
         sig_path.set_file_name(file_name_string);
         Ok(sig_path)
