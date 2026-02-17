@@ -413,23 +413,30 @@ pub fn verify_message_signature(
         return Err(Error::LegacySignatureRejected);
     }
 
-    // For prehashed signatures, we stream hash the message
-    // For non-prehashed, we need the full message in memory
-    let data_to_verify = if sig_box.sig_struct().is_prehashed() {
+    // For prehashed signatures, we stream hash the message.
+    // For non-prehashed, we need the full message in memory.
+    // Avoid heap allocation on the prehash path: blake2b_512_stream returns [u8; 64]
+    // (stack-allocated), so we hold both possible backing stores as separate bindings and
+    // coerce whichever one is initialised into a &[u8] slice.
+    let hash_buf;
+    let file_buf;
+    let data_to_verify: &[u8] = if sig_box.sig_struct().is_prehashed() {
         let file =
             std::fs::File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
-        blake2b_512_stream(file)?.to_vec()
+        hash_buf = blake2b_512_stream(file)?;
+        &hash_buf
     } else {
         // For non-prehashed mode, check file size limit first
         check_file_size_limit(message_file)?;
 
-        std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?
+        file_buf = std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        &file_buf
     };
 
     // Verify the Ed25519 signature
     crypto_verify(
         pubkey.public_key(),
-        &data_to_verify,
+        data_to_verify,
         sig_box.sig_struct().signature(),
     )
 }
