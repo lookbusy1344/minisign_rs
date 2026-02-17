@@ -515,14 +515,11 @@ pub fn sign_multiple_files(
             .collect()
     } else {
         files
-            .par_iter()
+            .into_par_iter()
             .map(|file| {
-                let result = sign_file_with_key(file, &secret_key, keynum, options);
-                report_file_result(file, &result, options);
-                FileSignResult {
-                    file: file.clone(),
-                    result,
-                }
+                let result = sign_file_with_key(&file, &secret_key, keynum, options);
+                report_file_result(&file, &result, options);
+                FileSignResult { file, result }
             })
             .collect()
     };

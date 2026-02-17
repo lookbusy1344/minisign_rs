@@ -533,14 +533,11 @@ pub fn verify_multiple_files(
             .collect()
     } else {
         files
-            .par_iter()
+            .into_par_iter()
             .map(|file| {
-                let result = verify_file_with_key(file, &pubkey, options);
-                report_file_result(file, &result, options);
-                FileVerifyResult {
-                    file: file.clone(),
-                    result,
-                }
+                let result = verify_file_with_key(&file, &pubkey, options);
+                report_file_result(&file, &result, options);
+                FileVerifyResult { file, result }
             })
             .collect()
     };
