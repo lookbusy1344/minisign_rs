@@ -263,6 +263,22 @@ For **encrypted keys**, the credential ID must be different from the key ID beca
 
 For **unencrypted keys**, the credential ID and key ID are the same since there's no decryption barrier.
 
+### macOS Keychain prompts after rebuilding
+
+After rebuilding the binary, macOS will prompt for Keychain access **once per stored credential**, not once per binary. This is expected macOS security behaviour: each Keychain item has its own Access Control List (ACL) tied to the binary's code identity, so a freshly built binary is treated as a new application for each item independently.
+
+With 3 keys stored, you will see 3 prompts. This is not a bug — it is macOS enforcing per-item access control.
+
+To avoid repeated prompts during development, sign the binary with a stable identity after each build:
+
+```bash
+# Ad-hoc signature (content-derived, changes every rebuild — prompts reset each time)
+codesign --force --sign - target/release/minisign_rs
+
+# Preferred: sign with a Developer ID certificate for a stable identity across rebuilds
+codesign --force --sign "Developer ID Application: Your Name" target/release/minisign_rs
+```
+
 ## Performance & Memory
 
 **Performance:** Within 6% of C minisign across all operations. See [Performance Benchmark Report](docs/benchmark-report.md).
