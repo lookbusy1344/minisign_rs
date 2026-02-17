@@ -462,7 +462,7 @@ This ensures scrypt runs at full speed even in debug builds, preventing test tim
 | ID | Finding | Impact | Mitigation |
 |----|---------|--------|------------|
 | **S-4** | **Multi-file symlink race** — deduplication resolves symlinks, but the actual signing reads the file later | Theoretically, a symlink target could change between deduplication and signing | Standard TOCTOU on filesystems; minisign does not claim to defend against concurrent filesystem modifications. |
-| **S-5** | **No secret key file permission check on load** — code doesn't verify 0600 permissions before reading | User may unknowingly use a world-readable secret key | Key generation always sets 0600; runtime check would be defense-in-depth only. |
+| **S-5** | **No secret key file permission check on load** — code doesn't verify 0600 permissions before reading | User may unknowingly use a world-readable secret key | ~~Key generation always sets 0600; runtime check would be defense-in-depth only.~~ **Resolved** — `load_secret_key()` now calls `check_secret_key_permissions()` on Unix, warning to stderr if `mode & 0o077 != 0` (commit `11db8a1`). |
 | **S-6** | **OS credential store security depends on OS** — password stored as plaintext in OS keyring | If OS keyring is compromised, password is exposed | By design; OS credential stores provide access control (e.g., macOS Keychain authorization dialogs). Feature is opt-in (`--save-password`). |
 | **S-7** | **No mlock() on sensitive memory** — secrets could be swapped to disk | A local attacker with root access could read secrets from swap | Rust's `Zeroizing` minimizes exposure window. `mlock` would require `unsafe` code, violating the project's zero-unsafe policy. This is consistent with the C implementation's behavior (libsodium uses `mlock` internally, but the C minisign application code does not `mlock` its own buffers). |
 
@@ -499,46 +499,40 @@ This ensures scrypt runs at full speed even in debug builds, preventing test tim
 | "Consider fsync() on key files" | **Resolved** — `sync_all()` called on all file writes |
 | "Document password strength recommendations" | Partially addressed via inspect command and weak key warnings |
 
+### Post-Audit Resolutions (2026-02-17)
+
+Recommendations 1–4 from [Section 15](#15-recommendations) were implemented immediately following the audit:
+
+| Recommendation | Resolution | Commit |
+|----------------|-----------|--------|
+| Rec 1: Warn on world-readable secret key files | `has_lax_permissions()` + `check_secret_key_permissions()` added to `file_utils.rs`; called from `load_secret_key()` on Unix. Five unit tests added. | `11db8a1` |
+| Rec 2: Minimum password length warning | `MIN_RECOMMENDED_PASSWORD_LEN = 8` constant and stderr warning added to the interactive branch of `prompt_password_with_confirmation()` in `main.rs`. Warning suppressed for `--password-file` (automation). | `95b3723` |
+| Rec 3: Document `--password-file` security implications | Dedicated "Using `--password-file` Securely" section added to `docs/USAGE.md` covering 0600 permissions, shared filesystem risks, CI cleanup pattern, and alternatives. | `c28fb9f` |
+| Rec 4: Pin crypto dependency ranges | `ed25519-dalek`, `blake2`, `scrypt`, `zeroize`, `subtle`, `rand_core` pinned to `=X.Y.Z` in `Cargo.toml`. All are at the latest stable release (next versions are RC/pre-release only). | `c82ffa4` |
+
 ---
 
 ## 15. Recommendations
 
 ### Medium Priority
 
-1. **Consider warning on world-readable secret key files** (addresses S-5)
+1. ✅ **RESOLVED** — **Warn on world-readable secret key files** (addresses S-5) — commit `11db8a1`
 
-   When loading a secret key, check Unix permissions and warn if the file is readable by group or others:
+   `load_secret_key()` now checks Unix permissions on every key load and emits a stderr warning with the current mode and a `chmod 600` reminder if `mode & 0o077 != 0`. The predicate `has_lax_permissions()` is exposed as a public function with five unit tests (0644, 0640, 0600, 0400, nonexistent).
 
-   ```rust
-   #[cfg(unix)]
-   fn check_secret_key_permissions(path: &Path) {
-       use std::os::unix::fs::PermissionsExt;
-       if let Ok(metadata) = std::fs::metadata(path) {
-           let mode = metadata.permissions().mode();
-           if mode & 0o077 != 0 {
-               eprintln!("Warning: {path:?} is accessible to other users (mode {mode:o})");
-               eprintln!("Consider running: chmod 600 {path:?}");
-           }
-       }
-   }
-   ```
+2. ✅ **RESOLVED** — **Minimum password length warning** (defense-in-depth) — commit `95b3723`
 
-2. **Consider minimum password length enforcement** (defense-in-depth)
+   A `MIN_RECOMMENDED_PASSWORD_LEN = 8` constant was added to `main.rs`. After successful password confirmation in the interactive branch of `prompt_password_with_confirmation()`, a stderr warning is emitted if the password is shorter than 8 characters. The check is suppressed for `--password-file` (CI automation).
 
-   The scrypt parameters are strong, but a 1-character password reduces effective security significantly. Consider warning (not blocking) for passwords shorter than 8 characters.
+3. ✅ **RESOLVED** — **Document `--password-file` security implications prominently** (addresses S-3) — commit `c28fb9f`
 
-3. **Document `--password-file` security implications more prominently** (addresses S-3)
-
-   The current warning on stderr is good. Consider also documenting in `USAGE.md` that password files should:
-   - Be `0600` permissions
-   - Not be on shared filesystems
-   - Be deleted after use in CI
+   A dedicated "Using `--password-file` Securely" section was added to `docs/USAGE.md` covering: 0600 permission requirement, shared/network filesystem risks, CI cleanup pattern (delete on failure too), and when to prefer unencrypted keys or the OS credential store instead.
 
 ### Low Priority
 
-4. **Pin dependency ranges more tightly** for crypto crates
+4. ✅ **RESOLVED** — **Pin crypto dependency ranges** — commit `c82ffa4`
 
-   Consider using `=X.Y.Z` pins for `ed25519-dalek`, `scrypt`, `subtle`, and `zeroize` to prevent unexpected updates. Currently `Cargo.lock` provides pinning, but explicit Cargo.toml pins document intent.
+   `ed25519-dalek`, `blake2`, `scrypt`, `zeroize`, `subtle`, and `rand_core` are now pinned to exact `=X.Y.Z` versions in `Cargo.toml`. All pins are at the current latest stable releases; next versions for all five RustCrypto crates are RC or pre-release only. An upgrade comment documents the review process for future updates.
 
 5. **Add SBOM generation to CI**
 
