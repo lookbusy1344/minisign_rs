@@ -290,6 +290,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and guid
 - [COMPATIBILITY.md](COMPATIBILITY.md) - C/Rust compatibility proof
 - [docs/benchmark-report.md](docs/benchmark-report.md) - Performance comparison
 - [docs/rsign2-comparison.md](docs/rsign2-comparison.md) - Comparison with rsign2
+- [docs/2026-02-17-security-audit.md](docs/2026-02-17-security-audit.md) - Security audit (v1.3.1)
 - [CLAUDE.md](CLAUDE.md) - Quick reference for AI assistants
 
 ## License
