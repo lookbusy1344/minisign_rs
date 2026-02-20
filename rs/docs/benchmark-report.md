@@ -4,13 +4,13 @@
 
 Performance comparison between the original C implementation and the Rust port of minisign. Benchmarks conducted using hyperfine on macOS (Apple Silicon) with `--shell=none` to eliminate shell overhead.
 
-**Key Finding:** Both implementations deliver essentially identical performance across all operations. Differences are within measurement variance (≤8%), with Rust holding a slight edge on large-file operations.
+**Key Finding:** Both implementations deliver essentially identical performance for single-file operations. Differences are within measurement variance (≤10%). Rust's parallel multi-file mode provides meaningful throughput gains at scale.
 
 ## Test Environment
 
 - **Platform:** macOS (arm64, Apple Silicon)
 - **C minisign:** v0.12 (70 KB binary, Homebrew)
-- **Rust minisign:** v1.3.3 (1.1 MB binary, `cargo build --release --no-default-features`)
+- **Rust minisign:** v1.3.4 (782 KB binary, `cargo build --release --no-default-features`)
 - **Benchmark Tool:** hyperfine (`--shell=none`, warmup runs per benchmark)
 - **Date:** 2026-02-20
 
@@ -19,7 +19,7 @@ Performance comparison between the original C implementation and the Rust port o
 | Implementation | Size   | Ratio |
 |----------------|--------|-------|
 | C (Original)   | 70 KB  | 1.0x  |
-| Rust           | 1.1 MB | 15.7x |
+| Rust           | 782 KB | 11.2x |
 
 The Rust binary is larger due to statically linked Rust standard library and dependencies. Negligible on modern systems.
 
@@ -31,8 +31,8 @@ All benchmarks use unencrypted keys (`-W`) to isolate signing/verification cost 
 
 | Implementation | Mean   | Std Dev | Range          | Runs |
 |----------------|--------|---------|----------------|------|
-| C              | 1.2 ms | 0.1 ms  | 1.1 – 1.8 ms  | 200  |
-| Rust           | 1.2 ms | 0.1 ms  | 1.1 – 1.6 ms  | 200  |
+| C              | 1.2 ms | 0.1 ms  | 1.1 – 1.5 ms  | 200  |
+| Rust           | 1.2 ms | 0.1 ms  | 1.1 – 1.5 ms  | 200  |
 
 **Winner:** Rust (1.03x faster, within noise)
 **Analysis:** Process launch and argument parsing are indistinguishable.
@@ -43,11 +43,11 @@ All benchmarks use unencrypted keys (`-W`) to isolate signing/verification cost 
 
 | Implementation | Mean   | Std Dev | Range          | Runs |
 |----------------|--------|---------|----------------|------|
-| C              | 1.4 ms | 0.1 ms  | 1.3 – 1.6 ms  | 50   |
-| Rust           | 1.4 ms | 0.1 ms  | 1.3 – 1.8 ms  | 50   |
+| C              | 1.5 ms | 0.2 ms  | 1.3 – 1.9 ms  | 50   |
+| Rust           | 1.4 ms | 0.1 ms  | 1.2 – 1.7 ms  | 50   |
 
-**Winner:** Tie (1.00x)
-**Analysis:** Ed25519 keygen and file I/O are identical between implementations.
+**Winner:** Rust (1.10x faster, within noise)
+**Analysis:** Ed25519 keygen and file I/O are essentially identical between implementations.
 
 ---
 
@@ -55,10 +55,10 @@ All benchmarks use unencrypted keys (`-W`) to isolate signing/verification cost 
 
 | Implementation | Mean   | Std Dev | Range          | Runs |
 |----------------|--------|---------|----------------|------|
-| C              | 1.5 ms | 0.2 ms  | 1.3 – 2.2 ms  | 100  |
-| Rust           | 1.5 ms | 0.1 ms  | 1.4 – 1.8 ms  | 100  |
+| C              | 1.5 ms | 0.1 ms  | 1.3 – 1.8 ms  | 100  |
+| Rust           | 1.4 ms | 0.1 ms  | 1.3 – 1.7 ms  | 100  |
 
-**Winner:** Rust (1.04x faster, within noise)
+**Winner:** Rust (1.05x faster, within noise)
 **Analysis:** Performance parity. Rust shows tighter variance.
 
 ---
@@ -67,8 +67,8 @@ All benchmarks use unencrypted keys (`-W`) to isolate signing/verification cost 
 
 | Implementation | Mean   | Std Dev | Range          | Runs |
 |----------------|--------|---------|----------------|------|
-| C              | 9.0 ms | 0.2 ms  | 8.8 – 9.8 ms  | 50   |
-| Rust           | 8.5 ms | 0.2 ms  | 8.3 – 9.1 ms  | 50   |
+| C              | 9.0 ms | 0.2 ms  | 8.7 – 10.1 ms | 50   |
+| Rust           | 8.6 ms | 0.1 ms  | 8.4 – 9.2 ms  | 50   |
 
 **Winner:** Rust (1.05x faster)
 **Analysis:** Rust's I/O buffering is marginally more efficient at scale.
@@ -79,23 +79,23 @@ All benchmarks use unencrypted keys (`-W`) to isolate signing/verification cost 
 
 | Implementation | Mean   | Std Dev | Range          | Runs |
 |----------------|--------|---------|----------------|------|
-| C              | 1.3 ms | 0.1 ms  | 1.2 – 1.7 ms  | 100  |
-| Rust           | 1.4 ms | 0.1 ms  | 1.3 – 1.8 ms  | 100  |
+| C              | 1.5 ms | 0.1 ms  | 1.3 – 2.0 ms  | 100  |
+| Rust           | 1.4 ms | 0.1 ms  | 1.3 – 1.7 ms  | 100  |
 
-**Winner:** C (1.08x faster, within noise)
+**Winner:** Rust (1.08x faster, within noise)
 **Analysis:** Statistically equivalent. Difference is within measurement variance.
 
 ---
 
 ### 6. Verification — 10 MB File
 
-| Implementation | Mean    | Std Dev | Range           | Runs |
-|----------------|---------|---------|-----------------|------|
-| C              | 10.4 ms | 0.4 ms  | 9.4 – 11.1 ms  | 50   |
-| Rust           | 9.1 ms  | 0.5 ms  | 8.4 – 10.5 ms  | 50   |
+| Implementation | Mean   | Std Dev | Range          | Runs |
+|----------------|--------|---------|----------------|------|
+| C              | 8.8 ms | 0.2 ms  | 8.5 – 9.5 ms  | 50   |
+| Rust           | 8.4 ms | 0.2 ms  | 8.1 – 9.3 ms  | 50   |
 
-**Winner:** Rust (1.15x faster)
-**Analysis:** Rust's Blake2b streaming implementation is measurably faster on larger files.
+**Winner:** Rust (1.05x faster)
+**Analysis:** Performance parity across implementations.
 
 ---
 
@@ -104,40 +104,50 @@ All benchmarks use unencrypted keys (`-W`) to isolate signing/verification cost 
 | Operation        | C      | Rust   | Winner | Margin |
 |------------------|--------|--------|--------|--------|
 | Version display  | 1.2 ms | 1.2 ms | Tie    | ~1.0x  |
-| Key gen (no pwd) | 1.4 ms | 1.4 ms | Tie    | 1.00x  |
-| Sign 100 KB      | 1.5 ms | 1.5 ms | Tie    | 1.04x  |
-| Sign 10 MB       | 9.0 ms | 8.5 ms | Rust   | 1.05x  |
-| Verify 100 KB    | 1.3 ms | 1.4 ms | C      | 1.08x  |
-| Verify 10 MB     | 10.4 ms| 9.1 ms | Rust   | 1.15x  |
+| Key gen (no pwd) | 1.5 ms | 1.4 ms | Rust   | 1.10x  |
+| Sign 100 KB      | 1.5 ms | 1.4 ms | Rust   | 1.05x  |
+| Sign 10 MB       | 9.0 ms | 8.6 ms | Rust   | 1.05x  |
+| Verify 100 KB    | 1.5 ms | 1.4 ms | Rust   | 1.08x  |
+| Verify 10 MB     | 8.8 ms | 8.4 ms | Rust   | 1.05x  |
 
 ## Conclusions
 
-1. **Runtime performance:** The Rust implementation matches the C implementation across all operations. All differences are within 15%, with Rust holding a consistent edge on large-file work.
+1. **Runtime performance:** The Rust implementation matches or slightly outperforms C across all single-file operations. All differences are within 10%, with Rust holding a consistent edge.
 
-2. **Scaling behaviour:** Rust pulls ahead as file size increases, particularly for 10 MB verification (1.15x faster) and signing (1.05x faster). This is consistent with more efficient I/O buffering in the Rust standard library.
+2. **Scaling behaviour:** Both implementations show the same throughput scaling with file size; the absolute gap widens proportionally but the ratio stays around 1.05x.
 
 3. **Consistency:** Rust shows equal or lower timing variance in most benchmarks, indicating more predictable performance.
 
-4. **Binary size trade-off:** The Rust binary is 15.7x larger (1.1 MB vs 70 KB). Negligible for general use; relevant only for minimal containers or embedded targets.
+4. **Binary size trade-off:** The Rust binary is 11.2x larger (782 KB vs 70 KB), down from the earlier 1.1 MB figure. Negligible for general use; relevant only for minimal containers or embedded targets.
 
-5. **Practical impact:** All tested operations complete under 15 ms. The difference is imperceptible for interactive use.
+5. **Practical impact:** All tested operations complete under 10 ms. The difference is imperceptible for interactive use.
 
-## Multi-File Parallel Benchmarks (Rust-only feature)
+## Multi-File Benchmarks
 
-C minisign has no multi-file mode; signing or verifying N files requires N separate process invocations. Rust accepts multiple files in one invocation and processes them in parallel via Rayon.
+Both implementations accept multiple files in a single invocation for **signing**. The execution model differs:
 
-The comparison below measures total wall time to process all files:
-- **C:** shell loop invoking the binary once per file
-- **Rust:** single invocation with all files, parallel execution
+- **C:** signs files **sequentially** within one process (`sign_all` with positional args after `-m file1`)
+- **Rust:** signs files **in parallel** via Rayon by default; `--sequential` flag opts out
 
-| Operation           | C (sequential) | Rust (parallel) | Speedup |
-|---------------------|----------------|-----------------|---------|
-| Sign 100 × 100 KB   | 191.8 ms       | 10.3 ms         | 18.6x   |
-| Sign 10 × 10 MB     | 103.7 ms       | 16.2 ms         | 6.4x    |
-| Verify 100 × 100 KB | 183.9 ms       | 8.2 ms          | 22.4x   |
-| Verify 10 × 10 MB   | 102.1 ms       | 16.8 ms         | 6.1x    |
+**C does not support multi-file verification.** Its `-V` mode accepts only a single `-m` file and silently ignores any positional arguments. Verifying N files with C requires N separate process invocations.
 
-User-time figures confirm both do equivalent total CPU work (e.g. 10 × 10 MB sign: C user=80ms, Rust user=76ms). The wall-time gap is entirely parallelism: Rayon distributes files across all available cores so hashing, signing, and I/O overlap across files simultaneously. Speedup scales with file count and saturates around core count.
+### Multi-File Signing (single invocation, both tools)
+
+| Operation         | C (sequential) | Rust (sequential) | Rust (parallel) | C→Rust speedup |
+|-------------------|----------------|-------------------|-----------------|----------------|
+| Sign 100 × 100 KB | 19.1 ms        | 18.5 ms           | 6.1 ms          | 3.1x           |
+| Sign 10 × 10 MB   | 80.0 ms        | 74.4 ms           | 11.7 ms         | 6.8x           |
+
+Rust sequential and C sequential are within 3-8% of each other — confirming equivalent CPU work. The wall-time gap to Rust parallel is entirely Rayon distributing files across all available cores.
+
+### Multi-File Verification (Rust only; C requires N invocations)
+
+| Operation            | Rust (sequential) | Rust (parallel) | Speedup |
+|----------------------|-------------------|-----------------|---------|
+| Verify 100 × 100 KB  | 16.0 ms           | 4.3 ms          | 3.7x    |
+| Verify 10 × 10 MB    | 74.3 ms           | 11.6 ms         | 6.4x    |
+
+For C, verifying N files via shell loop adds N × ~1.5 ms process-startup overhead (≈150 ms for 100 files, ≈90 ms for 10 × 10 MB). Rust parallel is the only path that avoids this.
 
 ---
 
