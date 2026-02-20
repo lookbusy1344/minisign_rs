@@ -65,21 +65,19 @@ impl<'a> VerifyOptionsBuilder<'a> {
         }
     }
 
-    /// Enable output mode (write verification result to stdout)
     #[must_use]
     pub const fn output(mut self, output: bool) -> Self {
         self.output = output;
         self
     }
 
-    /// Enable quiet mode (suppress output)
     #[must_use]
     pub const fn quiet(mut self, quiet: bool) -> Self {
         self.quiet = quiet;
         self
     }
 
-    /// Require prehashed signatures (reject legacy signatures)
+    /// Reject legacy (non-prehashed) signatures.
     #[must_use]
     pub const fn force_prehashed(mut self, force_prehashed: bool) -> Self {
         self.force_prehashed = force_prehashed;
@@ -167,37 +165,31 @@ impl<'a> VerifyOptions<'a> {
         }
     }
 
-    /// Get the public key source
     #[must_use]
     pub const fn public_key(&self) -> &PublicKeySource<'a> {
         &self.public_key
     }
 
-    /// Get the signature file path
     #[must_use]
     pub const fn signature_file(&self) -> &Path {
         self.signature_file
     }
 
-    /// Get the message file path
     #[must_use]
     pub const fn message_file(&self) -> &Path {
         self.message_file
     }
 
-    /// Get the output flag
     #[must_use]
     pub const fn output(&self) -> bool {
         self.output
     }
 
-    /// Get the quiet flag
     #[must_use]
     pub const fn quiet(&self) -> bool {
         self.quiet
     }
 
-    /// Get the `force_prehashed` flag
     #[must_use]
     pub const fn force_prehashed(&self) -> bool {
         self.force_prehashed
@@ -230,25 +222,21 @@ pub struct VerifyResult {
 }
 
 impl VerifyResult {
-    /// Get the trusted comment from the signature
     #[must_use]
     pub fn trusted_comment(&self) -> &str {
         &self.trusted_comment
     }
 
-    /// Get the untrusted comment from the signature
     #[must_use]
     pub fn untrusted_comment(&self) -> &str {
         &self.untrusted_comment
     }
 
-    /// Get the key ID in base64 format
     #[must_use]
     pub fn key_id(&self) -> &str {
         &self.key_id
     }
 
-    /// Get the key ID in PGP Word List format (human-readable)
     #[must_use]
     pub fn key_id_words(&self) -> &str {
         &self.key_id_words

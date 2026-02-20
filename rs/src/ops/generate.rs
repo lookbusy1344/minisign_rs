@@ -62,21 +62,18 @@ impl<'a> GenerateOptionsBuilder<'a> {
         }
     }
 
-    /// Set the comment for the key files
     #[must_use]
     pub const fn comment(mut self, comment: &'a str) -> Self {
         self.comment = Some(comment);
         self
     }
 
-    /// Enable force mode (overwrite existing files)
     #[must_use]
     pub const fn force(mut self, force: bool) -> Self {
         self.force = force;
         self
     }
 
-    /// Create unencrypted key (no password)
     #[must_use]
     pub const fn no_password(mut self, no_password: bool) -> Self {
         self.no_password = no_password;
@@ -148,37 +145,32 @@ pub struct GenerateResult {
 }
 
 impl GenerateResult {
-    /// Get the path where the secret key was written
     #[must_use]
     pub fn secret_key_file(&self) -> &Path {
         &self.secret_key_file
     }
 
-    /// Get the path where the public key was written
     #[must_use]
     pub fn public_key_file(&self) -> &Path {
         &self.public_key_file
     }
 
-    /// Get the keynum in hexadecimal format
     #[must_use]
     pub fn keynum_hex(&self) -> &str {
         &self.keynum_hex
     }
 
-    /// Get the keynum in PGP Word List format (human-readable)
     #[must_use]
     pub fn keynum_words(&self) -> &str {
         &self.keynum_words
     }
 
-    /// Get the full public key in base64 format (for -P flag)
+    /// Full public key in base64 (for `-P` flag)
     #[must_use]
     pub fn public_key_base64(&self) -> &str {
         &self.public_key_base64
     }
 
-    /// Get the credential store lookup key
     #[must_use]
     pub fn credential_id(&self) -> &str {
         &self.credential_id

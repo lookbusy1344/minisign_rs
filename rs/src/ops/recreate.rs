@@ -24,14 +24,6 @@ pub struct RecreateOptions<'a> {
 }
 
 impl<'a> RecreateOptions<'a> {
-    /// Create new recreate options
-    ///
-    /// # Arguments
-    ///
-    /// * `secret_key_file` - Path to the secret key file
-    /// * `public_key_file` - Path to write the public key file
-    /// * `comment` - Optional comment for the public key file
-    /// * `force` - Force overwrite existing public key file
     #[must_use]
     pub const fn new(
         secret_key_file: &'a Path,
@@ -47,25 +39,21 @@ impl<'a> RecreateOptions<'a> {
         }
     }
 
-    /// Get the secret key file path
     #[must_use]
     pub const fn secret_key_file(&self) -> &Path {
         self.secret_key_file
     }
 
-    /// Get the public key file path
     #[must_use]
     pub const fn public_key_file(&self) -> &Path {
         self.public_key_file
     }
 
-    /// Get the comment
     #[must_use]
     pub const fn comment(&self) -> Option<&str> {
         self.comment
     }
 
-    /// Get the force flag
     #[must_use]
     pub const fn force(&self) -> bool {
         self.force
@@ -82,13 +70,11 @@ pub struct RecreateResult {
 }
 
 impl RecreateResult {
-    /// Get the path where the public key was written
     #[must_use]
     pub fn public_key_file(&self) -> &Path {
         &self.public_key_file
     }
 
-    /// Get the keynum in hexadecimal format
     #[must_use]
     pub fn keynum_hex(&self) -> &str {
         &self.keynum_hex

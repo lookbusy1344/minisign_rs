@@ -54,17 +54,11 @@ pub struct InspectOptions<'a> {
 }
 
 impl<'a> InspectOptions<'a> {
-    /// Create new inspect options
-    ///
-    /// # Arguments
-    ///
-    /// * `key_file` - Path to the key file (can be secret or public key)
     #[must_use]
     pub const fn new(key_file: &'a Path) -> Self {
         Self { key_file }
     }
 
-    /// Get the key file path
     #[must_use]
     pub const fn key_file(&self) -> &Path {
         self.key_file

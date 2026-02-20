@@ -75,44 +75,37 @@ impl<'a> SignOptionsBuilder<'a> {
         }
     }
 
-    /// Set the signature file path
     #[must_use]
     pub const fn signature_file(mut self, path: &'a Path) -> Self {
         self.signature_file = Some(path);
         self
     }
 
-    /// Set prehashed mode
-    ///
-    /// Default: true (matches C minisign behavior)
+    /// Default: `true` (matches C minisign behavior)
     #[must_use]
     pub const fn prehashed(mut self, prehashed: bool) -> Self {
         self.prehashed = prehashed;
         self
     }
 
-    /// Set the trusted comment
     #[must_use]
     pub const fn trusted_comment(mut self, comment: &'a str) -> Self {
         self.trusted_comment = Some(comment);
         self
     }
 
-    /// Set the untrusted comment
     #[must_use]
     pub const fn untrusted_comment(mut self, comment: &'a str) -> Self {
         self.untrusted_comment = Some(comment);
         self
     }
 
-    /// Enable force mode (overwrite existing files)
     #[must_use]
     pub const fn force(mut self, force: bool) -> Self {
         self.force = force;
         self
     }
 
-    /// Enable quiet mode (suppress output)
     #[must_use]
     pub const fn quiet(mut self, quiet: bool) -> Self {
         self.quiet = quiet;
@@ -165,66 +158,41 @@ impl<'a> SignOptions<'a> {
         SignOptionsBuilder::new(secret_key_file, message_file)
     }
 
-    /// Create new sign options (deprecated, use `builder()` instead)
-    ///
-    /// This method is deprecated to avoid excessive boolean parameters.
-    /// Use the builder pattern instead for better API clarity.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use minisign::ops::sign::SignOptions;
-    /// # use std::path::Path;
-    /// let options = SignOptions::builder(
-    ///     Path::new("secret.key"),
-    ///     Path::new("message.txt")
-    /// )
-    /// .prehashed(true)
-    /// .build();
-    /// ```
-    /// Get the secret key file path
     #[must_use]
     pub const fn secret_key_file(&self) -> &Path {
         self.secret_key_file
     }
 
-    /// Get the message file path
     #[must_use]
     pub const fn message_file(&self) -> &Path {
         self.message_file
     }
 
-    /// Get the signature file path
     #[must_use]
     pub const fn signature_file(&self) -> Option<&Path> {
         self.signature_file
     }
 
-    /// Get the prehashed flag
     #[must_use]
     pub const fn prehashed(&self) -> bool {
         self.prehashed
     }
 
-    /// Get the trusted comment
     #[must_use]
     pub const fn trusted_comment(&self) -> Option<&str> {
         self.trusted_comment
     }
 
-    /// Get the untrusted comment
     #[must_use]
     pub const fn untrusted_comment(&self) -> Option<&str> {
         self.untrusted_comment
     }
 
-    /// Get the force flag
     #[must_use]
     pub const fn force(&self) -> bool {
         self.force
     }
 
-    /// Get the quiet flag
     #[must_use]
     pub const fn quiet(&self) -> bool {
         self.quiet
@@ -245,25 +213,21 @@ pub struct SignResult {
 }
 
 impl SignResult {
-    /// Get the path where the signature was written
     #[must_use]
     pub fn signature_file(&self) -> &Path {
         &self.signature_file
     }
 
-    /// Get the trusted comment used
     #[must_use]
     pub fn trusted_comment(&self) -> &str {
         &self.trusted_comment
     }
 
-    /// Get the key ID in base64 format
     #[must_use]
     pub fn key_id(&self) -> &str {
         &self.key_id
     }
 
-    /// Get the key ID in PGP Word List format (human-readable)
     #[must_use]
     pub fn key_id_words(&self) -> &str {
         &self.key_id_words
