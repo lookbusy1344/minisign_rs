@@ -203,6 +203,12 @@ impl Cli {
     ///
     /// Checks the `MINISIGN_CONFIG_DIR` environment variable first.
     /// Falls back to `~/.minisign/` if not set.
+    ///
+    /// # Security
+    ///
+    /// `MINISIGN_CONFIG_DIR` is treated as trusted input — it determines the default
+    /// secret key path. Users are responsible for ensuring this variable is not
+    /// controlled by untrusted processes (e.g. SUID wrappers, CI pipeline injection).
     #[must_use]
     pub fn default_secret_key_path() -> PathBuf {
         if let Ok(config_dir) = std::env::var("MINISIGN_CONFIG_DIR") {
