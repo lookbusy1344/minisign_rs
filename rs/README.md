@@ -281,7 +281,7 @@ codesign --force --sign "Developer ID Application: Your Name" target/release/min
 
 ## Performance & Memory
 
-**Performance:** Within 6% of C minisign across all operations. See [Performance Benchmark Report](docs/benchmark-report.md).
+**Performance:** Matches C minisign across all operations (≤8% variance, within noise); marginally faster on large-file signing and verification. See [Performance Benchmark Report](docs/benchmark-report.md).
 
 **Binary size:** 1.1MB (vs C's 70KB) - larger binary for memory safety and zero C dependencies.
 
