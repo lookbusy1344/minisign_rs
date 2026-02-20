@@ -239,6 +239,51 @@ fn test_derive_key_different_salts() {
     assert_ne!(key1, key2);
 }
 
+/// Regression test: scrypt must produce exactly 104 bytes output (`ENCRYPTED_BLOB_SIZE`).
+///
+/// The implementation caps `params_len` at 64 when constructing `ScryptParams` but passes
+/// the full 104-byte buffer to the low-level `scrypt()` call. This test pins the exact
+/// output so any change in crate internals (e.g., scrypt crate upgrades) that breaks this
+/// boundary is caught immediately.
+///
+/// Uses reduced parameters (`log_n=10`) for fast execution.
+#[test]
+fn test_derive_key_104_byte_output_regression() {
+    const OUTPUT_LEN: usize = 104;
+    let password = b"minisign-regression-test-password";
+    let salt = [
+        0x42u8, 0x1a, 0x9f, 0x3c, 0x77, 0x08, 0xd5, 0xea, 0x23, 0xbc, 0xfe, 0x01, 0x60, 0xab, 0x84,
+        0x9d, 0x55, 0xe2, 0x71, 0xcc, 0x3a, 0x4f, 0x18, 0xb6, 0x9e, 0xd7, 0x2c, 0x05, 0xf1, 0x38,
+        0x6a, 0x7b,
+    ];
+    // log_n=10 (N=1024), r=8, p=1 — fast parameters for CI
+    let key =
+        derive_key_with_params(password, &salt, 10, 8, 1, OUTPUT_LEN).expect("derivation failed");
+    assert_eq!(
+        key.len(),
+        OUTPUT_LEN,
+        "scrypt must produce exactly {OUTPUT_LEN} bytes"
+    );
+    // Known-answer test vector: pre-computed with scrypt =0.11.0, log_n=10, r=8, p=1,
+    // output_len=104. The 104-byte output exercises the params_len=min(104,64)=64 cap
+    // in the Params constructor while the low-level scrypt() still fills all 104 bytes.
+    // If this fails after a crate upgrade, verify the new output is cryptographically
+    // correct before updating this constant.
+    let expected = hex::decode(concat!(
+        "2a55df14dfc617f725a5f1cf7cae4dcb662d7e490d1ff2fb4d596358ed0420c8",
+        "3ba34a3242fb83ae2e01a911caa0cb0f4597a11cfd2ad4f4ada60d02262d26fb",
+        "7982b6c5b294a7695a74cca14c1aa307e03028346f8e6ee468ce5a60b35a552f",
+        "4984052ac6538fcf",
+    ))
+    .expect("KAT hex is valid");
+    assert_eq!(
+        key.as_slice(),
+        expected.as_slice(),
+        "scrypt output must match known-answer test vector — if the scrypt crate was \
+         upgraded, re-derive and verify before updating this constant"
+    );
+}
+
 /// Test with full production parameters (marked ignore for normal test runs)
 #[test]
 #[ignore = "slow test with full scrypt parameters"]
