@@ -12,14 +12,10 @@ use crate::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
     },
-    validation::{validate_comment_with_length, validate_windows_path},
+    validation::validate_comment_with_length,
 };
 use rayon::prelude::*;
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 /// Default untrusted comment for signatures
 const DEFAULT_UNTRUSTED_COMMENT: &str = "signature from minisign secret key";
@@ -695,49 +691,4 @@ pub fn generate_default_trusted_comment() -> String {
     format!("timestamp:{timestamp}")
 }
 
-/// Write signature file with atomic creation
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File already exists (when force is false)
-/// - File cannot be created or written
-///
-/// # Note
-///
-/// This function is public for unit testing purposes but is not part of the stable API.
-pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    // Validate path doesn't use Windows reserved names
-    validate_windows_path(path)?;
-
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    // H4: Ensure durability - sync to disk before returning success
-    // Matches behavior of write_secret_key_file() and write_public_key_file()
-    file.sync_all().map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
-}
+pub use super::file_utils::write_signature_file;

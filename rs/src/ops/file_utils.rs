@@ -57,48 +57,25 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
     SeckeyStruct::from_file_contents(&contents)
 }
 
-/// Write a secret key file with appropriate permissions
+/// Write a file, optionally setting Unix permissions on creation and on force-overwrite.
 ///
-/// On Unix systems, sets mode 0600 (read/write for owner only).
-///
-/// # Arguments
-///
-/// * `path` - Path to write the file
-/// * `contents` - File contents to write
-/// * `force` - If true, overwrite existing files. If false, fail if file exists.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File already exists (when `force` is false)
-/// - File cannot be created or written
-///
-/// # Security
-///
-/// Uses atomic creation (`create_new(true)`) when `force` is false to prevent
-/// TOCTOU (Time-of-Check-Time-of-Use) race conditions.
-pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
-    let path = path.as_ref();
-
-    // Validate path doesn't use Windows reserved names
+/// All three public file-write functions delegate here. The `unix_mode` parameter is
+/// `Some(mode)` only for secret key files (0600); public key and signature files pass `None`.
+fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) -> Result<()> {
     validate_windows_path(path)?;
 
     let mut options = OpenOptions::new();
     options.write(true);
-
     if force {
-        // Force mode: create or truncate existing file
         options.create(true).truncate(true);
     } else {
-        // Normal mode: fail if file already exists (atomic check)
         options.create_new(true);
     }
 
-    // Set restrictive permissions on Unix systems (before writing)
     #[cfg(unix)]
-    {
+    if let Some(mode) = unix_mode {
         use std::os::unix::fs::OpenOptionsExt;
-        options.mode(SECRET_KEY_FILE_PERMISSIONS);
+        options.mode(mode);
     }
 
     let mut file = options.open(path).map_err(|e| {
@@ -109,73 +86,57 @@ pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool
         }
     })?;
 
-    // When forcing overwrite, explicitly set permissions to ensure existing files
-    // with lax permissions are secured (mode() only affects newly created files)
+    // When forcing overwrite of a secret key, re-apply permissions so that an
+    // existing file with lax permissions (mode() only affects newly created files)
+    // is also secured.
     #[cfg(unix)]
-    if force {
+    if force && let Some(mode) = unix_mode {
         use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(SECRET_KEY_FILE_PERMISSIONS);
+        let perms = std::fs::Permissions::from_mode(mode);
         std::fs::set_permissions(path, perms).map_err(|e| Error::file_write(path, e))?;
     }
 
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
-
-    // Ensure data is durably written to disk before returning success
-    // This prevents data loss if the system crashes immediately after key generation
     file.sync_all().map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
 }
 
-/// Write a public key file with atomic creation
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-///
-/// # Arguments
-///
-/// * `path` - Path to write the file
-/// * `contents` - File contents to write
-/// * `force` - If true, overwrite existing files. If false, fail if file exists.
+/// Write a secret key file with mode 0600 on Unix (read/write for owner only).
 ///
 /// # Errors
 ///
-/// Returns an error if:
-/// - File already exists (when `force` is false)
-/// - File cannot be created or written
+/// Returns [`Error::FileExists`] if the file exists and `force` is false.
+/// Returns [`Error::FileWrite`] on I/O failure.
+pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
+    #[cfg(unix)]
+    let unix_mode = Some(SECRET_KEY_FILE_PERMISSIONS);
+    #[cfg(not(unix))]
+    let unix_mode = None;
+    write_file(path.as_ref(), contents, force, unix_mode)
+}
+
+/// Write a public key file.
+///
+/// # Errors
+///
+/// Returns [`Error::FileExists`] if the file exists and `force` is false.
+/// Returns [`Error::FileWrite`] on I/O failure.
 pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
-    let path = path.as_ref();
+    write_file(path.as_ref(), contents, force, None)
+}
 
-    // Validate path doesn't use Windows reserved names
-    validate_windows_path(path)?;
-
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    // Ensure data is durably written to disk before returning success
-    file.sync_all().map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
+/// Write a signature file.
+///
+/// This function is public for unit testing purposes but is not part of the stable API.
+///
+/// # Errors
+///
+/// Returns [`Error::FileExists`] if the file exists and `force` is false.
+/// Returns [`Error::FileWrite`] on I/O failure.
+pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<()> {
+    write_file(path, contents, force, None)
 }
 
 /// Check that a file doesn't exceed the maximum size for non-prehashed mode
