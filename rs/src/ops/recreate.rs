@@ -100,32 +100,8 @@ impl RecreateResult {
 /// - The public key file already exists (unless force is true)
 /// - File I/O operations fail
 pub fn recreate(options: &RecreateOptions<'_>, password: Option<&[u8]>) -> Result<RecreateResult> {
-    // Load the secret key
     let seckey = load_secret_key(options.secret_key_file())?;
-
-    // Decrypt if necessary and get the keynum
-    let (secret_key, keynum) = seckey.extract_key(password)?;
-
-    // Extract public key from secret key
-    // Ed25519 secret keys contain the public key in the second half (bytes 32-64)
-    let public_key = extract_public_key_from_secret(&secret_key);
-
-    // Create public key structure
-    let pubkey = PubkeyStruct::new(keynum, public_key);
-
-    // Generate comment
-    let keynum_hex = keynum.to_key_id();
-    let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = options.comment().unwrap_or(&default_comment);
-
-    // Write the public key file with atomic creation
-    let pubkey_contents = pubkey.to_file_contents(comment);
-    write_public_key_file(options.public_key_file(), &pubkey_contents, options.force())?;
-
-    Ok(RecreateResult {
-        public_key_file: options.public_key_file().to_path_buf(),
-        keynum_hex,
-    })
+    recreate_with_key(&seckey, options, password)
 }
 
 /// Recreate a public key from a pre-loaded secret key
