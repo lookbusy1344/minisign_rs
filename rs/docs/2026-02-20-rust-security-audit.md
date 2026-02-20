@@ -149,11 +149,11 @@ Same mechanism as C-5 — the secret key file parser (`keys.rs:853-864`) uses `.
 
 ### C-9 (Medium): `fopen_create_useronly` Follows Symlinks — TOCTOU
 
-**Rust status: PARTIALLY MITIGATED**
+**Rust status: RESOLVED**
 
 Fresh creation uses `OpenOptions::create_new(true)` (`file_utils.rs:72`), which maps to `O_CREAT | O_EXCL` — atomic, rejects symlinks. This fully resolves the non-force case.
 
-**Residual risk:** Force-overwrite uses `.create(true).truncate(true)` without `O_NOFOLLOW`. See RS-9 below.
+The force-overwrite path previously used `.create(true).truncate(true)` without `O_NOFOLLOW`. This was fixed (see RS-9 below): `libc::O_NOFOLLOW` is now applied via `OpenOptionsExt::custom_flags()` on Unix when `force = true`, preventing symlink following on both paths.
 
 ---
 
@@ -247,7 +247,7 @@ See RS-5 below. Rust's memory safety eliminates the buffer-overflow/stack-smash 
 
 ### RS-1 — Medium: `ScryptParams::new` Receives Incorrect Output Length
 
-**Severity:** Medium
+**Severity:** Medium → **RESOLVED** (commit `a7eaff2`)
 **File:** `src/crypto.rs`, lines 531-539
 
 ```rust
@@ -261,94 +261,57 @@ scrypt(password, salt, &params, &mut output)
 
 **Vulnerability:** The scrypt crate's `Params::new` validates output length against a maximum of 64 bytes. The code caps the `Params` length at 64 but passes a 104-byte output buffer to the low-level `scrypt()` function. This works because `scrypt()` ignores `Params.len` and uses the buffer length directly.
 
-If a future scrypt crate version changes `scrypt()` to respect `Params.len`, or adds a buffer-length check, the result is either a silently truncated KDF output (corrupting all keys) or a hard error. The code documents this coupling in comments, but it remains a fragile dependency on crate internals.
+If a future scrypt crate version changes `scrypt()` to respect `Params.len`, or adds a buffer-length check, the result is either a silently truncated KDF output (corrupting all keys) or a hard error.
 
-**Remediation:** Add an integration test that verifies a 104-byte scrypt derivation against a known-good test vector, catching any silent regression on crate upgrade.
+**Resolution:** A known-answer test was added to `tests/unit/crypto.rs` exercising `derive_key_with_params` with `output_len = 104` (matching `ENCRYPTED_BLOB_SIZE`), a fixed password, salt, and scrypt parameters. The test pins the exact 104-byte KAT output and is `#[ignore]`-tagged for the slow test suite. Any future crate upgrade that changes the output will fail this test before merging.
 
 ---
 
 ### RS-2 — Low: Untrusted Comment Prefix Not Required on Parse
 
-**Severity:** Low
+**Severity:** Low → **RESOLVED** (commit `fefc382`)
 **File:** `src/signature.rs`, lines 307-310
 
-```rust
-let untrusted_comment = lines[0]
-    .strip_prefix("untrusted comment: ")
-    .unwrap_or(lines[0])
-    .to_string();
-```
+**Vulnerability:** If the first line of a `.minisig` file lacks the `"untrusted comment: "` prefix, the raw line was silently accepted as the comment body. The trusted comment on line 3 correctly required its prefix via `.ok_or_else()`. This asymmetry meant a crafted signature file with no untrusted comment prefix parsed without error.
 
-**Vulnerability:** If the first line of a `.minisig` file lacks the `"untrusted comment: "` prefix, the raw line is silently accepted as the comment body. The trusted comment on line 3 correctly requires its prefix via `.ok_or_else()`. This asymmetry means a crafted signature file with no untrusted comment prefix parses without error.
-
-Practical impact is low — the untrusted comment is not authenticated and does not affect verification. But the inconsistency with trusted comment handling is a code quality defect.
-
-**Remediation:** Apply the same `.ok_or_else()` pattern, or document why silent fallback is intentional.
+**Resolution:** The `unwrap_or(lines[0])` fallback was replaced with `.ok_or_else(|| Error::InvalidSignatureFormat(...))`, matching the trusted comment pattern exactly. A test asserting `InvalidSignatureFormat` on a missing prefix was added to `tests/unit/signature.rs`. Behaviour now aligns with the C implementation's `COMMENT_PREFIX` check.
 
 ---
 
 ### RS-3 — Low: Timestamp Silently Defaults to Zero on Clock Failure
 
-**Severity:** Low
+**Severity:** Low → **RESOLVED** (commit `549f2a7`)
 **File:** `src/ops/sign.rs`, lines 573-578
 
-```rust
-let timestamp = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .map(|d| d.as_secs())
-    .unwrap_or(0);
-```
+**Vulnerability:** On systems with incorrect clocks (embedded, Wasm, broken NTP), `duration_since` failed and the timestamp silently became `"timestamp:0"`.
 
-**Vulnerability:** On systems with incorrect clocks (embedded, Wasm, broken NTP), `duration_since` fails and the timestamp silently becomes `"timestamp:0"`. This could mislead users relying on timestamp freshness. The C code has the same issue (`time(NULL)` returns `-1` on failure, which is silently embedded).
-
-**Remediation:** Emit a warning to stderr on fallback.
+**Resolution:** The silent `unwrap_or(0)` was replaced with `unwrap_or_else` that emits a stderr warning (`"Warning: system clock error, using timestamp 0"`) before falling back. The zero timestamp is still embedded — callers already handle it — but the anomaly is now visible in logs and CI output.
 
 ---
 
 ### RS-4 — Low: `.expect()` Calls in Production Code
 
-**Severity:** Low
-**Files:** `src/keys.rs` lines 735, 740; `src/crypto.rs` line 197
+**Severity:** Low → **RESOLVED** (commit `c3bef92`)
+**Files:** `src/keys.rs`, `src/crypto.rs`, `src/formats.rs`
 
-```rust
-write_u64_le(&mut bytes[...], self.kdf_opslimit)
-    .expect("opslimit range is exactly 8 bytes");
-```
+**Vulnerability:** Three `.expect()` calls existed in production paths, all structurally unreachable but violating the project's no-`.expect()` rule. If surrounding constants were refactored incorrectly the process would panic rather than return a clean error.
 
-```rust
-let value = read_u64_le(&self.0).expect("KeyNum is always 8 bytes");
-```
+**Resolution:** All three were replaced with infallible operations:
 
-**Vulnerability:** These `.expect()` calls are structurally unreachable — the slice ranges are compile-time constants that provably produce 8-byte slices, and `KeyNum` is `[u8; 8]` by construction. However, `.expect()` in production paths introduces a theoretical panic vector. If the surrounding offset constants were ever refactored incorrectly, the process would panic with a stack trace rather than returning a clean error.
-
-**Remediation:** Replace with direct byte operations:
-
-```rust
-bytes[OFFSET..OFFSET+8].copy_from_slice(&self.kdf_opslimit.to_le_bytes());
-let value = u64::from_le_bytes(self.0);
-```
+- `keys.rs` (`kdf_opslimit`/`kdf_memlimit` serialization): `copy_from_slice(&value.to_le_bytes())` — no fallibility possible, removed the `write_u64_le` call entirely.
+- `crypto.rs` (`KeyNum::to_key_id`): `u64::from_le_bytes(self.0)` — `KeyNum` is `[u8; 8]` by type, conversion is infallible.
+- `formats.rs` (`read_u64_le`): `.try_into().map_err(...)` returning `Result`, consistent with the function's existing `Result` return type.
 
 ---
 
 ### RS-5 — Low: Release Profile Missing Hardening Flags
 
-**Severity:** Low
-**File:** `Cargo.toml`, lines 63-65
+**Severity:** Low → **RESOLVED** (commit `966ab72`)
+**File:** `Cargo.toml`
 
-```toml
-[profile.release]
-strip = true
-```
+**Vulnerability:** The release profile omitted `overflow-checks`, LTO, `panic = "abort"`, and `codegen-units = 1`, leaving integer overflow silent in release builds.
 
-**Vulnerability:** The release profile omits:
-- `overflow-checks = true` — Rust release builds do not check integer overflow by default
-- `lto = true` — reduces binary attack surface, improves dead-code elimination
-- `panic = "abort"` — prevents stack unwinding from executing destructors in unexpected order
-- `codegen-units = 1` — improves LTO effectiveness
-
-While Rust's memory safety eliminates the buffer overflow class, integer overflow in release builds wraps silently, which could produce incorrect sizes or offsets in arithmetic-heavy code paths.
-
-**Remediation:**
+**Resolution:** All four flags were added to `[profile.release]`:
 
 ```toml
 [profile.release]
@@ -359,22 +322,18 @@ panic = "abort"
 codegen-units = 1
 ```
 
+The resulting binary was verified with a full sign/verify round-trip. `panic = "abort"` also removes unwinding machinery, reducing binary size and eliminating any concern about destructor ordering on panic.
+
 ---
 
 ### RS-6 — Low: `MINISIGN_CONFIG_DIR` Environment Variable Not Sanitised
 
-**Severity:** Low
-**File:** `src/cli.rs`, lines 207-210
+**Severity:** Low → **RESOLVED** (commit `0cb9997`)
+**File:** `src/cli.rs`
 
-```rust
-if let Ok(config_dir) = std::env::var("MINISIGN_CONFIG_DIR") {
-    PathBuf::from(config_dir).join("minisign.key")
-}
-```
+**Vulnerability:** An attacker who can set environment variables (SUID wrapper, CI pipeline injection) can redirect the default secret key path to an arbitrary location, causing the tool to read an attacker-controlled key file.
 
-**Vulnerability:** An attacker who can set environment variables (SUID wrapper, CI pipeline injection) can redirect the default secret key path to an arbitrary location, causing the tool to read an attacker-controlled key file. The write path uses `create_new(true)` (atomic), but the read path follows symlinks without restriction.
-
-**Remediation:** Document that `MINISIGN_CONFIG_DIR` is trusted input. Optionally validate the path is absolute and contains no `..` components.
+**Resolution:** A `Security` doc comment was added to `default_secret_key_path()` documenting that `MINISIGN_CONFIG_DIR` is trusted input, must not be controlled by untrusted processes, and that users are responsible for its integrity in privilege-escalation contexts. No code-level path validation was added — the threat model does not include attacker-controlled environment variables on non-SUID deployments, and adding validation would create false safety assurance without eliminating the actual risk class.
 
 ---
 
@@ -405,28 +364,12 @@ The `keyring` crate's `set_password` takes `&str` and internally copies it into 
 
 ### RS-9 — Medium: Force-Overwrite (`-f`) Follows Symlinks on POSIX
 
-**Severity:** Medium
-**File:** `src/ops/file_utils.rs`, lines 69-71, 81-87
+**Severity:** Medium → **RESOLVED** (commit `e759e93`)
+**File:** `src/ops/file_utils.rs`
 
-```rust
-if force {
-    options.create(true).truncate(true);
-}
-```
+**Vulnerability:** When `force = true`, `OpenOptions` used `.create(true).truncate(true)` without `O_NOFOLLOW`. An attacker who could place a symlink at the key path before `-G -f` ran would cause key material to be written to the symlink target.
 
-**Vulnerability:** When `force = true`, `OpenOptions` uses `.create(true).truncate(true)` without `O_NOFOLLOW`. On Linux/macOS, this follows symlinks. An attacker who can create a symlink at the key path before `minisign_rs -G -f` runs will cause key material to be written to the symlink target.
-
-Exploitation requires write access to `~/.minisign/` (0700 by default), limiting feasibility.
-
-**Remediation:** Use `O_NOFOLLOW` via `std::os::unix::fs::OpenOptionsExt`:
-
-```rust
-#[cfg(unix)]
-{
-    use std::os::unix::fs::OpenOptionsExt;
-    options.custom_flags(libc::O_NOFOLLOW);
-}
-```
+**Resolution:** `libc` was added as a direct dependency (`Cargo.toml`). On Unix, when `force = true`, `O_NOFOLLOW` is now applied via `OpenOptionsExt::custom_flags(libc::O_NOFOLLOW)`. The `O_CREAT | O_EXCL` path (`create_new`) already prevented symlink following; both paths are now safe. A unit test in `tests/unit/ops/file_utils.rs` creates a symlink and asserts that a forced write returns an error rather than following it.
 
 ---
 
@@ -444,7 +387,7 @@ Exploitation requires write access to `~/.minisign/` (0700 by default), limiting
 | 6 | **Medium** | Buffer size conflict 4096 vs 8192 | **RESOLVED** — heap `String`, named constants |
 | 7 | **Medium** | KDF error path leaks sensitive buffers | **RESOLVED** — `Zeroizing` RAII |
 | 8 | **Medium** | `trim()` return discarded for sk comment | **RESOLVED** — `.lines()` strips terminators |
-| 9 | **Medium** | `fopen_create_useronly` follows symlinks | **PARTIAL** — create_new is safe; force-overwrite is not |
+| 9 | **Medium** | `fopen_create_useronly` follows symlinks | **RESOLVED** — `O_NOFOLLOW` on all write paths (RS-9) |
 | 10 | **Medium** | `opt_seen` bitmask boundary | **N/A** — `clap` handles this |
 | 11 | **Medium** | Password truncation stdin residue | **RESOLVED** — `rpassword`, no truncation |
 | 12 | **Medium** | `pwd2` held for KDF duration | **MITIGATED** — `Zeroizing`, nanosecond window |
@@ -453,34 +396,38 @@ Exploitation requires write access to `~/.minisign/` (0700 by default), limiting
 | 15 | **Low** | Key existence check TOCTOU | **BENIGN** — `create_new` is atomic |
 | 16 | **Low** | `file_basename` dangling pointer | **N/A** — Rust ownership/lifetimes |
 | 17 | **Low** | `sodium_bin2hex` null-termination | **N/A** — Rust `String`/`fmt` |
-| 18 | **Low** | No compiler hardening flags | **PARTIAL** — see RS-5 |
+| 18 | **Low** | No compiler hardening flags | **RESOLVED** — see RS-5 |
 | 19 | **Info** | Distribution script ambient signing | **N/A** |
 | 20 | **Info** | Typo `LICEMSE` | **N/A** |
 
 ### New Rust-Specific Findings
 
-| # | Severity | Location | Category | Title |
-|---|---|---|---|---|
-| RS-1 | **Medium** | `crypto.rs:531-539` | Crypto / Compatibility | ScryptParams output length coupling to crate internals |
-| RS-2 | **Low** | `signature.rs:307-310` | Input Validation | Untrusted comment prefix not required on parse |
-| RS-3 | **Low** | `ops/sign.rs:573-578` | Error Handling | Timestamp silently defaults to zero on clock failure |
-| RS-4 | **Low** | `keys.rs:735,740`, `crypto.rs:197` | Error Handling | `.expect()` in production code (structurally unreachable) |
-| RS-5 | **Low** | `Cargo.toml:63-65` | Build | Release profile missing hardening flags |
-| RS-6 | **Low** | `cli.rs:207-210` | Input Validation | `MINISIGN_CONFIG_DIR` env var unsanitised |
-| RS-7 | **Info** | `ops/sign.rs:400-408` | Side-channel | Parallel signing shares SecretKey across threads |
-| RS-8 | **Info** | `credential_store.rs:49-58` | Crypto | OS keyring copy of password not zeroized |
-| RS-9 | **Medium** | `ops/file_utils.rs:69-71` | Path Traversal | Force-overwrite follows symlinks on POSIX |
+| # | Severity | Location | Category | Title | Status |
+|---|---|---|---|---|---|
+| RS-1 | **Medium** | `crypto.rs:531-539` | Crypto / Compatibility | ScryptParams output length coupling to crate internals | **RESOLVED** (`a7eaff2`) |
+| RS-2 | **Low** | `signature.rs:307-310` | Input Validation | Untrusted comment prefix not required on parse | **RESOLVED** (`fefc382`) |
+| RS-3 | **Low** | `ops/sign.rs:573-578` | Error Handling | Timestamp silently defaults to zero on clock failure | **RESOLVED** (`549f2a7`) |
+| RS-4 | **Low** | `keys.rs:735,740`, `crypto.rs:197` | Error Handling | `.expect()` in production code (structurally unreachable) | **RESOLVED** (`c3bef92`) |
+| RS-5 | **Low** | `Cargo.toml:63-65` | Build | Release profile missing hardening flags | **RESOLVED** (`966ab72`) |
+| RS-6 | **Low** | `cli.rs:207-210` | Input Validation | `MINISIGN_CONFIG_DIR` env var unsanitised | **RESOLVED** (`0cb9997`) |
+| RS-7 | **Info** | `ops/sign.rs:400-408` | Side-channel | Parallel signing shares SecretKey across threads | No action (inherent) |
+| RS-8 | **Info** | `credential_store.rs:49-58` | Crypto | OS keyring copy of password not zeroized | No action (OS API limit) |
+| RS-9 | **Medium** | `ops/file_utils.rs:69-71` | Path Traversal | Force-overwrite follows symlinks on POSIX | **RESOLVED** (`e759e93`) |
 
 ### Risk Assessment
 
-| Severity | C/Zig | Rust | Delta |
-|----------|-------|------|-------|
-| Critical | 1 | 0 | -1 |
-| High | 4 | 0 | -4 |
-| Medium | 8 | 2 | -6 |
-| Low | 5 | 4 | -1 |
-| Informational | 2 | 2 | 0 |
-| **Total** | **20** | **8** | **-12** |
+Post-remediation (security_audit branch, merged commit `679958e`):
+
+| Severity | C/Zig | Rust (initial) | Rust (post-remediation) | Delta vs C/Zig |
+|----------|-------|----------------|------------------------|----------------|
+| Critical | 1 | 0 | 0 | -1 |
+| High | 4 | 0 | 0 | -4 |
+| Medium | 8 | 2 | 0 | -8 |
+| Low | 5 | 4 | 0 | -5 |
+| Informational | 2 | 2 | 2 | 0 |
+| **Total** | **20** | **8** | **2** | **-18** |
+
+All actionable findings (RS-1 through RS-6, RS-9) are closed. The two remaining items (RS-7, RS-8) are informational observations with no feasible mitigation at the application layer.
 
 ---
 
@@ -500,14 +447,16 @@ These C/Zig vulnerability classes **cannot exist** in the Rust implementation:
 | Manual string parsing errors | C-5, C-8 | `str::lines()`, `strip_prefix()`, iterators |
 | Integer boundary in bitmasks | C-10 | `clap` derive macros |
 
-### What Rust Does Not Eliminate
+### What Rust Does Not Eliminate By Itself
 
-| Class | C/Zig Finding | Rust Finding | Why |
-|-------|--------------|--------------|-----|
-| Symlink following | C-9 | RS-9 | OS-level file operation, not memory safety |
-| Logic errors | — | RS-1, RS-2 | Type system cannot catch semantic bugs |
-| Missing hardening flags | C-18 | RS-5 | Build configuration, not language feature |
-| Environment variable trust | — | RS-6 | Input validation policy, not memory safety |
+These classes required explicit application-level remediation even in safe Rust:
+
+| Class | C/Zig Finding | Rust Finding | Why | Remediation |
+|-------|--------------|--------------|-----|-------------|
+| Symlink following | C-9 | RS-9 | OS-level file operation, not memory safety | `O_NOFOLLOW` added (`e759e93`) |
+| Logic errors | — | RS-1, RS-2 | Type system cannot catch semantic bugs | KAT test + prefix enforcement |
+| Missing hardening flags | C-18 | RS-5 | Build configuration, not language feature | All flags added (`966ab72`) |
+| Environment variable trust | — | RS-6 | Input validation policy, not memory safety | Trust model documented (`0cb9997`) |
 
 ### Dependency Security
 
@@ -530,22 +479,20 @@ Cryptographic crates are exact-pinned; non-crypto crates use range versions (sta
 
 ## Recommendations
 
-### Priority 1 (Address Soon)
+All actionable findings from this audit have been addressed in the `security_audit` branch (merged into `lb_rust` at commit `679958e` on 2026-02-20).
 
-1. **RS-9**: Add `O_NOFOLLOW` to the force-overwrite path in `file_utils.rs`
-2. **RS-1**: Add a scrypt output-length regression test with a known-good 104-byte test vector
+| Finding | Commit | Action taken |
+|---------|--------|--------------|
+| RS-9 | `e759e93` | `O_NOFOLLOW` on force-overwrite path; unit test added |
+| RS-1 | `a7eaff2` | 104-byte scrypt KAT regression test added |
+| RS-4 | `c3bef92` | All `.expect()` replaced with infallible operations |
+| RS-5 | `966ab72` | `overflow-checks`, LTO, `panic = "abort"`, `codegen-units = 1` |
+| RS-2 | `fefc382` | Untrusted comment prefix enforced; test added |
+| RS-3 | `549f2a7` | stderr warning on timestamp fallback |
+| RS-6 | `0cb9997` | Trust model documented in doc comment |
 
-### Priority 2 (Address When Convenient)
-
-3. **RS-5**: Add `overflow-checks = true`, `lto = true`, `panic = "abort"` to release profile
-4. **RS-4**: Replace `.expect()` with infallible byte operations
-5. **RS-2**: Enforce untrusted comment prefix consistently with trusted comment
-
-### Priority 3 (Low Risk, Improve Incrementally)
-
-6. **RS-3**: Warn on timestamp fallback
-7. **RS-6**: Document `MINISIGN_CONFIG_DIR` trust model
+Ongoing: run `cargo audit` periodically and keep cryptographic dependencies current.
 
 ---
 
-*This audit was conducted by static analysis of the source code. No dynamic testing, fuzzing, or runtime instrumentation was performed. Line numbers reference the `lb_rust` branch at commit `5f75f2c`.*
+*This audit was conducted by static analysis of the source code. No dynamic testing, fuzzing, or runtime instrumentation was performed. Line numbers in findings reference the `lb_rust` branch at commit `5f75f2c`. Remediation status updated 2026-02-20 against merge commit `679958e`.*
