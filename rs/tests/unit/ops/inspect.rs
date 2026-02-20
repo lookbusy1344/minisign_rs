@@ -400,7 +400,7 @@ fn test_inspect_base64_wrong_format() {
 
 #[test]
 fn test_inspect_private_decrypts_and_shows_real_keyid() {
-    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+    use minisign::ops::inspect::inspect_private;
 
     // Create an encrypted key with known keynum
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
@@ -426,10 +426,8 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
     let file_contents = seckey.to_file_contents("test encrypted key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions::new(temp_file.path());
-
     // Decrypt and inspect
-    let result = inspect_private(&options, password).unwrap();
+    let result = inspect_private(temp_file.path(), password).unwrap();
 
     // Verify the real keynum is shown (not zeros)
     let expected_key_id = keynum.to_key_id();
@@ -443,7 +441,7 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
 
 #[test]
 fn test_inspect_private_fails_with_wrong_password() {
-    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+    use minisign::ops::inspect::inspect_private;
 
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"correct_password";
@@ -464,16 +462,14 @@ fn test_inspect_private_fails_with_wrong_password() {
     let file_contents = seckey.to_file_contents("test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions::new(temp_file.path());
-
     // Try with wrong password
-    let result = inspect_private(&options, b"wrong_password");
+    let result = inspect_private(temp_file.path(), b"wrong_password");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_inspect_private_works_with_unencrypted_key() {
-    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+    use minisign::ops::inspect::inspect_private;
 
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
@@ -481,10 +477,8 @@ fn test_inspect_private_works_with_unencrypted_key() {
     let file_contents = seckey.to_file_contents("unencrypted test key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions::new(temp_file.path());
-
     // Should work without password (password is ignored for unencrypted keys)
-    let result = inspect_private(&options, b"").unwrap();
+    let result = inspect_private(temp_file.path(), b"").unwrap();
 
     assert_eq!(result.key_type, KeyType::SecretUnencrypted);
     assert_eq!(result.key_id, keynum.to_key_id());
@@ -493,7 +487,7 @@ fn test_inspect_private_works_with_unencrypted_key() {
 #[test]
 fn test_inspect_private_works_with_public_key() {
     use minisign::keys::PubkeyStruct;
-    use minisign::ops::inspect::{InspectPrivateOptions, inspect_private};
+    use minisign::ops::inspect::inspect_private;
 
     let (_secret_key, public_key, keynum) = generate_keypair().unwrap();
     let pubkey = PubkeyStruct::new(keynum, public_key);
@@ -501,10 +495,8 @@ fn test_inspect_private_works_with_public_key() {
     let file_contents = pubkey.to_file_contents("test public key");
     let temp_file = create_temp_key_file(&file_contents);
 
-    let options = InspectPrivateOptions::new(temp_file.path());
-
     // Should work with public key (password is ignored)
-    let result = inspect_private(&options, b"").unwrap();
+    let result = inspect_private(temp_file.path(), b"").unwrap();
 
     assert_eq!(result.key_type, KeyType::Public);
     assert_eq!(result.key_id, keynum.to_key_id());
