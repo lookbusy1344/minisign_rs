@@ -35,7 +35,7 @@ use crate::crypto::{
     SECRET_KEY_BYTES, SecretKey, blake2b_256, derive_key_with_params,
 };
 use crate::errors::Error;
-use crate::formats::{decode_base64, encode_base64, read_u64_le, write_u64_le};
+use crate::formats::{decode_base64, encode_base64, read_u64_le};
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
@@ -728,16 +728,10 @@ impl SeckeyStruct {
 
         bytes[SECKEY_CHK_ALG_OFFSET..chk_end].copy_from_slice(CHK_ALG);
         bytes[SECKEY_KDF_SALT_OFFSET..salt_end].copy_from_slice(&self.kdf_salt);
-        write_u64_le(
-            &mut bytes[SECKEY_KDF_OPSLIMIT_OFFSET..opslimit_end],
-            self.kdf_opslimit,
-        )
-        .expect("opslimit range is exactly 8 bytes");
-        write_u64_le(
-            &mut bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end],
-            self.kdf_memlimit,
-        )
-        .expect("memlimit range is exactly 8 bytes");
+        bytes[SECKEY_KDF_OPSLIMIT_OFFSET..opslimit_end]
+            .copy_from_slice(&self.kdf_opslimit.to_le_bytes());
+        bytes[SECKEY_KDF_MEMLIMIT_OFFSET..memlimit_end]
+            .copy_from_slice(&self.kdf_memlimit.to_le_bytes());
 
         // For encrypted keys, write encrypted_keynum; for unencrypted, write plaintext keynum
         if self.encrypted {

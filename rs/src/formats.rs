@@ -37,7 +37,7 @@ pub fn read_u64_le(bytes: &[u8]) -> Result<u64> {
             ))
         })?
         .try_into()
-        .expect("slice is exactly 8 bytes");
+        .map_err(|_| Error::Other("slice conversion to [u8; 8] failed".into()))?;
     Ok(u64::from_le_bytes(buf))
 }
 
