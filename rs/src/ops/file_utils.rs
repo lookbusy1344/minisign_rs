@@ -98,7 +98,6 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
 
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
-    file.sync_all().map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
 }

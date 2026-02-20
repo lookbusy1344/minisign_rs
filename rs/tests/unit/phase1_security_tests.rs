@@ -205,32 +205,23 @@ fn h3_kdf_params_error_on_u32_truncation() {
 }
 
 // ============================================================================
-// H4: write_signature_file() must call sync_all()
+// H4: write_signature_file() writes correct content
 // ============================================================================
 
 #[test]
-fn h4_signature_file_write_durability() {
-    // This test verifies that write_signature_file calls sync_all()
-    // We can't directly test fsync behavior in unit tests, but we can verify
-    // the function completes successfully and the file exists with correct content
-
+fn h4_signature_file_write_correct_content() {
     let temp_dir = TempDir::new().unwrap();
     let sig_path = temp_dir.path().join("test.minisig");
 
     let contents =
         "untrusted comment: test\nYmFzZTY0ZGF0YQ==\ntrusted comment: test\nZ2xvYmFsc2ln\n";
 
-    // Call the write function (which should now include sync_all)
     let result = minisign::ops::sign::write_signature_file(&sig_path, contents, false);
 
     assert!(result.is_ok(), "write_signature_file should succeed");
 
-    // Verify file exists and has correct content
     let read_contents = fs::read_to_string(&sig_path).unwrap();
     assert_eq!(read_contents, contents, "File contents should match");
-
-    // Note: We cannot directly test sync_all() was called without mocking,
-    // but this test documents the requirement. Code inspection is needed.
 }
 
 // ============================================================================
