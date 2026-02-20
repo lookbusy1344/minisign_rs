@@ -1030,7 +1030,7 @@ dependencies = [
 
 [[package]]
 name = "minisign-rs"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "assert_cmd",
  "base64",
