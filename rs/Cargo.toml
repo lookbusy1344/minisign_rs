@@ -63,3 +63,7 @@ opt-level = 3
 
 [profile.release]
 strip = true
+overflow-checks = true
+lto = true
+panic = "abort"
+codegen-units = 1
