@@ -11,7 +11,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ## Project Status
 
-**Version 1.3.3 Release** - Production-ready Rust implementation with complete C minisign compatibility.
+**Version 1.3.4 Release** - Production-ready Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
@@ -32,7 +32,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **481 total tests** covering all operations and CLI behavior
+- **484 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Credential store tests (skip gracefully when OS keyring unavailable)
@@ -42,16 +42,16 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
 - **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (470 tests) using optimized scrypt parameters (~10 seconds)
+- **Fast test suite** (473 tests) using optimized scrypt parameters (~10 seconds)
 - **Slow test suite** (11 tests) with production scrypt parameters (~11 seconds)
 
 ### Code Quality
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **3,957 lines** of production code in `src/` (4,961 total with comments)
-- **10,046 lines** of test code in `tests/` (13,639 total with comments)
-- **Test-to-code ratio**: 2.54:1 demonstrating thorough test coverage
+- **3,961 lines** of production code in `src/` (4,968 total with comments)
+- **10,107 lines** of test code in `tests/` (13,705 total with comments)
+- **Test-to-code ratio**: 2.55:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
@@ -308,6 +308,15 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and guid
 - [docs/rsign2-comparison.md](docs/rsign2-comparison.md) - Comparison with rsign2
 - [docs/2026-02-17-security-audit.md](docs/2026-02-17-security-audit.md) - Security audit (v1.3.1)
 - [CLAUDE.md](CLAUDE.md) - Quick reference for AI assistants
+
+### Security Audits
+
+Both audits were conducted on 2026-02-20 by static analysis against the `lb_rust` branch (commit `5f75f2c`), with all actionable findings remediated in the `security_audit` branch (merged at commit `679958e`).
+
+- [docs/2026-02-20-rust-security-audit.md](docs/2026-02-20-rust-security-audit.md) — Rust implementation audit with full C/Zig comparison (9 findings; all actioned)
+- [docs/2026-02-20-c-zig-security-audit.md](docs/2026-02-20-c-zig-security-audit.md) — C/Zig implementation audit (20 findings; 1 Critical, 4 High)
+
+**Summary:** The Rust implementation begins with zero Critical/High issues — Rust's type system, ownership model, and `zeroize`/`subtle` crates structurally eliminate the most severe C/Zig vulnerability classes (secret-material leakage, buffer overflows, timing side-channels). Post-remediation, only two informational items remain (RS-7: cache-line side-channel inherent to any multi-threaded design; RS-8: OS keyring API limitation).
 
 ## License
 
