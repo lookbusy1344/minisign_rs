@@ -72,6 +72,22 @@ Install with: `cargo install cargo-audit`
 
 After dependency updates, always run full test suite and audit.
 
+## Measuring Code Length
+
+Always use `tokei` for accurate line counts. Never estimate or use `wc -l`.
+
+```bash
+# Production code only
+tokei src/ --output json | jq '.Rust | {code, comments, total: (.code + .comments + .blanks)}'
+
+# Test code only
+tokei tests/ --output json | jq '.Rust | {code, comments, total: (.code + .comments + .blanks)}'
+```
+
+- **`code`** — non-blank, non-comment lines (use this as the headline figure)
+- **`total`** — code + comments + blanks (use this as "total with comments")
+- Update README.md whenever these figures change materially
+
 ## Refactoring Tools
 **Available tools for code refactoring:**
 - `rust-analyzer` - Installed via `rustup component add rust-analyzer`
