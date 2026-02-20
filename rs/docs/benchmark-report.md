@@ -122,6 +122,25 @@ All benchmarks use unencrypted keys (`-W`) to isolate signing/verification cost 
 
 5. **Practical impact:** All tested operations complete under 15 ms. The difference is imperceptible for interactive use.
 
+## Multi-File Parallel Benchmarks (Rust-only feature)
+
+C minisign has no multi-file mode; signing or verifying N files requires N separate process invocations. Rust accepts multiple files in one invocation and processes them in parallel via Rayon.
+
+The comparison below measures total wall time to process all files:
+- **C:** shell loop invoking the binary once per file
+- **Rust:** single invocation with all files, parallel execution
+
+| Operation           | C (sequential) | Rust (parallel) | Speedup |
+|---------------------|----------------|-----------------|---------|
+| Sign 100 × 100 KB   | 191.8 ms       | 10.3 ms         | 18.6x   |
+| Sign 10 × 10 MB     | 103.7 ms       | 16.2 ms         | 6.4x    |
+| Verify 100 × 100 KB | 183.9 ms       | 8.2 ms          | 22.4x   |
+| Verify 10 × 10 MB   | 102.1 ms       | 16.8 ms         | 6.1x    |
+
+User-time figures confirm both do equivalent total CPU work (e.g. 10 × 10 MB sign: C user=80ms, Rust user=76ms). The wall-time gap is entirely parallelism: Rayon distributes files across all available cores so hashing, signing, and I/O overlap across files simultaneously. Speedup scales with file count and saturates around core count.
+
+---
+
 ## Methodology
 
 - `hyperfine --shell=none` eliminates shell fork/exec overhead

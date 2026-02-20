@@ -281,7 +281,7 @@ codesign --force --sign "Developer ID Application: Your Name" target/release/min
 
 ## Performance & Memory
 
-**Performance:** Matches C minisign across all operations (≤8% variance, within noise); marginally faster on large-file signing and verification. See [Performance Benchmark Report](docs/benchmark-report.md).
+**Performance:** Matches C minisign on single-file operations (≤8% variance, within noise); marginally faster on large-file work. Multi-file signing and verification run in parallel via Rayon — up to **22x faster** than C's equivalent shell loop (e.g. 100 × 100KB files: 8ms vs 184ms). See [Performance Benchmark Report](docs/benchmark-report.md).
 
 **Binary size:** 1.1MB (vs C's 70KB) - larger binary for memory safety and zero C dependencies.
 
