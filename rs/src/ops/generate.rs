@@ -34,23 +34,9 @@ pub struct GenerateOptions<'a> {
     force_weak_kdf: bool,
 }
 
-/// Builder for `GenerateOptions`
-#[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct GenerateOptionsBuilder<'a> {
-    secret_key_file: &'a Path,
-    public_key_file: &'a Path,
-    comment: Option<&'a str>,
-    force: bool,
-    no_password: bool,
-    allow_kdf_fallback: bool,
-    force_weak_kdf: bool,
-}
-
-impl<'a> GenerateOptionsBuilder<'a> {
-    /// Create a new builder with required fields
+impl<'a> GenerateOptions<'a> {
     #[must_use]
-    pub const fn new(secret_key_file: &'a Path, public_key_file: &'a Path) -> Self {
+    pub const fn builder(secret_key_file: &'a Path, public_key_file: &'a Path) -> Self {
         Self {
             secret_key_file,
             public_key_file,
@@ -62,21 +48,23 @@ impl<'a> GenerateOptionsBuilder<'a> {
         }
     }
 
-    /// Set the comment for the key files
+    #[must_use]
+    pub const fn build(self) -> Self {
+        self
+    }
+
     #[must_use]
     pub const fn comment(mut self, comment: &'a str) -> Self {
         self.comment = Some(comment);
         self
     }
 
-    /// Enable force mode (overwrite existing files)
     #[must_use]
     pub const fn force(mut self, force: bool) -> Self {
         self.force = force;
         self
     }
 
-    /// Create unencrypted key (no password)
     #[must_use]
     pub const fn no_password(mut self, no_password: bool) -> Self {
         self.no_password = no_password;
@@ -93,40 +81,10 @@ impl<'a> GenerateOptionsBuilder<'a> {
     /// Force weak KDF parameters for testing (DEBUG ONLY)
     #[must_use]
     pub const fn force_weak_kdf(mut self, force: bool) -> Self {
+        #[cfg(not(debug_assertions))]
+        assert!(!force, "force_weak_kdf must be false in release builds");
         self.force_weak_kdf = force;
         self
-    }
-
-    /// Build the `GenerateOptions`
-    #[must_use]
-    pub const fn build(self) -> GenerateOptions<'a> {
-        // In release builds, force_weak_kdf must always be false
-        #[cfg(not(debug_assertions))]
-        assert!(
-            !self.force_weak_kdf,
-            "force_weak_kdf must be false in release builds"
-        );
-
-        GenerateOptions {
-            secret_key_file: self.secret_key_file,
-            public_key_file: self.public_key_file,
-            comment: self.comment,
-            force: self.force,
-            no_password: self.no_password,
-            allow_kdf_fallback: self.allow_kdf_fallback,
-            force_weak_kdf: self.force_weak_kdf,
-        }
-    }
-}
-
-impl<'a> GenerateOptions<'a> {
-    /// Create a builder for `GenerateOptions`
-    #[must_use]
-    pub const fn builder(
-        secret_key_file: &'a Path,
-        public_key_file: &'a Path,
-    ) -> GenerateOptionsBuilder<'a> {
-        GenerateOptionsBuilder::new(secret_key_file, public_key_file)
     }
 }
 
@@ -148,37 +106,32 @@ pub struct GenerateResult {
 }
 
 impl GenerateResult {
-    /// Get the path where the secret key was written
     #[must_use]
     pub fn secret_key_file(&self) -> &Path {
         &self.secret_key_file
     }
 
-    /// Get the path where the public key was written
     #[must_use]
     pub fn public_key_file(&self) -> &Path {
         &self.public_key_file
     }
 
-    /// Get the keynum in hexadecimal format
     #[must_use]
     pub fn keynum_hex(&self) -> &str {
         &self.keynum_hex
     }
 
-    /// Get the keynum in PGP Word List format (human-readable)
     #[must_use]
     pub fn keynum_words(&self) -> &str {
         &self.keynum_words
     }
 
-    /// Get the full public key in base64 format (for -P flag)
+    /// Full public key in base64 (for `-P` flag)
     #[must_use]
     pub fn public_key_base64(&self) -> &str {
         &self.public_key_base64
     }
 
-    /// Get the credential store lookup key
     #[must_use]
     pub fn credential_id(&self) -> &str {
         &self.credential_id

@@ -30,27 +30,22 @@ pub struct VerifyOptions<'a> {
     force_prehashed: bool,
 }
 
-/// Builder for `VerifyOptions`
-#[derive(Debug, Clone)]
-pub struct VerifyOptionsBuilder<'a> {
-    public_key: PublicKeySource<'a>,
-    signature_file: &'a Path,
-    message_file: &'a Path,
-    output: bool,
-    quiet: bool,
-    force_prehashed: bool,
-}
-
-impl<'a> VerifyOptionsBuilder<'a> {
-    /// Create a new builder with required fields
+impl<'a> VerifyOptions<'a> {
+    /// # Example
     ///
-    /// # Arguments
-    ///
-    /// * `public_key` - Public key (either from file or provided directly)
-    /// * `signature_file` - Path to the signature file
-    /// * `message_file` - Path to the message file
+    /// ```
+    /// # use minisign::ops::verify::{VerifyOptions, PublicKeySource};
+    /// # use std::path::Path;
+    /// let options = VerifyOptions::builder(
+    ///     PublicKeySource::File(Path::new("key.pub")),
+    ///     Path::new("message.txt.sig"),
+    ///     Path::new("message.txt")
+    /// )
+    /// .output(true)
+    /// .force_prehashed(true);
+    /// ```
     #[must_use]
-    pub const fn new(
+    pub const fn builder(
         public_key: PublicKeySource<'a>,
         signature_file: &'a Path,
         message_file: &'a Path,
@@ -65,88 +60,35 @@ impl<'a> VerifyOptionsBuilder<'a> {
         }
     }
 
-    /// Enable output mode (write verification result to stdout)
+    #[must_use]
+    pub const fn build(self) -> Self {
+        self
+    }
+
     #[must_use]
     pub const fn output(mut self, output: bool) -> Self {
         self.output = output;
         self
     }
 
-    /// Enable quiet mode (suppress output)
     #[must_use]
     pub const fn quiet(mut self, quiet: bool) -> Self {
         self.quiet = quiet;
         self
     }
 
-    /// Require prehashed signatures (reject legacy signatures)
+    /// Reject legacy (non-prehashed) signatures.
     #[must_use]
     pub const fn force_prehashed(mut self, force_prehashed: bool) -> Self {
         self.force_prehashed = force_prehashed;
         self
     }
 
-    /// Build the `VerifyOptions`
-    #[must_use]
-    pub const fn build(self) -> VerifyOptions<'a> {
-        VerifyOptions {
-            public_key: self.public_key,
-            signature_file: self.signature_file,
-            message_file: self.message_file,
-            output: self.output,
-            quiet: self.quiet,
-            force_prehashed: self.force_prehashed,
-        }
-    }
-}
-
-impl<'a> VerifyOptions<'a> {
-    /// Create a builder for `VerifyOptions`
-    ///
-    /// # Arguments
-    ///
-    /// * `public_key` - Public key (either from file or provided directly)
-    /// * `signature_file` - Path to the signature file
-    /// * `message_file` - Path to the message file
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use minisign::ops::verify::{VerifyOptions, PublicKeySource};
-    /// # use std::path::Path;
-    /// let options = VerifyOptions::builder(
-    ///     PublicKeySource::File(Path::new("key.pub")),
-    ///     Path::new("message.txt.sig"),
-    ///     Path::new("message.txt")
-    /// )
-    /// .output(true)
-    /// .force_prehashed(true)
-    /// .build();
-    /// ```
-    #[must_use]
-    pub const fn builder(
-        public_key: PublicKeySource<'a>,
-        signature_file: &'a Path,
-        message_file: &'a Path,
-    ) -> VerifyOptionsBuilder<'a> {
-        VerifyOptionsBuilder::new(public_key, signature_file, message_file)
-    }
-
     /// Create new verify options
     ///
     /// # Deprecated
     ///
-    /// Use [`VerifyOptions::builder`] instead for better ergonomics and to avoid
-    /// excessive boolean parameters.
-    ///
-    /// # Arguments
-    ///
-    /// * `public_key` - Public key (either from file or provided directly)
-    /// * `signature_file` - Path to the signature file
-    /// * `message_file` - Path to the message file
-    /// * `output` - Output verification result to stdout
-    /// * `quiet` - Quiet mode (no output)
-    /// * `force_prehashed` - Require prehashed signatures (reject legacy)
+    /// Use [`VerifyOptions::builder`] instead.
     #[deprecated(since = "1.3.0", note = "Use VerifyOptions::builder instead")]
     #[must_use]
     pub const fn new(
@@ -167,40 +109,19 @@ impl<'a> VerifyOptions<'a> {
         }
     }
 
-    /// Get the public key source
     #[must_use]
     pub const fn public_key(&self) -> &PublicKeySource<'a> {
         &self.public_key
     }
 
-    /// Get the signature file path
     #[must_use]
     pub const fn signature_file(&self) -> &Path {
         self.signature_file
     }
 
-    /// Get the message file path
     #[must_use]
     pub const fn message_file(&self) -> &Path {
         self.message_file
-    }
-
-    /// Get the output flag
-    #[must_use]
-    pub const fn output(&self) -> bool {
-        self.output
-    }
-
-    /// Get the quiet flag
-    #[must_use]
-    pub const fn quiet(&self) -> bool {
-        self.quiet
-    }
-
-    /// Get the `force_prehashed` flag
-    #[must_use]
-    pub const fn force_prehashed(&self) -> bool {
-        self.force_prehashed
     }
 }
 
@@ -230,25 +151,21 @@ pub struct VerifyResult {
 }
 
 impl VerifyResult {
-    /// Get the trusted comment from the signature
     #[must_use]
     pub fn trusted_comment(&self) -> &str {
         &self.trusted_comment
     }
 
-    /// Get the untrusted comment from the signature
     #[must_use]
     pub fn untrusted_comment(&self) -> &str {
         &self.untrusted_comment
     }
 
-    /// Get the key ID in base64 format
     #[must_use]
     pub fn key_id(&self) -> &str {
         &self.key_id
     }
 
-    /// Get the key ID in PGP Word List format (human-readable)
     #[must_use]
     pub fn key_id_words(&self) -> &str {
         &self.key_id_words
@@ -318,7 +235,7 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
         &pubkey,
         &sig_box,
         options.message_file(),
-        options.force_prehashed(),
+        options.force_prehashed,
     )?;
 
     // Verify the global signature (trusted comment binding)
@@ -455,7 +372,7 @@ fn verify_file_with_key(
     let sig_box = load_signature(&sig_file_path)?;
 
     // Verify the signature on the message
-    verify_message_signature(pubkey, &sig_box, message_file, options.force_prehashed())?;
+    verify_message_signature(pubkey, &sig_box, message_file, options.force_prehashed)?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
@@ -499,7 +416,7 @@ pub fn verify_multiple_files(
     if files.len() == 1 {
         let result =
             verify_file_with_key(&files[0], &load_public_key(options.public_key())?, options)?;
-        if !options.quiet() {
+        if !options.quiet {
             println!(
                 "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
                 files[0].display(),
@@ -515,7 +432,7 @@ pub fn verify_multiple_files(
     let pubkey = load_public_key(options.public_key())?;
 
     // Show key ID once at the top (like signing does)
-    if !options.quiet() {
+    if !options.quiet {
         let key_id = pubkey.keynum().to_key_id();
         let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
         println!("Verifying with key: {key_id} ({key_id_words})");
@@ -549,7 +466,7 @@ pub fn verify_multiple_files(
 fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &VerifyOptions<'_>) {
     match result {
         Ok(verify_result) => {
-            if !options.quiet() {
+            if !options.quiet {
                 println!(
                     "Verified: {}\n  Trusted comment: {}",
                     file.display(),
@@ -574,7 +491,7 @@ fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> R
     let success_count = results.len() - failures.len();
 
     if !failures.is_empty() {
-        if !options.quiet() {
+        if !options.quiet {
             eprintln!(
                 "\nSummary: {} verified, {} failed",
                 success_count,

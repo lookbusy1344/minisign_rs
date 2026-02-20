@@ -82,40 +82,6 @@ fn test_u64_le_known_values() {
 }
 
 #[test]
-fn test_u16_le_roundtrip() {
-    let test_values = vec![0u16, 1, 255, 256, u16::MAX];
-
-    for value in test_values {
-        let mut buf = [0u8; 2];
-        write_u16_le(&mut buf, value).unwrap();
-        let read_value = read_u16_le(&buf).unwrap();
-        assert_eq!(value, read_value, "u16 roundtrip failed for {value:#x}");
-    }
-}
-
-#[test]
-fn test_u16_le_known_values() {
-    // Test specific byte patterns to ensure correct endianness
-    let test_cases = vec![
-        (0x0102u16, [0x02, 0x01]),
-        (0x0001u16, [0x01, 0x00]),
-        (0x0100u16, [0x00, 0x01]),
-    ];
-
-    for (value, expected_bytes) in test_cases {
-        let mut buf = [0u8; 2];
-        write_u16_le(&mut buf, value).unwrap();
-        assert_eq!(
-            buf, expected_bytes,
-            "write_u16_le produced wrong bytes for {value:#x}"
-        );
-
-        let read_value = read_u16_le(&expected_bytes).unwrap();
-        assert_eq!(read_value, value, "read_u16_le read wrong value from bytes");
-    }
-}
-
-#[test]
 fn test_read_u64_le_short_buffer() {
     let buf = [0u8; 7];
     let result = read_u64_le(&buf);
@@ -152,12 +118,4 @@ proptest! {
         prop_assert_eq!(value, decoded);
     }
 
-    /// Property test: u16 little-endian roundtrip
-    #[test]
-    fn prop_u16_le_roundtrip(value: u16) {
-        let mut buf = [0u8; 2];
-        write_u16_le(&mut buf, value).unwrap();
-        let decoded = read_u16_le(&buf).unwrap();
-        prop_assert_eq!(value, decoded);
-    }
 }

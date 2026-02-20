@@ -159,10 +159,7 @@ fn test_recreate_wrong_password_fails() {
     let result = recreate(&options, Some(b"wrongpassword"));
     assert!(result.is_err());
     // Wrong password results in checksum failure when decrypting
-    assert!(matches!(
-        result.unwrap_err(),
-        Error::DecryptionFailed | Error::ChecksumFailed
-    ));
+    assert!(matches!(result.unwrap_err(), Error::ChecksumFailed));
 }
 
 #[test]

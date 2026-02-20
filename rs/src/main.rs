@@ -98,22 +98,14 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         false
     };
 
-    let mut builder = GenerateOptions::builder(secret_key_file, public_key_file);
+    let mut builder = GenerateOptions::builder(secret_key_file, public_key_file)
+        .force(cli.force)
+        .no_password(cli.no_password)
+        .allow_kdf_fallback(cli.allow_kdf_fallback)
+        .force_weak_kdf(force_weak_kdf);
 
     if let Some(comment) = comment {
         builder = builder.comment(comment);
-    }
-    if cli.force {
-        builder = builder.force(true);
-    }
-    if cli.no_password {
-        builder = builder.no_password(true);
-    }
-    if cli.allow_kdf_fallback {
-        builder = builder.allow_kdf_fallback(true);
-    }
-    if force_weak_kdf {
-        builder = builder.force_weak_kdf(true);
     }
 
     let options = builder.build();
@@ -171,16 +163,17 @@ fn handle_generate(cli: &Cli) -> Result<()> {
 /// Get password for a key: check credential store first, then prompt
 fn get_password_with_credential_store(
     key_id: &str,
+    prompt: &str,
     quiet: bool,
     password_file: Option<&std::path::Path>,
-) -> Result<Option<Zeroizing<String>>> {
+) -> Result<Zeroizing<String>> {
     if let Some(saved_pwd) = minisign::credential_store::get_password(key_id) {
         if !quiet {
             eprintln!("Using saved password from credential store");
         }
-        Ok(Some(saved_pwd))
+        Ok(saved_pwd)
     } else {
-        Ok(Some(prompt_password("Password: ", password_file)?))
+        prompt_password(prompt, password_file)
     }
 }
 
@@ -252,7 +245,12 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     let password = if cli.no_password {
         None
     } else {
-        get_password_with_credential_store(&credential_id, cli.quiet, cli.password_file.as_deref())?
+        Some(get_password_with_credential_store(
+            &credential_id,
+            "Password: ",
+            cli.quiet,
+            cli.password_file.as_deref(),
+        )?)
     };
 
     // Display working message for signing operation
@@ -287,6 +285,17 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
+/// Apply common CLI flags to a `SignOptions` builder chain
+fn apply_sign_options<'a>(mut builder: SignOptions<'a>, cli: &'a Cli) -> SignOptions<'a> {
+    if let Some(comment) = cli.trusted_comment.as_deref() {
+        builder = builder.trusted_comment(comment);
+    }
+    if let Some(comment) = cli.untrusted_comment.as_deref() {
+        builder = builder.untrusted_comment(comment);
+    }
+    builder.force(cli.force).quiet(cli.quiet)
+}
+
 /// Handle signing a single file
 fn handle_sign_single(
     cli: &Cli,
@@ -300,24 +309,13 @@ fn handle_sign_single(
     let default_signature = Cli::default_signature_path(message_file)?;
     let signature_file = cli.signature_file.as_ref().unwrap_or(&default_signature);
 
-    let mut builder = SignOptions::builder(secret_key_file, message_file)
-        .signature_file(signature_file)
-        .prehashed(prehashed);
-
-    if let Some(comment) = cli.trusted_comment.as_deref() {
-        builder = builder.trusted_comment(comment);
-    }
-    if let Some(comment) = cli.untrusted_comment.as_deref() {
-        builder = builder.untrusted_comment(comment);
-    }
-    if cli.force {
-        builder = builder.force(true);
-    }
-    if cli.quiet {
-        builder = builder.quiet(true);
-    }
-
-    let options = builder.build();
+    let options = apply_sign_options(
+        SignOptions::builder(secret_key_file, message_file)
+            .signature_file(signature_file)
+            .prehashed(prehashed),
+        cli,
+    )
+    .build();
 
     // Use sign_with_key to avoid redundant file load
     let result = sign_with_key(
@@ -356,23 +354,11 @@ fn handle_sign_multiple(
         ));
     }
 
-    let mut builder =
-        SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(prehashed);
-
-    if let Some(comment) = cli.trusted_comment.as_deref() {
-        builder = builder.trusted_comment(comment);
-    }
-    if let Some(comment) = cli.untrusted_comment.as_deref() {
-        builder = builder.untrusted_comment(comment);
-    }
-    if cli.force {
-        builder = builder.force(true);
-    }
-    if cli.quiet {
-        builder = builder.quiet(true);
-    }
-
-    let options = builder.build();
+    let options = apply_sign_options(
+        SignOptions::builder(secret_key_file, std::path::Path::new("")).prehashed(prehashed),
+        cli,
+    )
+    .build();
 
     sign_multiple_files(
         message_files,
@@ -506,14 +492,12 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     // Get password: check credential store first, then prompt if needed
     let password = if seckey.is_encrypted() {
         let credential_id = seckey.credential_id();
-        if let Some(saved_pwd) = minisign::credential_store::get_password(&credential_id) {
-            if !cli.quiet {
-                eprintln!("Using saved password from credential store");
-            }
-            Some(saved_pwd)
-        } else {
-            Some(prompt_password("Password: ", cli.password_file.as_deref())?)
-        }
+        Some(get_password_with_credential_store(
+            &credential_id,
+            "Password: ",
+            cli.quiet,
+            cli.password_file.as_deref(),
+        )?)
     } else {
         None
     };
@@ -568,17 +552,12 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     // Get current password: check credential store first, then prompt if needed
     let current_password = if seckey.is_encrypted() {
-        if let Some(saved_pwd) = minisign::credential_store::get_password(&old_credential_id) {
-            if !cli.quiet {
-                eprintln!("Using saved password from credential store");
-            }
-            Some(saved_pwd)
-        } else {
-            Some(prompt_password(
-                "Current password: ",
-                cli.password_file.as_deref(),
-            )?)
-        }
+        Some(get_password_with_credential_store(
+            &old_credential_id,
+            "Current password: ",
+            cli.quiet,
+            cli.password_file.as_deref(),
+        )?)
     } else {
         None
     };
@@ -600,19 +579,11 @@ fn handle_change(cli: &Cli) -> Result<()> {
         false
     };
 
-    let mut builder = ChangeOptions::builder(secret_key_file);
-
-    if cli.no_password && new_password.is_none() {
-        builder = builder.remove_password(true);
-    }
-    if cli.allow_kdf_fallback {
-        builder = builder.allow_kdf_fallback(true);
-    }
-    if force_weak_kdf {
-        builder = builder.force_weak_kdf(true);
-    }
-
-    let options = builder.build();
+    let options = ChangeOptions::builder(secret_key_file)
+        .remove_password(cli.no_password && new_password.is_none())
+        .allow_kdf_fallback(cli.allow_kdf_fallback)
+        .force_weak_kdf(force_weak_kdf)
+        .build();
 
     let result = change(
         &options,
@@ -625,23 +596,13 @@ fn handle_change(cli: &Cli) -> Result<()> {
         let _ = minisign::credential_store::forget_password(&old_credential_id);
     }
 
-    // Save new password to credential store if requested
-    if cli.save_password {
-        if let Some(pwd) = &new_password {
-            match minisign::credential_store::save_password(result.credential_id(), pwd) {
-                Ok(()) => {
-                    if !cli.quiet {
-                        eprintln!("Password saved to OS credential store");
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to save password to credential store: {e}");
-                }
-            }
-        } else {
-            eprintln!("Warning: --save-password ignored (key has no password)");
-        }
-    }
+    save_password_to_credential_store(
+        result.credential_id(),
+        new_password.as_ref(),
+        cli.save_password,
+        cli.quiet,
+        None,
+    );
 
     if !cli.quiet {
         println!(
@@ -812,15 +773,12 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         let credential_id = seckey.credential_id();
 
         // Try credential store first, then prompt if needed
-        let password =
-            if let Some(saved_pwd) = minisign::credential_store::get_password(&credential_id) {
-                if !cli.quiet {
-                    eprintln!("Using saved password from credential store");
-                }
-                saved_pwd
-            } else {
-                prompt_password("Password: ", cli.password_file.as_deref())?
-            };
+        let password = get_password_with_credential_store(
+            &credential_id,
+            "Password: ",
+            cli.quiet,
+            cli.password_file.as_deref(),
+        )?;
 
         result = inspect_private_with_key(&seckey, password.as_bytes())?;
         decrypted = true;

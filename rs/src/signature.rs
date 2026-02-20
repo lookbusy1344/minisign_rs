@@ -102,13 +102,11 @@ impl SigStruct {
         }
     }
 
-    /// Get whether this is a prehashed signature
     #[must_use]
     pub const fn is_prehashed(&self) -> bool {
         self.prehashed
     }
 
-    /// Get the signature algorithm
     #[must_use]
     pub const fn algorithm(&self) -> SignatureAlgorithm {
         if self.prehashed {
@@ -118,13 +116,11 @@ impl SigStruct {
         }
     }
 
-    /// Get the key number
     #[must_use]
     pub const fn keynum(&self) -> &KeyNum {
         &self.keynum
     }
 
-    /// Get the signature
     #[must_use]
     pub const fn signature(&self) -> &Signature {
         &self.signature
@@ -270,25 +266,21 @@ impl SignatureBox {
         })
     }
 
-    /// Get the untrusted comment
     #[must_use]
     pub fn untrusted_comment(&self) -> &str {
         &self.untrusted_comment
     }
 
-    /// Get the signature structure
     #[must_use]
     pub const fn sig_struct(&self) -> &SigStruct {
         &self.sig_struct
     }
 
-    /// Get the trusted comment
     #[must_use]
     pub fn trusted_comment(&self) -> &str {
         &self.trusted_comment
     }
 
-    /// Get the global signature
     #[must_use]
     pub const fn global_signature(&self) -> &Signature {
         &self.global_signature

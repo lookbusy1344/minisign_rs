@@ -54,42 +54,11 @@ pub struct InspectOptions<'a> {
 }
 
 impl<'a> InspectOptions<'a> {
-    /// Create new inspect options
-    ///
-    /// # Arguments
-    ///
-    /// * `key_file` - Path to the key file (can be secret or public key)
     #[must_use]
     pub const fn new(key_file: &'a Path) -> Self {
         Self { key_file }
     }
 
-    /// Get the key file path
-    #[must_use]
-    pub const fn key_file(&self) -> &Path {
-        self.key_file
-    }
-}
-
-/// Options for inspecting an encrypted private key (with decryption)
-#[derive(Debug, Clone)]
-pub struct InspectPrivateOptions<'a> {
-    /// Path to the secret key file
-    key_file: &'a Path,
-}
-
-impl<'a> InspectPrivateOptions<'a> {
-    /// Create new inspect private options
-    ///
-    /// # Arguments
-    ///
-    /// * `key_file` - Path to the secret key file
-    #[must_use]
-    pub const fn new(key_file: &'a Path) -> Self {
-        Self { key_file }
-    }
-
-    /// Get the key file path
     #[must_use]
     pub const fn key_file(&self) -> &Path {
         self.key_file
@@ -244,11 +213,8 @@ pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
 /// - The file cannot be read
 /// - The file is not a valid key
 /// - For encrypted keys: password is incorrect or decryption fails
-pub fn inspect_private(
-    options: &InspectPrivateOptions<'_>,
-    password: &[u8],
-) -> Result<InspectResult> {
-    let contents = fs::read_to_string(options.key_file())
+pub fn inspect_private(key_file: &Path, password: &[u8]) -> Result<InspectResult> {
+    let contents = fs::read_to_string(key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first

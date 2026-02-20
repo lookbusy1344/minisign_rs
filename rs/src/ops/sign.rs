@@ -12,14 +12,10 @@ use crate::{
         COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
         TRUSTEDCOMMENTMAXBYTES,
     },
-    validation::{validate_comment_with_length, validate_windows_path},
+    validation::validate_comment_with_length,
 };
 use rayon::prelude::*;
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 /// Default untrusted comment for signatures
 const DEFAULT_UNTRUSTED_COMMENT: &str = "signature from minisign secret key";
@@ -45,28 +41,22 @@ pub struct SignOptions<'a> {
     quiet: bool,
 }
 
-/// Builder for `SignOptions`
-#[derive(Debug, Clone)]
-pub struct SignOptionsBuilder<'a> {
-    secret_key_file: &'a Path,
-    message_file: &'a Path,
-    signature_file: Option<&'a Path>,
-    prehashed: bool,
-    trusted_comment: Option<&'a str>,
-    untrusted_comment: Option<&'a str>,
-    force: bool,
-    quiet: bool,
-}
-
-impl<'a> SignOptionsBuilder<'a> {
-    /// Create a new builder with required fields
+impl<'a> SignOptions<'a> {
+    /// # Example
     ///
-    /// # Arguments
-    ///
-    /// * `secret_key_file` - Path to the secret key file
-    /// * `message_file` - Path to the message file
+    /// ```
+    /// # use minisign::ops::sign::SignOptions;
+    /// # use std::path::Path;
+    /// let options = SignOptions::builder(
+    ///     Path::new("secret.key"),
+    ///     Path::new("message.txt")
+    /// )
+    /// .prehashed(true)
+    /// .trusted_comment("timestamp:12345")
+    /// .force(true);
+    /// ```
     #[must_use]
-    pub const fn new(secret_key_file: &'a Path, message_file: &'a Path) -> Self {
+    pub const fn builder(secret_key_file: &'a Path, message_file: &'a Path) -> Self {
         Self {
             secret_key_file,
             message_file,
@@ -79,159 +69,56 @@ impl<'a> SignOptionsBuilder<'a> {
         }
     }
 
-    /// Set the signature file path
+    #[must_use]
+    pub const fn build(self) -> Self {
+        self
+    }
+
     #[must_use]
     pub const fn signature_file(mut self, path: &'a Path) -> Self {
         self.signature_file = Some(path);
         self
     }
 
-    /// Set prehashed mode
-    ///
-    /// Default: true (matches C minisign behavior)
+    /// Default: `true` (matches C minisign behavior)
     #[must_use]
     pub const fn prehashed(mut self, prehashed: bool) -> Self {
         self.prehashed = prehashed;
         self
     }
 
-    /// Set the trusted comment
     #[must_use]
     pub const fn trusted_comment(mut self, comment: &'a str) -> Self {
         self.trusted_comment = Some(comment);
         self
     }
 
-    /// Set the untrusted comment
     #[must_use]
     pub const fn untrusted_comment(mut self, comment: &'a str) -> Self {
         self.untrusted_comment = Some(comment);
         self
     }
 
-    /// Enable force mode (overwrite existing files)
     #[must_use]
     pub const fn force(mut self, force: bool) -> Self {
         self.force = force;
         self
     }
 
-    /// Enable quiet mode (suppress output)
     #[must_use]
     pub const fn quiet(mut self, quiet: bool) -> Self {
         self.quiet = quiet;
         self
     }
 
-    /// Build the `SignOptions`
-    #[must_use]
-    pub const fn build(self) -> SignOptions<'a> {
-        SignOptions {
-            secret_key_file: self.secret_key_file,
-            message_file: self.message_file,
-            signature_file: self.signature_file,
-            prehashed: self.prehashed,
-            trusted_comment: self.trusted_comment,
-            untrusted_comment: self.untrusted_comment,
-            force: self.force,
-            quiet: self.quiet,
-        }
-    }
-}
-
-impl<'a> SignOptions<'a> {
-    /// Create a builder for `SignOptions`
-    ///
-    /// # Arguments
-    ///
-    /// * `secret_key_file` - Path to the secret key file
-    /// * `message_file` - Path to the message file
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use minisign::ops::sign::SignOptions;
-    /// # use std::path::Path;
-    /// let options = SignOptions::builder(
-    ///     Path::new("secret.key"),
-    ///     Path::new("message.txt")
-    /// )
-    /// .prehashed(true)
-    /// .trusted_comment("timestamp:12345")
-    /// .force(true)
-    /// .build();
-    /// ```
-    #[must_use]
-    pub const fn builder(
-        secret_key_file: &'a Path,
-        message_file: &'a Path,
-    ) -> SignOptionsBuilder<'a> {
-        SignOptionsBuilder::new(secret_key_file, message_file)
-    }
-
-    /// Create new sign options (deprecated, use `builder()` instead)
-    ///
-    /// This method is deprecated to avoid excessive boolean parameters.
-    /// Use the builder pattern instead for better API clarity.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use minisign::ops::sign::SignOptions;
-    /// # use std::path::Path;
-    /// let options = SignOptions::builder(
-    ///     Path::new("secret.key"),
-    ///     Path::new("message.txt")
-    /// )
-    /// .prehashed(true)
-    /// .build();
-    /// ```
-    /// Get the secret key file path
     #[must_use]
     pub const fn secret_key_file(&self) -> &Path {
         self.secret_key_file
     }
 
-    /// Get the message file path
     #[must_use]
     pub const fn message_file(&self) -> &Path {
         self.message_file
-    }
-
-    /// Get the signature file path
-    #[must_use]
-    pub const fn signature_file(&self) -> Option<&Path> {
-        self.signature_file
-    }
-
-    /// Get the prehashed flag
-    #[must_use]
-    pub const fn prehashed(&self) -> bool {
-        self.prehashed
-    }
-
-    /// Get the trusted comment
-    #[must_use]
-    pub const fn trusted_comment(&self) -> Option<&str> {
-        self.trusted_comment
-    }
-
-    /// Get the untrusted comment
-    #[must_use]
-    pub const fn untrusted_comment(&self) -> Option<&str> {
-        self.untrusted_comment
-    }
-
-    /// Get the force flag
-    #[must_use]
-    pub const fn force(&self) -> bool {
-        self.force
-    }
-
-    /// Get the quiet flag
-    #[must_use]
-    pub const fn quiet(&self) -> bool {
-        self.quiet
     }
 }
 
@@ -249,25 +136,21 @@ pub struct SignResult {
 }
 
 impl SignResult {
-    /// Get the path where the signature was written
     #[must_use]
     pub fn signature_file(&self) -> &Path {
         &self.signature_file
     }
 
-    /// Get the trusted comment used
     #[must_use]
     pub fn trusted_comment(&self) -> &str {
         &self.trusted_comment
     }
 
-    /// Get the key ID in base64 format
     #[must_use]
     pub fn key_id(&self) -> &str {
         &self.key_id
     }
 
-    /// Get the key ID in PGP Word List format (human-readable)
     #[must_use]
     pub fn key_id_words(&self) -> &str {
         &self.key_id_words
@@ -302,7 +185,7 @@ fn sign_file_with_key(
     keynum: crate::crypto::KeyNum,
     options: &SignOptions<'_>,
 ) -> Result<SignResult> {
-    let sig_file_path = options.signature_file().map_or_else(
+    let sig_file_path = options.signature_file.map_or_else(
         || {
             // Append .minisig extension using OsString to handle non-UTF8 paths correctly
             let mut path = message_file.as_os_str().to_os_string();
@@ -316,13 +199,13 @@ fn sign_file_with_key(
         secret_key,
         keynum,
         message_file,
-        options.prehashed(),
-        options.trusted_comment(),
-        options.untrusted_comment(),
+        options.prehashed,
+        options.trusted_comment,
+        options.untrusted_comment,
     )?;
 
     let sig_contents = sig_box.to_file_contents();
-    write_signature_file(&sig_file_path, &sig_contents, options.force())?;
+    write_signature_file(&sig_file_path, &sig_contents, options.force)?;
 
     let key_id = keynum.to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(&keynum);
@@ -497,7 +380,7 @@ pub fn sign_multiple_files(
     let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password)?;
 
     // Show key ID once at the top (like verification does)
-    if !options.quiet() {
+    if !options.quiet {
         let key_id = keynum.to_key_id();
         let key_id_words = crate::wordlist::keynum_to_words(&keynum);
         println!("Signing with key: {key_id} ({key_id_words})");
@@ -531,7 +414,7 @@ pub fn sign_multiple_files(
 fn report_file_result(file: &Path, result: &Result<SignResult>, options: &SignOptions<'_>) {
     match result {
         Ok(_) => {
-            if !options.quiet() {
+            if !options.quiet {
                 println!("Signed: {} → {}.minisig", file.display(), file.display());
             }
         }
@@ -554,7 +437,7 @@ fn print_summary(results: &[FileSignResult], options: &SignOptions<'_>) -> Resul
     if !failures.is_empty() {
         // Only print summary in non-quiet mode
         // Individual errors are already reported by report_file_result
-        if !options.quiet() {
+        if !options.quiet {
             eprintln!(
                 "\nSummary: {} signed, {} failed",
                 success_count,
@@ -695,49 +578,4 @@ pub fn generate_default_trusted_comment() -> String {
     format!("timestamp:{timestamp}")
 }
 
-/// Write signature file with atomic creation
-///
-/// This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions by using
-/// `create_new(true)`, which atomically creates the file only if it doesn't exist.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File already exists (when force is false)
-/// - File cannot be created or written
-///
-/// # Note
-///
-/// This function is public for unit testing purposes but is not part of the stable API.
-pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    // Validate path doesn't use Windows reserved names
-    validate_windows_path(path)?;
-
-    let mut options = OpenOptions::new();
-    options.write(true);
-
-    if force {
-        // Force mode: create or truncate existing file
-        options.create(true).truncate(true);
-    } else {
-        // Normal mode: fail if file already exists (atomic check)
-        options.create_new(true);
-    }
-
-    let mut file = options.open(path).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            Error::FileExists(path.into())
-        } else {
-            Error::file_write(path, e)
-        }
-    })?;
-
-    file.write_all(contents.as_bytes())
-        .map_err(|e| Error::file_write(path, e))?;
-
-    // H4: Ensure durability - sync to disk before returning success
-    // Matches behavior of write_secret_key_file() and write_public_key_file()
-    file.sync_all().map_err(|e| Error::file_write(path, e))?;
-
-    Ok(())
-}
+pub use super::file_utils::write_signature_file;

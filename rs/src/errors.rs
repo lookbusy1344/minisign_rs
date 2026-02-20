@@ -70,9 +70,6 @@ pub enum Error {
     #[error("checksum verification failed")]
     ChecksumFailed,
 
-    #[error("decryption failed: wrong password")]
-    DecryptionFailed,
-
     // Credential store errors
     #[error("credential store operation failed: {0}")]
     CredentialStoreError(String),
