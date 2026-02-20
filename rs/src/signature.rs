@@ -303,10 +303,14 @@ impl SignatureBox {
             )));
         }
 
-        // Line 1: untrusted comment
+        // Line 1: untrusted comment — prefix is required, matching C minisign behaviour
         let untrusted_comment = lines[0]
             .strip_prefix("untrusted comment: ")
-            .unwrap_or(lines[0])
+            .ok_or_else(|| {
+                Error::InvalidSignatureFormat(
+                    "untrusted comment must start with \"untrusted comment: \"".to_string(),
+                )
+            })?
             .to_string();
 
         // Validate untrusted comment for printability and embedded carriage returns

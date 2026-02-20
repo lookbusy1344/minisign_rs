@@ -104,6 +104,19 @@ fn test_signature_box_global_signature_verification() {
     assert!(sig_box.verify_global_signature(&wrong_key).is_err());
 }
 #[test]
+fn test_signature_box_rejects_missing_untrusted_comment_prefix() {
+    // Line 1 is missing the required "untrusted comment: " prefix
+    let contents = "no prefix here\nbase64data\ntrusted comment: tc\nglobalsig";
+    let result = SignatureBox::from_file_contents(contents);
+    assert!(
+        matches!(
+            result,
+            Err(minisign::errors::Error::InvalidSignatureFormat(_))
+        ),
+        "missing untrusted comment prefix must return InvalidSignatureFormat"
+    );
+}
+#[test]
 fn test_signature_box_invalid_wrong_line_count() {
     let contents = "line1\nline2\nline3";
     let result = SignatureBox::from_file_contents(contents);
