@@ -572,8 +572,11 @@ pub fn generate_default_trusted_comment() -> String {
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .unwrap_or_else(|_| {
+            eprintln!("Warning: system clock is before UNIX epoch, using timestamp 0");
+            std::time::Duration::ZERO
+        })
+        .as_secs();
 
     format!("timestamp:{timestamp}")
 }
