@@ -73,9 +73,18 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
     }
 
     #[cfg(unix)]
-    if let Some(mode) = unix_mode {
+    {
         use std::os::unix::fs::OpenOptionsExt;
-        options.mode(mode);
+        if let Some(mode) = unix_mode {
+            options.mode(mode);
+        }
+        if force {
+            // O_NOFOLLOW prevents following symlinks in the final path component.
+            // Without this, create(true).truncate(true) would silently clobber a
+            // symlink's target. The non-force path uses create_new(true) which
+            // implies O_EXCL, so symlinks are already rejected there.
+            options.custom_flags(libc::O_NOFOLLOW);
+        }
     }
 
     let mut file = options.open(path).map_err(|e| {
