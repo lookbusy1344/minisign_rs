@@ -27,7 +27,7 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - **ZERO unsafe code**
 - **ZERO clippy warnings** (pedantic mode)
 - **Write tests BEFORE code** (TDD required)
-- **Run ALL checks before committing** (see below)
+- **Run ALL checks before committing**
 - All secrets use `Zeroize` + `ZeroizeOnDrop`
 - No `.unwrap()`/`.expect()` in production paths
 - Use `?` operator for errors
@@ -53,16 +53,6 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - **Prefer builder pattern** for structs with 3+ params or multiple booleans (saved 452 lines in commit 17c648d)
 - Never use `#[allow(clippy::fn_params_excessive_bools)]` - use builder instead
 
-## Pre-Commit Checklist
-**ALWAYS run in this exact order before committing:**
-```bash
-cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
-cargo fmt                     # REQUIRED: Always run AFTER clippy, BEFORE commit
-cargo test                    # Fast tests (~9s)
-cargo test -- --ignored       # Slow security tests (~16s)
-```
-**Note:** `cargo fmt` MUST be the last formatting step before commit to ensure consistent style.
-
 ## Security Auditing
 **Run periodically (weekly or before releases):**
 ```bash
@@ -72,36 +62,10 @@ Install with: `cargo install cargo-audit`
 
 After dependency updates, always run full test suite and audit.
 
-## Measuring Code Length
-
-Always use `tokei` for accurate line counts. Never estimate or use `wc -l`.
-
-```bash
-# Production code only
-tokei src/ --output json | jq '.Rust | {code, comments, total: (.code + .comments + .blanks)}'
-
-# Test code only
-tokei tests/ --output json | jq '.Rust | {code, comments, total: (.code + .comments + .blanks)}'
-```
-
-- **`code`** — non-blank, non-comment lines (use this as the headline figure)
-- **`total`** — code + comments + blanks (use this as "total with comments")
-- Update README.md whenever these figures change materially
-
 ## Refactoring Tools
 **Available tools for code refactoring:**
 - `rust-analyzer` - Installed via `rustup component add rust-analyzer`
 - `ast-grep` - Installed via `cargo install ast-grep`
-
-## Testing
-
-**Run before committing:**
-```bash
-cargo test --no-default-features           # Fast tests (~9s)
-cargo test --no-default-features -- --ignored  # Slow tests (~16s)
-```
-
-See [docs/TESTING.md](docs/TESTING.md) for complete testing guide.
 
 ## Documentation
 
