@@ -34,23 +34,9 @@ pub struct GenerateOptions<'a> {
     force_weak_kdf: bool,
 }
 
-/// Builder for `GenerateOptions`
-#[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct GenerateOptionsBuilder<'a> {
-    secret_key_file: &'a Path,
-    public_key_file: &'a Path,
-    comment: Option<&'a str>,
-    force: bool,
-    no_password: bool,
-    allow_kdf_fallback: bool,
-    force_weak_kdf: bool,
-}
-
-impl<'a> GenerateOptionsBuilder<'a> {
-    /// Create a new builder with required fields
+impl<'a> GenerateOptions<'a> {
     #[must_use]
-    pub const fn new(secret_key_file: &'a Path, public_key_file: &'a Path) -> Self {
+    pub const fn builder(secret_key_file: &'a Path, public_key_file: &'a Path) -> Self {
         Self {
             secret_key_file,
             public_key_file,
@@ -60,6 +46,11 @@ impl<'a> GenerateOptionsBuilder<'a> {
             allow_kdf_fallback: false,
             force_weak_kdf: false,
         }
+    }
+
+    #[must_use]
+    pub const fn build(self) -> Self {
+        self
     }
 
     #[must_use]
@@ -90,40 +81,10 @@ impl<'a> GenerateOptionsBuilder<'a> {
     /// Force weak KDF parameters for testing (DEBUG ONLY)
     #[must_use]
     pub const fn force_weak_kdf(mut self, force: bool) -> Self {
+        #[cfg(not(debug_assertions))]
+        assert!(!force, "force_weak_kdf must be false in release builds");
         self.force_weak_kdf = force;
         self
-    }
-
-    /// Build the `GenerateOptions`
-    #[must_use]
-    pub const fn build(self) -> GenerateOptions<'a> {
-        // In release builds, force_weak_kdf must always be false
-        #[cfg(not(debug_assertions))]
-        assert!(
-            !self.force_weak_kdf,
-            "force_weak_kdf must be false in release builds"
-        );
-
-        GenerateOptions {
-            secret_key_file: self.secret_key_file,
-            public_key_file: self.public_key_file,
-            comment: self.comment,
-            force: self.force,
-            no_password: self.no_password,
-            allow_kdf_fallback: self.allow_kdf_fallback,
-            force_weak_kdf: self.force_weak_kdf,
-        }
-    }
-}
-
-impl<'a> GenerateOptions<'a> {
-    /// Create a builder for `GenerateOptions`
-    #[must_use]
-    pub const fn builder(
-        secret_key_file: &'a Path,
-        public_key_file: &'a Path,
-    ) -> GenerateOptionsBuilder<'a> {
-        GenerateOptionsBuilder::new(secret_key_file, public_key_file)
     }
 }
 

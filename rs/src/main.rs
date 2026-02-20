@@ -1,7 +1,7 @@
 use clap::Parser;
 use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
 use minisign::ops::file_utils::load_secret_key;
-use minisign::ops::sign::{SignOptionsBuilder, sign_multiple_files};
+use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
     Error, Result,
@@ -285,11 +285,8 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-/// Apply common CLI flags to a `SignOptionsBuilder`
-fn apply_sign_options<'a>(
-    mut builder: SignOptionsBuilder<'a>,
-    cli: &'a Cli,
-) -> SignOptionsBuilder<'a> {
+/// Apply common CLI flags to a `SignOptions` builder chain
+fn apply_sign_options<'a>(mut builder: SignOptions<'a>, cli: &'a Cli) -> SignOptions<'a> {
     if let Some(comment) = cli.trusted_comment.as_deref() {
         builder = builder.trusted_comment(comment);
     }
