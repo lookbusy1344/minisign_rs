@@ -1042,6 +1042,7 @@ dependencies = [
  "hex",
  "itertools",
  "keyring",
+ "libc",
  "predicates",
  "proptest",
  "rand 0.8.5",
