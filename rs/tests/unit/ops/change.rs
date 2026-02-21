@@ -3,8 +3,12 @@
 use minisign::{
     crypto::generate_keypair,
     errors::Error,
-    keys::SeckeyStruct,
-    ops::change::{ChangeOptions, change_with_log_n},
+    keys::{PubkeyStruct, SeckeyStruct},
+    ops::{
+        change::{ChangeOptions, change_with_log_n},
+        sign::create_signature,
+        verify::verify_message_signature,
+    },
 };
 use rand::Rng;
 use std::fs;
@@ -315,4 +319,75 @@ fn test_change_password_with_force_weak_kdf() {
     let (_sk, _kn) = new_seckey
         .decrypt(new_password)
         .expect("should decrypt with new password");
+}
+
+#[test]
+fn test_change_password_then_sign_verify_roundtrip() {
+    // P6.4: Exercises the full lifecycle: generate → change password → sign → verify.
+    // Ensures re-encryption preserves the key material so signatures produced after
+    // the change are still accepted by the matching public key.
+    const LOG_N: u8 = 14;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Generate a key with fast KDF parameters (log_n=14, ~50ms)
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let old_password = b"initial-password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+    let n = 1u64 << LOG_N;
+    let r = 8u64;
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        old_password,
+        kdf_salt,
+        4 * n * r,   // kdf_opslimit
+        128 * n * r, // kdf_memlimit
+        false,
+    )
+    .unwrap();
+
+    let sk_path = temp_dir.path().join("key.key");
+    fs::write(&sk_path, seckey.to_file_contents("roundtrip test")).unwrap();
+
+    // Change password (re-encrypts with the same fast KDF parameters)
+    let new_password = b"changed-password";
+    let change_options = ChangeOptions::builder(sk_path.as_path()).build();
+    change_with_log_n(
+        &change_options,
+        Some(old_password),
+        Some(new_password),
+        LOG_N,
+    )
+    .expect("password change should succeed");
+
+    // Sign a message file using the re-encrypted key
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"test message for roundtrip").unwrap();
+
+    let sig_box = {
+        let sk_contents = fs::read_to_string(&sk_path).unwrap();
+        let re_encrypted_seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
+        let (decrypted_sk, decrypted_kn) = re_encrypted_seckey
+            .decrypt(new_password)
+            .expect("should decrypt with new password");
+        create_signature(
+            &decrypted_sk,
+            decrypted_kn,
+            &message_path,
+            false,
+            Some("roundtrip"),
+            None,
+        )
+        .expect("signing with re-encrypted key should succeed")
+    };
+
+    // Verify the signature against the original public key
+    let pubkey_struct = PubkeyStruct::new(keynum, public_key);
+    let result = verify_message_signature(&pubkey_struct, &sig_box, &message_path, false);
+    assert!(
+        result.is_ok(),
+        "signature produced after password change must verify against the original public key"
+    );
 }
