@@ -83,28 +83,27 @@ fn t1_reject_tampered_global_signature() {
 }
 
 // ============================================================================
-// T1.3: Signature reuse across different messages
+// T1.3 / T1.6: Signature binds to exact message bytes
 // ============================================================================
 
 #[test]
-fn t1_reject_signature_reuse() {
+fn t1_reject_signature_for_wrong_message() {
     let (secret_key, public_key, _keynum) = generate_keypair().unwrap();
 
-    let message1 = b"first message";
-    let message2 = b"second message - completely different";
+    // Each pair: (signed_message, wrong_message)
+    let cases: &[(&[u8], &[u8])] = &[
+        (b"first message", b"second message - completely different"),
+        (b"original message", b"modified message"),
+    ];
 
-    // Sign first message
-    let signature = sign(&secret_key, message1).unwrap();
-
-    // Verify signature is valid for message1
-    assert!(verify(&public_key, message1, &signature).is_ok());
-
-    // Try to reuse signature for message2 (should fail)
-    let result = verify(&public_key, message2, &signature);
-    assert!(
-        result.is_err(),
-        "Reused signature should be rejected for different message"
-    );
+    for (signed, other) in cases {
+        let signature = sign(&secret_key, signed).unwrap();
+        assert!(verify(&public_key, signed, &signature).is_ok());
+        assert!(
+            verify(&public_key, other, &signature).is_err(),
+            "Signature must be rejected for different message"
+        );
+    }
 }
 
 // ============================================================================
@@ -161,31 +160,6 @@ fn t1_reject_keynum_mismatch() {
 
     // This demonstrates that keynum is part of the signature structure
     // and would be checked during verification
-}
-
-// ============================================================================
-// T1.6: Message modification detection
-// ============================================================================
-
-#[test]
-fn t1_reject_modified_message() {
-    let (secret_key, public_key, _keynum) = generate_keypair().unwrap();
-
-    let original_message = b"original message";
-    let modified_message = b"modified message";
-
-    // Sign original message
-    let signature = sign(&secret_key, original_message).unwrap();
-
-    // Verify signature is valid for original
-    assert!(verify(&public_key, original_message, &signature).is_ok());
-
-    // Verify signature fails for modified message
-    let result = verify(&public_key, modified_message, &signature);
-    assert!(
-        result.is_err(),
-        "Signature should be rejected for modified message"
-    );
 }
 
 // ============================================================================

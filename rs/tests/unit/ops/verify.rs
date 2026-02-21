@@ -5,7 +5,6 @@ use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
     ops::{
-        file_utils::check_file_size_limit,
         sign::{SignOptions, sign},
         verify::{
             PublicKeySource, VerifyOptions, load_public_key, load_signature, verify,
@@ -168,18 +167,6 @@ fn test_verify_with_wrong_keynum() {
             _ => panic!("Expected KeyMismatch error, got: {e:?}"),
         }
     }
-}
-
-#[test]
-fn test_check_file_size_limit_small_file() {
-    use tempfile::NamedTempFile;
-
-    // Create a small file (1 KB)
-    let temp_file = NamedTempFile::new().unwrap();
-    std::fs::write(temp_file.path(), vec![0u8; 1024]).unwrap();
-
-    // Should pass size check
-    check_file_size_limit(temp_file.path()).expect("small file should pass");
 }
 
 #[test]

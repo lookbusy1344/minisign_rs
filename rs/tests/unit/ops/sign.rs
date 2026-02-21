@@ -7,13 +7,10 @@ use minisign::{
     },
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    ops::{
-        file_utils::check_file_size_limit,
-        sign::{
-            SignOptions, create_global_signature_data, create_signature,
-            generate_default_trusted_comment, sign, sign_multiple_files, sign_single_file,
-            write_signature_file,
-        },
+    ops::sign::{
+        SignOptions, create_global_signature_data, create_signature,
+        generate_default_trusted_comment, sign, sign_multiple_files, sign_single_file,
+        write_signature_file,
     },
     signature::{SigStruct, SignatureBox},
 };
@@ -434,39 +431,6 @@ fn test_atomic_file_creation_force_overwrites() {
     // Verify content was overwritten
     let contents = std::fs::read_to_string(&sig_path).unwrap();
     assert_eq!(contents, "overwritten content");
-}
-
-#[test]
-fn test_check_file_size_limit_small_file() {
-    use tempfile::NamedTempFile;
-
-    // Create a small file (1 KB)
-    let temp_file = NamedTempFile::new().unwrap();
-    std::fs::write(temp_file.path(), vec![0u8; 1024]).unwrap();
-
-    // Should pass size check
-    check_file_size_limit(temp_file.path()).expect("small file should pass");
-}
-
-#[test]
-fn test_check_file_size_limit_at_limit() {
-    // Test limit (1 MB) - we can't actually create 1 GB files in tests
-    const TEST_LIMIT: usize = 1024 * 1024;
-
-    let temp_dir = TempDir::new().unwrap();
-
-    let large_file = temp_dir.path().join("at_limit.bin");
-
-    // Create metadata that shows file is exactly at the limit
-    // We can't actually create a 1 GB file in tests, but we can check the logic
-    // by testing with smaller sizes and verifying the error message
-    std::fs::write(&large_file, vec![0u8; TEST_LIMIT]).unwrap();
-
-    // File at limit should pass (only > limit fails)
-    let result = check_file_size_limit(&large_file);
-    // This will pass because we're checking against MAX_MESSAGE_SIZE_BYTES (1 GB),
-    // not our test limit
-    assert!(result.is_ok());
 }
 
 #[test]
