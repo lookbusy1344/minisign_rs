@@ -348,12 +348,12 @@ fn test_concurrent_different_files() {
     }
 }
 
-/// Test multiple processes signing with the same key simultaneously
+/// Test multiple threads signing with the same key simultaneously
 ///
-/// Unlike thread-based tests, this spawns actual separate processes to verify
-/// that file locking and atomic operations work across process boundaries.
+/// Verifies that concurrent thread-level access to the same key file does not
+/// corrupt signatures or panic.
 #[test]
-fn test_multiprocess_signing_same_key() {
+fn test_concurrent_signing_same_key() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
     // Generate a key pair first
