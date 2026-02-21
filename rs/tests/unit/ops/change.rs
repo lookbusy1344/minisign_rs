@@ -14,46 +14,28 @@ use rand::Rng;
 use std::fs;
 use tempfile::TempDir;
 
+use super::helpers::{TEST_LOG_N, make_fast_encrypted_seckey};
+
 #[test]
 fn test_change_password_fast() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Create an encrypted key with fast parameters (N=2^14)
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let old_password = b"oldpassword";
-    let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
 
-    let n = 1u64 << 14;
-    let r = 8u64;
-    let kdf_opslimit = 4 * n * r;
-    let kdf_memlimit = 128 * n * r;
-
-    let seckey = SeckeyStruct::new_encrypted(
-        keynum,
-        &secret_key,
-        old_password,
-        kdf_salt,
-        kdf_opslimit,
-        kdf_memlimit,
-        false, // allow_fallback - tests use secure defaults
-    )
-    .unwrap();
-
+    let seckey = make_fast_encrypted_seckey(keynum, &secret_key, old_password);
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Change to new password
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path()).build();
 
-    let result = change_with_log_n(&options, Some(old_password), Some(new_password), 14)
+    let result = change_with_log_n(&options, Some(old_password), Some(new_password), TEST_LOG_N)
         .expect("password change should succeed");
 
     assert_eq!(result.secret_key_file(), sk_path);
     assert!(result.encrypted());
 
-    // Verify can decrypt with new password
     let sk_contents = fs::read_to_string(&sk_path).unwrap();
     let new_seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
     assert!(new_seckey.is_encrypted());
@@ -61,7 +43,6 @@ fn test_change_password_fast() {
         .decrypt(new_password)
         .expect("should decrypt with new password");
 
-    // Verify old password no longer works
     let old_result = new_seckey.decrypt(old_password);
     assert!(old_result.is_err());
 }
@@ -70,43 +51,23 @@ fn test_change_password_fast() {
 fn test_remove_password_from_encrypted_key() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Create an encrypted key with fast parameters
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"password";
-    let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
 
-    let n = 1u64 << 14;
-    let r = 8u64;
-    let kdf_opslimit = 4 * n * r;
-    let kdf_memlimit = 128 * n * r;
-
-    let seckey = SeckeyStruct::new_encrypted(
-        keynum,
-        &secret_key,
-        password,
-        kdf_salt,
-        kdf_opslimit,
-        kdf_memlimit,
-        false, // allow_fallback - tests use secure defaults
-    )
-    .unwrap();
-
+    let seckey = make_fast_encrypted_seckey(keynum, &secret_key, password);
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Remove password
     let options = ChangeOptions::builder(sk_path.as_path())
         .remove_password(true)
         .build();
 
-    let result = change_with_log_n(&options, Some(password), None, 14)
+    let result = change_with_log_n(&options, Some(password), None, TEST_LOG_N)
         .expect("password removal should succeed");
 
     assert_eq!(result.secret_key_file(), sk_path);
     assert!(!result.encrypted());
 
-    // Verify key is now unencrypted
     let sk_contents = fs::read_to_string(&sk_path).unwrap();
     let new_seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
     assert!(!new_seckey.is_encrypted());
@@ -119,23 +80,20 @@ fn test_remove_password_from_encrypted_key() {
 fn test_add_password_to_unencrypted_key() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Create an unencrypted key
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Add password
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path()).build();
 
-    let result = change_with_log_n(&options, None, Some(new_password), 14)
+    let result = change_with_log_n(&options, None, Some(new_password), TEST_LOG_N)
         .expect("adding password should succeed");
 
     assert!(result.encrypted());
 
-    // Verify key is now encrypted
     let sk_contents = fs::read_to_string(&sk_path).unwrap();
     let new_seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
     assert!(new_seckey.is_encrypted());
@@ -148,35 +106,16 @@ fn test_add_password_to_unencrypted_key() {
 fn test_change_without_old_password_fails() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Create an encrypted key
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"password";
-    let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
 
-    let n = 1u64 << 14;
-    let r = 8u64;
-    let kdf_opslimit = 4 * n * r;
-    let kdf_memlimit = 128 * n * r;
-
-    let seckey = SeckeyStruct::new_encrypted(
-        keynum,
-        &secret_key,
-        password,
-        kdf_salt,
-        kdf_opslimit,
-        kdf_memlimit,
-        false, // allow_fallback - tests use secure defaults
-    )
-    .unwrap();
-
+    let seckey = make_fast_encrypted_seckey(keynum, &secret_key, password);
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Try to change without old password
     let options = ChangeOptions::builder(&sk_path).build();
 
-    let result = change_with_log_n(&options, None, Some(b"newpass"), 14);
+    let result = change_with_log_n(&options, None, Some(b"newpass"), TEST_LOG_N);
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), Error::PasswordRequired));
 }
@@ -187,32 +126,19 @@ fn test_change_with_wrong_old_password_fails() {
 
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"correctpassword";
-    let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
 
-    let n = 1u64 << 14;
-    let r = 8u64;
-    let kdf_opslimit = 4 * n * r;
-    let kdf_memlimit = 128 * n * r;
-
-    let seckey = SeckeyStruct::new_encrypted(
-        keynum,
-        &secret_key,
-        password,
-        kdf_salt,
-        kdf_opslimit,
-        kdf_memlimit,
-        false, // allow_fallback - tests use secure defaults
-    )
-    .unwrap();
-
+    let seckey = make_fast_encrypted_seckey(keynum, &secret_key, password);
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Try with wrong old password
     let options = ChangeOptions::builder(&sk_path).build();
 
-    let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
+    let result = change_with_log_n(
+        &options,
+        Some(b"wrongpassword"),
+        Some(b"newpass"),
+        TEST_LOG_N,
+    );
     let err = result.unwrap_err();
     assert!(
         matches!(err, Error::ChecksumFailed),
@@ -230,10 +156,9 @@ fn test_encrypt_without_new_password_fails() {
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Try to encrypt without providing new password
     let options = ChangeOptions::builder(&sk_path).build();
 
-    let result = change_with_log_n(&options, None, None, 14);
+    let result = change_with_log_n(&options, None, None, TEST_LOG_N);
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), Error::PasswordRequired));
 }
@@ -251,19 +176,16 @@ fn test_change_preserves_file_permissions() {
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Set initial permissions
     let metadata = fs::metadata(&sk_path).unwrap();
     let mut permissions = metadata.permissions();
     permissions.set_mode(0o600);
     fs::set_permissions(&sk_path, permissions).unwrap();
 
-    // Add password
     let options = ChangeOptions::builder(sk_path.as_path()).build();
 
-    change_with_log_n(&options, None, Some(b"password"), 14)
+    change_with_log_n(&options, None, Some(b"password"), TEST_LOG_N)
         .expect("adding password should succeed");
 
-    // Verify permissions are still 0600
     let metadata = fs::metadata(&sk_path).unwrap();
     let permissions = metadata.permissions();
     assert_eq!(permissions.mode() & 0o777, 0o600);
@@ -279,7 +201,8 @@ fn test_change_password_with_force_weak_kdf() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let old_password = b"oldpassword";
 
-    // Create a normal production-strength key
+    // Create a key with production-strength params (the test is about what happens
+    // AFTER the change, not the initial key strength).
     let mut kdf_salt = [0u8; 32];
     rand::thread_rng().fill(&mut kdf_salt);
     let seckey = SeckeyStruct::new_encrypted(
@@ -287,8 +210,8 @@ fn test_change_password_with_force_weak_kdf() {
         &secret_key,
         old_password,
         kdf_salt,
-        33_554_432, // Production N=2^20
-        1_073_741_824,
+        33_554_432,    // opslimit: 4 * 2^20 * 8 = N=2^20
+        1_073_741_824, // memlimit: 128 * 2^20 * 8
         false,
     )
     .unwrap();
@@ -296,10 +219,9 @@ fn test_change_password_with_force_weak_kdf() {
     let sk_path = temp_dir.path().join("test.key");
     fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // Change password with force_weak_kdf
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path())
-        .force_weak_kdf(true) // Force weak parameters
+        .force_weak_kdf(true)
         .build();
 
     let result = change_with_log_n(&options, Some(old_password), Some(new_password), 20)
@@ -307,7 +229,6 @@ fn test_change_password_with_force_weak_kdf() {
 
     assert!(result.encrypted());
 
-    // Verify the key now has weak parameters
     let sk_contents = fs::read_to_string(&sk_path).unwrap();
     let new_seckey = SeckeyStruct::from_file_contents(&sk_contents).unwrap();
 
@@ -315,7 +236,6 @@ fn test_change_password_with_force_weak_kdf() {
     assert_eq!(new_seckey.kdf_opslimit(), 4_194_304); // N=2^17
     assert_eq!(new_seckey.kdf_memlimit(), 134_217_728); // 128 MB
 
-    // Verify it can be decrypted with new password
     let (_sk, _kn) = new_seckey
         .decrypt(new_password)
         .expect("should decrypt with new password");
@@ -326,43 +246,25 @@ fn test_change_password_then_sign_verify_roundtrip() {
     // P6.4: Exercises the full lifecycle: generate → change password → sign → verify.
     // Ensures re-encryption preserves the key material so signatures produced after
     // the change are still accepted by the matching public key.
-    const LOG_N: u8 = 14;
-
     let temp_dir = TempDir::new().unwrap();
 
-    // Generate a key with fast KDF parameters (log_n=14, ~50ms)
     let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
     let old_password = b"initial-password";
-    let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
-    let n = 1u64 << LOG_N;
-    let r = 8u64;
-    let seckey = SeckeyStruct::new_encrypted(
-        keynum,
-        &secret_key,
-        old_password,
-        kdf_salt,
-        4 * n * r,   // kdf_opslimit
-        128 * n * r, // kdf_memlimit
-        false,
-    )
-    .unwrap();
 
+    let seckey = make_fast_encrypted_seckey(keynum, &secret_key, old_password);
     let sk_path = temp_dir.path().join("key.key");
     fs::write(&sk_path, seckey.to_file_contents("roundtrip test")).unwrap();
 
-    // Change password (re-encrypts with the same fast KDF parameters)
     let new_password = b"changed-password";
     let change_options = ChangeOptions::builder(sk_path.as_path()).build();
     change_with_log_n(
         &change_options,
         Some(old_password),
         Some(new_password),
-        LOG_N,
+        TEST_LOG_N,
     )
     .expect("password change should succeed");
 
-    // Sign a message file using the re-encrypted key
     let message_path = temp_dir.path().join("message.txt");
     fs::write(&message_path, b"test message for roundtrip").unwrap();
 
@@ -383,7 +285,6 @@ fn test_change_password_then_sign_verify_roundtrip() {
         .expect("signing with re-encrypted key should succeed")
     };
 
-    // Verify the signature against the original public key
     let pubkey_struct = PubkeyStruct::new(keynum, public_key);
     let result = verify_message_signature(&pubkey_struct, &sig_box, &message_path, false);
     assert!(

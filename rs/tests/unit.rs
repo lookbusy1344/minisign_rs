@@ -19,6 +19,7 @@ mod unit {
         pub mod change;
         pub mod file_utils;
         pub mod generate;
+        pub mod helpers;
         pub mod inspect;
         pub mod recreate;
         pub mod sign;
