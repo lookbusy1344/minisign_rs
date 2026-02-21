@@ -172,13 +172,11 @@ fn t1_reject_keynum_mismatch() {
     )
     .unwrap();
 
-    // Correct keynum: keynum check passes (global sig check may fail but that
-    // comes after the keynum check we're testing here)
-    let result = verify_message_signature(&pubkey, &valid_box, &message_path, false);
-    assert!(
-        !matches!(result, Err(Error::KeyMismatch { .. })),
-        "correct keynum must not produce KeyMismatch"
-    );
+    // Correct keynum with valid primary signature: must succeed.
+    // verify_message_signature only checks keynum, prehash flag, and the Ed25519
+    // primary signature — the global signature is not verified here.
+    verify_message_signature(&pubkey, &valid_box, &message_path, false)
+        .expect("correct keynum + valid primary sig must succeed");
 
     // Tampered SigStruct: wrong keynum — must be rejected with KeyMismatch
     let wrong_keynum = KeyNum::from_bytes([0xFF; 8]);
