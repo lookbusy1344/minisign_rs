@@ -1065,40 +1065,38 @@ fn test_path_traversal_attack() {
 
 /// Test null byte injection in paths
 ///
-/// Null bytes in paths should be rejected by the OS or handled safely.
+/// Paths containing null bytes must be rejected: the OS treats a null byte as
+/// the end-of-string sentinel in path syscalls, so allowing it would silently
+/// truncate the path.
 #[test]
+#[cfg(unix)]
 fn test_null_byte_in_path() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::PathBuf;
+
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let secret_key = temp_dir.path().join("test.key");
     let public_key = temp_dir.path().join("test.pub");
 
-    // Generate key
     let gen_opts = GenerateOptions::builder(secret_key.as_path(), public_key.as_path())
         .force(true)
         .no_password(true)
         .build();
     generate(&gen_opts, None).expect("Failed to generate key");
 
-    // On Unix, null bytes in paths are rejected by the OS
-    // On Windows, they're also invalid
-    // This test just ensures we don't panic or corrupt anything
+    // Construct a path that contains an embedded null byte.
+    // OsStr::from_bytes lets us bypass Rust's String null-check.
+    let raw = format!("{}\0hidden.txt", temp_dir.path().join("target").display());
+    let null_byte_path = PathBuf::from(OsStr::from_bytes(raw.as_bytes()));
 
-    // Create a PathBuf manually (standard construction would fail)
-    let base_path = temp_dir.path().join("test");
-    let _path_str = format!("{}\0hidden.txt", base_path.display());
-
-    // This should either fail during path construction or during file operations
-    // The important thing is we handle it gracefully
-    let sign_opts = SignOptions::builder(secret_key.as_path(), base_path.as_path())
+    let sign_opts = SignOptions::builder(secret_key.as_path(), null_byte_path.as_path())
         .force(true)
         .quiet(true)
-        .build(); // Use the base path without null
+        .build();
 
-    // Even with a normal path, this should fail because the file doesn't exist
     let result = sign(&sign_opts, None);
-    assert!(result.is_err());
-
-    // The key point is we didn't panic or do anything unsafe with the null byte
+    assert!(result.is_err(), "signing with a null-byte path must fail");
 }
 
 /// Test extremely long paths

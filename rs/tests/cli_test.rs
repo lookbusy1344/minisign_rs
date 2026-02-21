@@ -831,15 +831,6 @@ fn test_force_weak_kdf_creates_weak_key() {
 
 #[test]
 #[cfg(debug_assertions)]
-fn test_force_weak_kdf_with_change_password() {
-    // Test that --force-weak-kdf works with -C (change password)
-    // Note: -C doesn't support --password-file for both old and new passwords,
-    // so we test this via the ops module directly in unit tests instead
-    // This test is a placeholder showing the intended behavior
-}
-
-#[test]
-#[cfg(debug_assertions)]
 fn test_force_weak_kdf_requires_no_password_or_password_file() {
     // --force-weak-kdf should work non-interactively (requires --password-file or -W)
     let temp_dir = TempDir::new().unwrap();
