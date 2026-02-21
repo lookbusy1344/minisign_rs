@@ -308,6 +308,55 @@ fn test_sign_large_file_streaming() {
 }
 
 #[test]
+fn test_create_signature_rejects_cr_in_trusted_comment() {
+    // P6.5: A CR character in a trusted comment must be rejected as non-printable.
+    // This differs from the length tests below: the comment is short but contains
+    // an invalid character (U+000D is a control character per is_printable()).
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"test").unwrap();
+
+    let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
+
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        false,
+        Some("timestamp:1234\r5678"),
+        None,
+    );
+    assert!(
+        matches!(result.unwrap_err(), Error::InvalidComment(_)),
+        "CR in trusted comment must produce InvalidComment"
+    );
+}
+
+#[test]
+fn test_create_signature_rejects_nonprintable_in_untrusted_comment() {
+    // P6.5: A null byte in an untrusted comment must be rejected.
+    // This covers the character-level validation path, distinct from length checks.
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"test").unwrap();
+
+    let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
+
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        false,
+        None,
+        Some("sig\x00from key"),
+    );
+    assert!(
+        matches!(result.unwrap_err(), Error::InvalidComment(_)),
+        "null byte in untrusted comment must produce InvalidComment"
+    );
+}
+
+#[test]
 fn test_trusted_comment_too_long() {
     let temp_dir = TempDir::new().unwrap();
     let message_path = temp_dir.path().join("message.txt");
