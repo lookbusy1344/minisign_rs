@@ -3,14 +3,14 @@
 
 mod unit {
     pub mod cli;
+    pub mod constant_time_and_kdf;
     pub mod constants;
     pub mod credential_store;
     pub mod crypto;
     pub mod errors;
     pub mod formats;
     pub mod keys;
-    pub mod phase1_security_tests;
-    pub mod phase2_security_tests;
+    pub mod security_hardening;
     pub mod signature;
     pub mod validation;
     pub mod wordlist;

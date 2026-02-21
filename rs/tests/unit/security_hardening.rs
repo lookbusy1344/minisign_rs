@@ -1,6 +1,7 @@
-// Phase 1: Critical Security Fixes - Test Suite
+// Security Hardening Tests
 //
-// Tests for findings H1, H2, H3, H4, H6 from 2026-02-06 code review
+// Tests for findings H1, H2, H3, H4, H6 from the 2026-02-06 security audit:
+// comment validation, KDF parameter bounds-checking, and signature file I/O.
 
 use minisign::{
     Error,

@@ -1,6 +1,7 @@
-// Phase 2: Security Hardening - Test Suite
+// Constant-Time Operations and KDF Tests
 //
-// Tests for findings H5, M1, M6 from 2026-02-06 code review
+// Tests for findings H5, M1, M6 from the 2026-02-06 security audit:
+// constant-time KeyNum comparison, KDF overflow protection, and early validation.
 
 use minisign::{
     Error,
