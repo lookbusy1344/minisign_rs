@@ -209,7 +209,11 @@ fn test_change_with_wrong_old_password_fails() {
     let options = ChangeOptions::builder(&sk_path).build();
 
     let result = change_with_log_n(&options, Some(b"wrongpassword"), Some(b"newpass"), 14);
-    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, Error::ChecksumFailed),
+        "wrong password must fail with ChecksumFailed, got: {err}"
+    );
 }
 
 #[test]

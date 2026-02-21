@@ -59,8 +59,11 @@ fn test_verify_wrong_key_fails() {
     )
     .build();
 
-    let result = verify(&options);
-    assert!(result.is_err(), "should fail with wrong public key");
+    let err = verify(&options).unwrap_err();
+    assert!(
+        matches!(err, Error::KeyMismatch { .. }),
+        "wrong key must fail with KeyMismatch, got: {err}"
+    );
 }
 
 #[test]
@@ -72,8 +75,11 @@ fn test_verify_nonexistent_file() {
     )
     .build();
 
-    let result = verify(&options);
-    assert!(result.is_err(), "should fail with nonexistent message file");
+    let err = verify(&options).unwrap_err();
+    assert!(
+        matches!(err, Error::FileRead { .. }),
+        "nonexistent file must fail with FileRead, got: {err}"
+    );
 }
 
 #[test]
