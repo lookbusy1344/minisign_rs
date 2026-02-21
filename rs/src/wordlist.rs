@@ -17,7 +17,7 @@ use itertools::Itertools;
 /// PGP Word List for even byte positions (two-syllable words)
 ///
 /// Maps byte values 0x00-0xFF to phonetically distinct two-syllable words.
-const EVEN_WORDS: [&str; 256] = [
+pub const EVEN_WORDS: [&str; 256] = [
     "aardvark",
     "absurd",
     "accrue",
@@ -279,7 +279,7 @@ const EVEN_WORDS: [&str; 256] = [
 /// PGP Word List for odd byte positions (three-syllable words)
 ///
 /// Maps byte values 0x00-0xFF to phonetically distinct three-syllable words.
-const ODD_WORDS: [&str; 256] = [
+pub const ODD_WORDS: [&str; 256] = [
     "adroitness",
     "adviser",
     "aggregate",

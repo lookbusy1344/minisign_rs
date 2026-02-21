@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use minisign::crypto::KeyNum;
 use minisign::wordlist::*;
 
@@ -106,6 +108,24 @@ fn test_word_list_parity() {
     assert_ne!(
         words[0], words[1],
         "Even and odd position words should differ"
+    );
+}
+
+#[test]
+fn test_all_words_globally_unique_case_insensitive() {
+    let all_words: Vec<String> = EVEN_WORDS
+        .iter()
+        .chain(ODD_WORDS.iter())
+        .map(|w| w.to_lowercase())
+        .collect();
+
+    let unique: HashSet<&str> = all_words.iter().map(String::as_str).collect();
+
+    assert_eq!(
+        unique.len(),
+        all_words.len(),
+        "Wordlist contains {} duplicate(s) across EVEN_WORDS and ODD_WORDS (case-insensitive)",
+        all_words.len() - unique.len()
     );
 }
 
