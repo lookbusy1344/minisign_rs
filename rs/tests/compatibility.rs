@@ -145,6 +145,7 @@ fn test_verify_c_generated_signature_wrong_key() {
 
 /// Test cross-compatibility: C minisign legacy signature -> Rust verify
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_verify_c_legacy_signature() {
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
     let message_file = temp_dir.path().join("legacy_test.txt");
@@ -166,10 +167,10 @@ fn test_verify_c_legacy_signature() {
         .arg(&public_key)
         .output();
 
-    if output.is_err() || !output.as_ref().unwrap().status.success() {
-        eprintln!("Warning: C minisign not available, skipping test");
-        return;
-    }
+    assert!(
+        output.is_ok() && output.as_ref().unwrap().status.success(),
+        "C minisign key generation failed — is the binary installed? (brew install minisign)"
+    );
 
     // Sign with legacy mode using C minisign
     let status = Command::new("minisign")
@@ -181,10 +182,10 @@ fn test_verify_c_legacy_signature() {
         .arg(&message_file)
         .output();
 
-    if status.is_err() || !status.as_ref().unwrap().status.success() {
-        eprintln!("Warning: C minisign sign failed, skipping test");
-        return;
-    }
+    assert!(
+        status.is_ok() && status.as_ref().unwrap().status.success(),
+        "C minisign sign failed"
+    );
 
     // Load the C-generated signature
     let sig_contents = fs::read_to_string(&sig_file).expect("Failed to read C-generated signature");
@@ -227,6 +228,7 @@ fn test_verify_c_legacy_signature() {
 
 /// Test cross-compatibility: Rust legacy signature -> C minisign verify
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_c_verify_rust_legacy_signature() {
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
     let message_file = temp_dir.path().join("rust_legacy.txt");
@@ -260,16 +262,10 @@ fn test_c_verify_rust_legacy_signature() {
         .arg(&message_file)
         .output();
 
-    if let Ok(output) = status {
-        if output.status.success() {
-            // Success!
-        } else {
-            panic!(
-                "C minisign failed to verify Rust legacy signature: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-    } else {
-        eprintln!("Warning: C minisign not available, skipping verification");
-    }
+    let output = status.expect("C minisign not found — is it installed? (brew install minisign)");
+    assert!(
+        output.status.success(),
+        "C minisign failed to verify Rust legacy signature: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
