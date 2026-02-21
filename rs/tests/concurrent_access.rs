@@ -476,13 +476,17 @@ fn test_read_during_write() {
     let final_data = fs::read(&*secret_key).expect("Should read final file");
     assert!(!final_data.is_empty(), "Final file should not be empty");
 
-    // Verify that any successful reads had valid data
+    // Atomicity check: generate() writes to a temp file then renames it, so any
+    // concurrent read must observe either the complete file or nothing — never
+    // a partial file.  Compare against the actual final size, not a magic number.
+    let complete_size = final_data.len();
     let attempts = read_attempts.lock().unwrap();
     for (success, size) in attempts.iter() {
         if *success && *size > 0 {
-            // If we read data, it should be at least plausible
-            // (key files are relatively fixed size after base64 decoding)
-            assert!(*size > 50, "Partial read detected: size {size}");
+            assert_eq!(
+                *size, complete_size,
+                "atomic write must not expose partial content: got {size} bytes, expected {complete_size}"
+            );
         }
     }
 }
