@@ -831,3 +831,47 @@ fn test_sign_multiple_files_deduplication() {
     let sig_path = PathBuf::from(sig_path);
     assert!(sig_path.exists());
 }
+
+/// Verifies that the clock-fallback path (timestamp=0) does not panic and produces a valid signature.
+///
+/// The `generate_default_trusted_comment` function uses `unwrap_or_else` to fall back to
+/// `Duration::ZERO` when the system clock is before the UNIX epoch.  This means it will
+/// produce `"timestamp:0"` instead of panicking.  Directly injecting a failing clock is not
+/// straightforward without mocking, so this test simulates the fallback by passing
+/// `trusted_comment = Some("timestamp:0")` to `create_signature`, which is the exact string
+/// the fallback path would produce.
+///
+// TODO: add mock-clock injection to enable a full stderr-capture test of the fallback branch.
+#[test]
+fn test_sign_clock_fallback_behavior() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"clock fallback test message").unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+
+    // Simulate the fallback: timestamp:0 is what the code produces when
+    // SystemTime::now().duration_since(UNIX_EPOCH) returns an error.
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        true,
+        Some("timestamp:0"),
+        None,
+    );
+
+    assert!(
+        result.is_ok(),
+        "zero timestamp (clock fallback) must not cause an error or panic; got: {:?}",
+        result.err()
+    );
+
+    let sig_box = result.unwrap();
+    assert_eq!(sig_box.trusted_comment(), "timestamp:0");
+
+    // Verify the global signature is valid — confirming the signing path completed correctly.
+    sig_box
+        .verify_global_signature(&public_key)
+        .expect("global signature from zero-timestamp path must verify");
+}
