@@ -4,9 +4,13 @@
 //! These tests verify that the implementation properly rejects various attack vectors.
 
 use minisign::{
-    crypto::{KeyNum, SIGNATURE_BYTES, Signature, generate_keypair, sign, verify},
+    Error,
+    crypto::{KeyNum, SIGNATURE_BYTES, Signature, blake2b_512, generate_keypair, sign, verify},
+    keys::PubkeyStruct,
+    ops::verify::verify_message_signature,
     signature::{SigStruct, SignatureBox},
 };
+use tempfile::TempDir;
 
 // ============================================================================
 // T1.1: Signature forgery - correct keynum but forged signature bytes
@@ -112,25 +116,32 @@ fn t1_reject_signature_for_wrong_message() {
 
 #[test]
 fn t1_reject_prehashed_mode_mismatch() {
-    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let (secret_key, public_key, keynum) = generate_keypair().unwrap();
     let message = b"test message";
 
-    // Create signature in normal mode
+    // Signature created in normal mode: over raw message bytes
     let signature = sign(&secret_key, message).unwrap();
     let sig_struct_normal = SigStruct::new(keynum, signature, false);
-
-    // Create same signature but claim it's prehashed mode
     let sig_struct_prehashed = SigStruct::new(keynum, signature, true);
 
-    // The is_prehashed flag should be different
     assert!(!sig_struct_normal.is_prehashed());
     assert!(sig_struct_prehashed.is_prehashed());
-
-    // The binary representation should be different
     assert_ne!(
         sig_struct_normal.to_bytes(),
         sig_struct_prehashed.to_bytes(),
-        "Normal and prehashed mode should have different binary representation"
+        "normal and prehashed mode must have different binary representation"
+    );
+
+    // Normal mode: verifying against raw message must succeed
+    assert!(verify(&public_key, message, &signature).is_ok());
+
+    // Algorithm confusion: if a prehashed verifier receives a normal-mode
+    // signature, it will hash the message first and verify against the hash —
+    // that hash was never signed, so it must fail.
+    let hashed_message = blake2b_512(message);
+    assert!(
+        verify(&public_key, &hashed_message, &signature).is_err(),
+        "normal-mode signature must not verify against blake2b_512(message)"
     );
 }
 
@@ -140,26 +151,49 @@ fn t1_reject_prehashed_mode_mismatch() {
 
 #[test]
 fn t1_reject_keynum_mismatch() {
-    let (secret_key, _public_key, correct_keynum) = generate_keypair().unwrap();
-    let message = b"test message";
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("msg.txt");
+    std::fs::write(&message_path, b"test message").unwrap();
 
-    // Create valid signature
-    let signature = sign(&secret_key, message).unwrap();
+    let (secret_key, public_key, correct_keynum) = generate_keypair().unwrap();
+    let pubkey = PubkeyStruct::new(correct_keynum, public_key);
 
-    // Create two SigStructs with different keynums
-    let sig_struct_correct = SigStruct::new(correct_keynum, signature, false);
-    let wrong_keynum = KeyNum::from_bytes([0xFF; 8]);
-    let sig_struct_wrong = SigStruct::new(wrong_keynum, signature, false);
+    // Create a valid signature box for the message
+    let raw_sig = sign(&secret_key, b"test message").unwrap();
+    let sig_struct_correct = SigStruct::new(correct_keynum, raw_sig, false);
+    let dummy_global = Signature::from_bytes([0u8; SIGNATURE_BYTES]);
+    let valid_box = SignatureBox::new(
+        "untrusted comment".to_string(),
+        sig_struct_correct,
+        "trusted comment".to_string(),
+        dummy_global,
+    )
+    .unwrap();
 
-    // Keynums should be different
-    assert_ne!(
-        sig_struct_correct.keynum(),
-        sig_struct_wrong.keynum(),
-        "Keynums should be different"
+    // Correct keynum: keynum check passes (global sig check may fail but that
+    // comes after the keynum check we're testing here)
+    let result = verify_message_signature(&pubkey, &valid_box, &message_path, false);
+    assert!(
+        !matches!(result, Err(Error::KeyMismatch { .. })),
+        "correct keynum must not produce KeyMismatch"
     );
 
-    // This demonstrates that keynum is part of the signature structure
-    // and would be checked during verification
+    // Tampered SigStruct: wrong keynum — must be rejected with KeyMismatch
+    let wrong_keynum = KeyNum::from_bytes([0xFF; 8]);
+    let sig_struct_wrong = SigStruct::new(wrong_keynum, raw_sig, false);
+    let tampered_box = SignatureBox::new(
+        "untrusted comment".to_string(),
+        sig_struct_wrong,
+        "trusted comment".to_string(),
+        dummy_global,
+    )
+    .unwrap();
+
+    let err = verify_message_signature(&pubkey, &tampered_box, &message_path, false).unwrap_err();
+    assert!(
+        matches!(err, Error::KeyMismatch { .. }),
+        "wrong keynum must produce KeyMismatch, got: {err}"
+    );
 }
 
 // ============================================================================
