@@ -212,22 +212,12 @@ fn save_password_to_credential_store(
 
 /// Remove a saved credential and print feedback, unless `quiet` is set.
 fn forget_password_with_feedback(credential_id: &str, quiet: bool) -> Result<()> {
-    let had_password = minisign::credential_store::has_password(credential_id);
-    match minisign::credential_store::forget_password(credential_id) {
-        Ok(()) => {
-            if !quiet {
-                if had_password {
-                    println!("Password removed from credential store");
-                } else {
-                    println!("No saved password found for this key");
-                }
-            }
-            Ok(())
-        }
-        Err(e) => Err(Error::CredentialStoreError(format!(
-            "Failed to remove password: {e}"
-        ))),
+    minisign::credential_store::forget_password(credential_id)
+        .map_err(|e| Error::CredentialStoreError(format!("Failed to remove password: {e}")))?;
+    if !quiet {
+        println!("Password removed from credential store");
     }
+    Ok(())
 }
 
 fn handle_sign(cli: &Cli) -> Result<()> {
@@ -748,9 +738,29 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    // Determine the source and get the inspection result
+    // Determine the source key file path first (before any credential store access)
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
     let default_secret_key = Cli::default_secret_key_path();
+    let key_file_path: Option<&std::path::Path> = if cli.secret_key_file.is_some() {
+        cli.secret_key_file.as_deref()
+    } else if cli.public_key_file.is_some() {
+        cli.public_key_file.as_deref()
+    } else if cli.public_key_base64.is_none() {
+        Some(default_secret_key.as_path())
+    } else {
+        None
+    };
+
+    // Handle --forget-password before calling inspect() to avoid a spurious
+    // credential store read (which triggers a macOS Keychain prompt on its own).
+    if cli.forget_password
+        && let Some(path) = key_file_path
+    {
+        let seckey = load_secret_key(path)?;
+        let credential_id = seckey.credential_id();
+        return forget_password_with_feedback(&credential_id, cli.quiet);
+    }
+
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
             let options = build_inspect_options(sk_file.as_path(), cli.no_decrypt);
@@ -782,15 +792,6 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
                 Some(default_secret_key.as_path()),
             )
         };
-
-    // Handle --forget-password: remove saved credential and exit without decrypting
-    if cli.forget_password
-        && let Some(path) = key_file_path
-    {
-        let seckey = load_secret_key(path)?;
-        let credential_id = seckey.credential_id();
-        return forget_password_with_feedback(&credential_id, cli.quiet);
-    }
 
     // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt
     let mut decrypted = false;
