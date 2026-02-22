@@ -1,7 +1,6 @@
 use minisign::crypto::generate_keypair;
 use minisign::errors::Error;
 use minisign::keys::{PubkeyStruct, SeckeyStruct};
-use minisign::ops::file_utils::write_public_key_file;
 use minisign::ops::recreate::{RecreateOptions, extract_public_key_from_secret, recreate};
 use rand::Rng;
 use std::fs;
@@ -267,52 +266,4 @@ fn test_recreate_atomic_file_creation() {
     // Verify original content unchanged
     let contents = fs::read_to_string(&pk_path).unwrap();
     assert_eq!(contents, "existing public key");
-}
-
-#[test]
-fn test_write_public_key_file_atomic_creation() {
-    let temp_dir = TempDir::new().unwrap();
-    let pk_path = temp_dir.path().join("new.pub");
-
-    // Should succeed when file doesn't exist
-    write_public_key_file(&pk_path, "public key content", false).expect("should create new file");
-
-    // Verify content
-    let contents = fs::read_to_string(&pk_path).unwrap();
-    assert_eq!(contents, "public key content");
-}
-
-#[test]
-fn test_write_public_key_file_prevents_overwrite() {
-    let temp_dir = TempDir::new().unwrap();
-    let pk_path = temp_dir.path().join("existing.pub");
-
-    // Create initial file
-    fs::write(&pk_path, "original content").unwrap();
-
-    // Try to write without force - should fail
-    let result = write_public_key_file(&pk_path, "new content", false);
-    assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), Error::FileExists(_)));
-
-    // Verify original content unchanged
-    let contents = fs::read_to_string(&pk_path).unwrap();
-    assert_eq!(contents, "original content");
-}
-
-#[test]
-fn test_write_public_key_file_force_overwrites() {
-    let temp_dir = TempDir::new().unwrap();
-    let pk_path = temp_dir.path().join("test.pub");
-
-    // Create initial file
-    fs::write(&pk_path, "original content").unwrap();
-
-    // Write with force - should succeed
-    write_public_key_file(&pk_path, "overwritten content", true)
-        .expect("should overwrite with force");
-
-    // Verify content was overwritten
-    let contents = fs::read_to_string(&pk_path).unwrap();
-    assert_eq!(contents, "overwritten content");
 }

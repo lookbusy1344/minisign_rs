@@ -7,13 +7,10 @@ use minisign::{
     },
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    ops::{
-        file_utils::check_file_size_limit,
-        sign::{
-            SignOptions, create_global_signature_data, create_signature,
-            generate_default_trusted_comment, sign, sign_multiple_files, sign_single_file,
-            write_signature_file,
-        },
+    ops::sign::{
+        SignOptions, create_global_signature_data, create_signature,
+        generate_default_trusted_comment, sign, sign_multiple_files, sign_single_file,
+        write_signature_file,
     },
     signature::{SigStruct, SignatureBox},
 };
@@ -311,6 +308,55 @@ fn test_sign_large_file_streaming() {
 }
 
 #[test]
+fn test_create_signature_rejects_cr_in_trusted_comment() {
+    // P6.5: A CR character in a trusted comment must be rejected as non-printable.
+    // This differs from the length tests below: the comment is short but contains
+    // an invalid character (U+000D is a control character per is_printable()).
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"test").unwrap();
+
+    let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
+
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        false,
+        Some("timestamp:1234\r5678"),
+        None,
+    );
+    assert!(
+        matches!(result.unwrap_err(), Error::InvalidComment(_)),
+        "CR in trusted comment must produce InvalidComment"
+    );
+}
+
+#[test]
+fn test_create_signature_rejects_nonprintable_in_untrusted_comment() {
+    // P6.5: A null byte in an untrusted comment must be rejected.
+    // This covers the character-level validation path, distinct from length checks.
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"test").unwrap();
+
+    let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
+
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        false,
+        None,
+        Some("sig\x00from key"),
+    );
+    assert!(
+        matches!(result.unwrap_err(), Error::InvalidComment(_)),
+        "null byte in untrusted comment must produce InvalidComment"
+    );
+}
+
+#[test]
 fn test_trusted_comment_too_long() {
     let temp_dir = TempDir::new().unwrap();
     let message_path = temp_dir.path().join("message.txt");
@@ -434,39 +480,6 @@ fn test_atomic_file_creation_force_overwrites() {
     // Verify content was overwritten
     let contents = std::fs::read_to_string(&sig_path).unwrap();
     assert_eq!(contents, "overwritten content");
-}
-
-#[test]
-fn test_check_file_size_limit_small_file() {
-    use tempfile::NamedTempFile;
-
-    // Create a small file (1 KB)
-    let temp_file = NamedTempFile::new().unwrap();
-    std::fs::write(temp_file.path(), vec![0u8; 1024]).unwrap();
-
-    // Should pass size check
-    check_file_size_limit(temp_file.path()).expect("small file should pass");
-}
-
-#[test]
-fn test_check_file_size_limit_at_limit() {
-    // Test limit (1 MB) - we can't actually create 1 GB files in tests
-    const TEST_LIMIT: usize = 1024 * 1024;
-
-    let temp_dir = TempDir::new().unwrap();
-
-    let large_file = temp_dir.path().join("at_limit.bin");
-
-    // Create metadata that shows file is exactly at the limit
-    // We can't actually create a 1 GB file in tests, but we can check the logic
-    // by testing with smaller sizes and verifying the error message
-    std::fs::write(&large_file, vec![0u8; TEST_LIMIT]).unwrap();
-
-    // File at limit should pass (only > limit fails)
-    let result = check_file_size_limit(&large_file);
-    // This will pass because we're checking against MAX_MESSAGE_SIZE_BYTES (1 GB),
-    // not our test limit
-    assert!(result.is_ok());
 }
 
 #[test]
@@ -817,4 +830,47 @@ fn test_sign_multiple_files_deduplication() {
     sig_path.push(".minisig");
     let sig_path = PathBuf::from(sig_path);
     assert!(sig_path.exists());
+}
+
+/// Verifies that `create_signature` accepts a zero timestamp as a custom `trusted_comment`
+/// and produces a globally-verifiable signature.
+///
+/// This exercises the `Some(trusted_comment)` branch of `create_signature` with the exact
+/// string `"timestamp:0"` — the value that `generate_default_trusted_comment` would produce
+/// if the system clock were before the UNIX epoch.  The clock-fallback branch itself
+/// (`unwrap_or_else` in `generate_default_trusted_comment`) cannot be triggered without
+/// clock-injection infrastructure; see `test_generate_default_trusted_comment` for the
+/// happy-path coverage of that function.
+#[test]
+fn test_create_signature_accepts_zero_timestamp_comment() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"clock fallback test message").unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+
+    // Simulate the fallback: timestamp:0 is what the code produces when
+    // SystemTime::now().duration_since(UNIX_EPOCH) returns an error.
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        true,
+        Some("timestamp:0"),
+        None,
+    );
+
+    assert!(
+        result.is_ok(),
+        "create_signature must accept a zero timestamp trusted_comment; got: {:?}",
+        result.err()
+    );
+
+    let sig_box = result.unwrap();
+    assert_eq!(sig_box.trusted_comment(), "timestamp:0");
+
+    // Verify the global signature is valid — confirming the signing path completed correctly.
+    sig_box
+        .verify_global_signature(&public_key)
+        .expect("global signature from zero-timestamp path must verify");
 }

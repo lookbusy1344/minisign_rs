@@ -5,7 +5,6 @@ use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
     ops::{
-        file_utils::check_file_size_limit,
         sign::{SignOptions, sign},
         verify::{
             PublicKeySource, VerifyOptions, load_public_key, load_signature, verify,
@@ -60,8 +59,11 @@ fn test_verify_wrong_key_fails() {
     )
     .build();
 
-    let result = verify(&options);
-    assert!(result.is_err(), "should fail with wrong public key");
+    let err = verify(&options).unwrap_err();
+    assert!(
+        matches!(err, Error::KeyMismatch { .. }),
+        "wrong key must fail with KeyMismatch, got: {err}"
+    );
 }
 
 #[test]
@@ -73,8 +75,11 @@ fn test_verify_nonexistent_file() {
     )
     .build();
 
-    let result = verify(&options);
-    assert!(result.is_err(), "should fail with nonexistent message file");
+    let err = verify(&options).unwrap_err();
+    assert!(
+        matches!(err, Error::FileRead { .. }),
+        "nonexistent file must fail with FileRead, got: {err}"
+    );
 }
 
 #[test]
@@ -168,18 +173,6 @@ fn test_verify_with_wrong_keynum() {
             _ => panic!("Expected KeyMismatch error, got: {e:?}"),
         }
     }
-}
-
-#[test]
-fn test_check_file_size_limit_small_file() {
-    use tempfile::NamedTempFile;
-
-    // Create a small file (1 KB)
-    let temp_file = NamedTempFile::new().unwrap();
-    std::fs::write(temp_file.path(), vec![0u8; 1024]).unwrap();
-
-    // Should pass size check
-    check_file_size_limit(temp_file.path()).expect("small file should pass");
 }
 
 #[test]

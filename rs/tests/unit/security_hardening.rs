@@ -1,6 +1,7 @@
-// Phase 1: Critical Security Fixes - Test Suite
+// Security Hardening Tests
 //
-// Tests for findings H1, H2, H3, H4, H6 from 2026-02-06 code review
+// Tests for findings H1, H2, H3, H4, H6 from the 2026-02-06 security audit:
+// comment validation, KDF parameter bounds-checking, and signature file I/O.
 
 use minisign::{
     Error,
@@ -177,31 +178,25 @@ fn h3_kdf_params_error_on_derivation_overflow() {
 
 #[test]
 fn h3_kdf_params_error_on_u32_truncation() {
-    // Test that H3 fix is in place: .ok_or_else() instead of .unwrap_or()
-    // For very large opslimit values with standard memlimit, if derivation
-    // of r would exceed u32::MAX, we should get an error
-
-    // Use standard memlimit for log_n=14 (for faster testing)
-    let memlimit = 16_777_216u64; // for log_n=14, n=16384, standard case
-
-    // Craft opslimit to be non-standard AND large enough that derived_r > u32::MAX
-    // derived_r = opslimit / (32768 * 16384) = opslimit / 536870912
-    // To get r > u32::MAX, opslimit needs to be > u32::MAX * 536870912
-    // That's > 2305843009213693952, which exceeds u64::MAX
-
-    // More realistic test: verify that errors are returned instead of silent fallback
-    // Use opslimit that doesn't match the expected value
+    // Verify H3 fix: non-standard opslimit must yield a deterministically derived r,
+    // not a silent fallback default.
+    //
+    // For memlimit=16_777_216 (log_n=14, n=16_384):
+    //   expected_opslimit = 4 * 16_384 * 8 = 524_288
+    //   Since 999_999_999_999 ≠ 524_288, the non-standard branch fires:
+    //   derived_r = 999_999_999_999 / (4 * 16_384) = 15_258_789  (fits in u32)
+    let memlimit = 16_777_216u64;
     let non_standard_opslimit = 999_999_999_999u64;
 
     let result = opslimit_memlimit_to_params(non_standard_opslimit, memlimit);
+    let (log_n, derived_r, p) = result.expect("should succeed: derived_r fits in u32");
 
-    // Should either succeed with derived r, or error if derivation fails
-    // The key is NO SILENT FALLBACK - we either get Ok or Err, never a default
-    if let Ok((_, derived_r, _)) = result {
-        // If it succeeds, verify r was actually derived and is reasonable
-        assert!(derived_r > 0, "derived r should be non-zero");
-    }
-    // Error is acceptable - no silent fallback
+    assert_eq!(log_n, 14, "log_n must be derived from memlimit");
+    assert_eq!(
+        derived_r, 15_258_789,
+        "r must be exactly derived from opslimit"
+    );
+    assert_eq!(p, 1, "p must be standard SCRYPT_P");
 }
 
 // ============================================================================

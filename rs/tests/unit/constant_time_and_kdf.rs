@@ -1,6 +1,7 @@
-// Phase 2: Security Hardening - Test Suite
+// Constant-Time Operations and KDF Tests
 //
-// Tests for findings H5, M1, M6 from 2026-02-06 code review
+// Tests for findings H5, M1, M6 from the 2026-02-06 security audit:
+// constant-time KeyNum comparison, KDF overflow protection, and early validation.
 
 use minisign::{
     Error,
@@ -78,29 +79,21 @@ fn m1_calculate_kdf_params_rejects_excessive_log_n() {
 
 #[test]
 fn m1_calculate_kdf_params_handles_overflow_safely() {
-    // For large but valid log_n values (32-63), the subsequent multiplications
-    // (n * r * MULTIPLIER) can overflow without checked arithmetic
-    // Test that we handle this safely
+    // For log_n=50: n = 2^50 = 1_125_899_906_842_624, r = 8
+    //   opslimit = 4 * n * r = 36_028_797_018_963_968  (< u64::MAX, no overflow)
+    //   memlimit = 128 * n * r = 1_152_921_504_606_846_976  (< u64::MAX, no overflow)
+    // The M1 fix uses checked_mul, so both should succeed with exact values.
+    let (opslimit, memlimit) =
+        calculate_kdf_params(50, false).expect("log_n=50 should not overflow u64");
 
-    // log_n = 50 gives n = 2^50 = 1,125,899,906,842,624
-    // n * r * MULTIPLIER could overflow u64
-    let result = calculate_kdf_params(50, false);
-
-    // Should either succeed with valid params or return overflow error
-    match result {
-        Ok((opslimit, memlimit)) => {
-            // Verify results are reasonable and didn't wrap
-            assert!(opslimit > 0, "opslimit should be non-zero");
-            assert!(memlimit > 0, "memlimit should be non-zero");
-        }
-        Err(e) => {
-            // Overflow error is acceptable
-            assert!(
-                e.to_string().contains("overflow") || e.to_string().contains("ScryptParamError"),
-                "Should return overflow error: {e}"
-            );
-        }
-    }
+    assert_eq!(
+        opslimit, 36_028_797_018_963_968,
+        "opslimit must be 4 * 2^50 * 8"
+    );
+    assert_eq!(
+        memlimit, 1_152_921_504_606_846_976,
+        "memlimit must be 128 * 2^50 * 8"
+    );
 }
 
 #[test]

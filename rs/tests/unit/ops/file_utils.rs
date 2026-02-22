@@ -1,5 +1,27 @@
 //! Unit tests for file utility operations
 
+mod size_limit {
+    use minisign::ops::file_utils::check_file_size_limit;
+    use tempfile::{NamedTempFile, TempDir};
+
+    #[test]
+    fn small_file_passes() {
+        let temp_file = NamedTempFile::new().unwrap();
+        std::fs::write(temp_file.path(), vec![0u8; 1024]).unwrap();
+        check_file_size_limit(temp_file.path()).expect("small file should pass");
+    }
+
+    #[test]
+    fn file_well_under_limit_passes() {
+        // Test with 1 MB — well below the 1 GB limit
+        const ONE_MB: usize = 1024 * 1024;
+        let temp_dir = TempDir::new().unwrap();
+        let file = temp_dir.path().join("medium.bin");
+        std::fs::write(&file, vec![0u8; ONE_MB]).unwrap();
+        check_file_size_limit(&file).expect("1 MB file should pass");
+    }
+}
+
 #[cfg(unix)]
 mod symlink_protection {
     use minisign::ops::file_utils::write_public_key_file;

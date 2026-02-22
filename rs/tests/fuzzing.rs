@@ -4,6 +4,7 @@
 //! incorrect parsing, or security issues.
 
 use minisign::constants;
+use minisign::crypto::{generate_keypair, sign, verify};
 use minisign::formats;
 use minisign::keys::{PubkeyStruct, SeckeyStruct};
 use minisign::signature::{SigStruct, SignatureBox};
@@ -575,4 +576,40 @@ proptest! {
         let _ = SeckeyStruct::from_bytes(&key_bytes);
     }
 
+}
+
+// ============================================================================
+// Core Cryptographic Roundtrip (P7.3)
+// ============================================================================
+
+proptest! {
+    /// Property test: sign then verify always succeeds for the matching key pair.
+    ///
+    /// Covers the fundamental Ed25519 invariant: for any message `m` and any
+    /// freshly-generated key pair `(sk, pk)`, `verify(pk, m, sign(sk, m))` must
+    /// succeed. This catches regressions in the signing or verification paths
+    /// that pure parsing tests cannot reach.
+    #[test]
+    fn prop_sign_verify_roundtrip(
+        msg in prop::collection::vec(any::<u8>(), 0..10_000)
+    ) {
+        let (secret_key, public_key, _keynum) = generate_keypair().unwrap();
+        let sig = sign(&secret_key, &msg).unwrap();
+        prop_assert!(verify(&public_key, &msg, &sig).is_ok());
+    }
+
+    /// Property test: a signature for one message must not verify against a different message.
+    ///
+    /// Complements the roundtrip test: cross-message rejection is the other half
+    /// of the binding property.
+    #[test]
+    fn prop_sign_verify_wrong_message_fails(
+        msg in prop::collection::vec(any::<u8>(), 1..10_000),
+        other_msg in prop::collection::vec(any::<u8>(), 1..10_000)
+    ) {
+        prop_assume!(msg != other_msg);
+        let (secret_key, public_key, _keynum) = generate_keypair().unwrap();
+        let sig = sign(&secret_key, &msg).unwrap();
+        prop_assert!(verify(&public_key, &other_msg, &sig).is_err());
+    }
 }

@@ -365,6 +365,56 @@ fn test_scrypt_fallback_minimum_constants() {
     // they work or hit these minimums.
 }
 
+/// Verifies that the minimum scrypt constants represent a coherent, valid parameter set.
+///
+/// `SCRYPT_OPSLIMIT_MIN` and `SCRYPT_MEMLIMIT_MIN` are independent lower bounds used by
+/// the fallback mechanism.  This test confirms they are not just arbitrary numbers: each
+/// constant, paired with the standard r=8 formulation, must be accepted by
+/// `opslimit_memlimit_to_params` and produce `(log_n, r, p)` values within valid scrypt
+/// ranges.  If this test fails after a constants change, the fallback mechanism would
+/// silently fail to produce valid scrypt parameters.
+///
+/// Note: `SCRYPT_OPSLIMIT_MIN` and `SCRYPT_MEMLIMIT_MIN` are independent minimums
+/// (matching libsodium semantics) and do NOT form a coherent pair together — they
+/// correspond to different N values and must be tested with their respective matching
+/// counterparts.
+#[test]
+fn test_scrypt_minimum_constants_are_valid_params() {
+    use minisign::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN, opslimit_memlimit_to_params};
+
+    // Exact-value pins (matching test_scrypt_fallback_minimum_constants, for regression detection)
+    assert_eq!(SCRYPT_OPSLIMIT_MIN, 32_768);
+    assert_eq!(SCRYPT_MEMLIMIT_MIN, 16_777_216);
+
+    // SCRYPT_OPSLIMIT_MIN=32768 corresponds to N=1024 (log_n=10), r=8, p=1:
+    //   opslimit = 4 * N * r = 4 * 1024 * 8 = 32_768  ✓
+    //   matching memlimit = 128 * N * r = 128 * 1024 * 8 = 1_048_576
+    let memlimit_for_min_opslimit: u64 = 1_048_576;
+    let result = opslimit_memlimit_to_params(SCRYPT_OPSLIMIT_MIN, memlimit_for_min_opslimit);
+    assert!(
+        result.is_ok(),
+        "SCRYPT_OPSLIMIT_MIN must correspond to valid scrypt parameters; got: {result:?}"
+    );
+    let (log_n, r, p) = result.unwrap();
+    assert!(log_n < 64, "log_n={log_n} must be < 64");
+    assert!(r > 0, "r={r} must be > 0");
+    assert!(p > 0, "p={p} must be > 0");
+
+    // SCRYPT_MEMLIMIT_MIN=16_777_216 corresponds to N=16384 (log_n=14), r=8, p=1:
+    //   memlimit = 128 * N * r = 128 * 16384 * 8 = 16_777_216  ✓
+    //   matching opslimit = 4 * N * r = 4 * 16384 * 8 = 524_288
+    let opslimit_for_min_memlimit: u64 = 524_288;
+    let result2 = opslimit_memlimit_to_params(opslimit_for_min_memlimit, SCRYPT_MEMLIMIT_MIN);
+    assert!(
+        result2.is_ok(),
+        "SCRYPT_MEMLIMIT_MIN must correspond to valid scrypt parameters; got: {result2:?}"
+    );
+    let (log_n2, r2, p2) = result2.unwrap();
+    assert!(log_n2 < 64, "log_n={log_n2} must be < 64");
+    assert!(r2 > 0, "r={r2} must be > 0");
+    assert!(p2 > 0, "p={p2} must be > 0");
+}
+
 #[test]
 fn test_scrypt_fallback_with_moderate_parameters() {
     use minisign::crypto::generate_keypair;

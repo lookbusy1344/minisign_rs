@@ -284,16 +284,52 @@ fn test_derive_key_104_byte_output_regression() {
     );
 }
 
-/// Test with full production parameters (marked ignore for normal test runs)
+/// Known-answer test (KAT) for scrypt with full production parameters.
+///
+/// Verifies that `derive_key` (which uses `log_n=20, r=8, p=1`) produces
+/// a specific, pre-computed 32-byte output for a fixed password and salt.
+/// This catches any change in scrypt crate output at production parameters,
+/// whether from a crate upgrade or an accidental parameter change.
+///
+/// Pre-computed with `scrypt` v0.11.0, `log_n=20`, `r=8`, `p=1`.
+/// If this test fails after a scrypt crate upgrade, re-derive and verify
+/// the new output is cryptographically correct before updating the constant.
 #[test]
 #[ignore = "slow test with full scrypt parameters"]
 fn test_derive_key_full_params() {
-    let password = b"test password";
-    let salt = [0u8; 32];
+    let password = b"minisign-full-params-kat-password";
+    let salt = [0x01u8; 32];
 
-    // This uses the full SENSITIVE parameters and will be slow
+    // This uses the full SENSITIVE parameters (log_n=20) and will take several seconds.
     let key = derive_key(password, &salt, 32).expect("derivation with full params failed");
-    assert_eq!(key.len(), 32);
+
+    let expected = hex::decode("dbe927d87942738ecb120925c349700420d0e8e8e2c8e5fddae038ca8c12efe8")
+        .expect("KAT hex is valid");
+    assert_eq!(
+        key.as_slice(),
+        expected.as_slice(),
+        "scrypt output must match known-answer test vector — if the scrypt crate was \
+         upgraded, re-derive and verify before updating this constant"
+    );
+}
+
+/// Verifies that `derive_key_with_params` rejects `output_len` values above the 1024-byte cap.
+///
+/// The guard `if output_len > MAX_KDF_OUTPUT_LEN` is an early-return that prevents
+/// resource-exhaustion attacks.  This test pins that the first value over the limit
+/// (`output_len = 1025`) is rejected with `Error::KdfError`.
+/// Uses fast parameters (`log_n=10`) so the test does not slow down the suite.
+#[test]
+fn test_derive_key_output_len_too_large() {
+    let result = derive_key_with_params(b"password", &[0u8; 32], 10, 8, 1, 1025);
+    assert!(
+        result.is_err(),
+        "output_len > MAX_KDF_OUTPUT_LEN must return Err"
+    );
+    assert!(
+        matches!(result, Err(Error::KdfError(_))),
+        "expected Error::KdfError, got {result:?}"
+    );
 }
 
 #[test]

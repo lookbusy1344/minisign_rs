@@ -35,17 +35,22 @@ fn check_c_minisign_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Run a test that requires C minisign, skipping if not available
+/// Assert that the C minisign binary is available, panicking with a clear message if not.
+///
+/// Tests using this helper must be marked `#[ignore]` so that they are only
+/// run explicitly (e.g. `cargo test -- --ignored`) and never silently counted
+/// as passed when the binary is absent.
 macro_rules! require_c_minisign {
     () => {
-        if !check_c_minisign_available() {
-            eprintln!("Skipping test: C minisign not found (install via: brew install minisign)");
-            return;
-        }
+        assert!(
+            check_c_minisign_available(),
+            "C minisign binary not found. Install via: brew install minisign"
+        );
     };
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_version_output_format() {
     require_c_minisign!();
 
@@ -71,6 +76,7 @@ fn test_version_output_format() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_help_output_similarity() {
     require_c_minisign!();
 
@@ -108,6 +114,7 @@ fn test_help_output_similarity() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_generate_rust_verify_c() {
     require_c_minisign!();
 
@@ -165,6 +172,7 @@ fn test_cross_generate_rust_verify_c() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_generate_c_verify_rust() {
     require_c_minisign!();
 
@@ -228,6 +236,7 @@ fn test_cross_generate_c_verify_rust() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_sign_rust_key_c_signature() {
     require_c_minisign!();
 
@@ -285,6 +294,7 @@ fn test_cross_sign_rust_key_c_signature() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_sign_c_key_rust_signature() {
     require_c_minisign!();
 
@@ -348,6 +358,7 @@ fn test_cross_sign_c_key_rust_signature() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_recreate_rust_key_c_recreate() {
     require_c_minisign!();
 
@@ -405,6 +416,7 @@ fn test_cross_recreate_rust_key_c_recreate() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_recreate_c_key_rust_recreate() {
     require_c_minisign!();
 
@@ -461,6 +473,7 @@ fn test_cross_recreate_c_key_rust_recreate() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_prehashed_mode() {
     require_c_minisign!();
 
@@ -552,6 +565,7 @@ fn test_cross_prehashed_mode() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_trusted_comment() {
     require_c_minisign!();
 
@@ -617,6 +631,7 @@ fn test_cross_trusted_comment() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_invalid_signature_detection() {
     require_c_minisign!();
 
@@ -686,6 +701,7 @@ fn test_cross_invalid_signature_detection() {
 }
 
 #[test]
+#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_cross_quiet_mode_behavior() {
     require_c_minisign!();
 
@@ -760,7 +776,7 @@ fn test_cross_quiet_mode_behavior() {
 // ============================================================================
 
 #[test]
-#[ignore = "Slow: uses production scrypt parameters"]
+#[ignore = "requires C minisign binary; slow: uses production scrypt parameters"]
 fn test_cross_encrypted_generate_rust_sign_c() {
     require_c_minisign!();
 

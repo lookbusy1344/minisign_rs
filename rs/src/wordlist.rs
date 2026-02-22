@@ -538,6 +538,19 @@ pub const ODD_WORDS: [&str; 256] = [
     "yucatan",
 ];
 
+// Compile-time invariant: both word lists must cover all 256 byte values.
+// Although [&str; 256] already encodes the length in the type, these assertions
+// make the requirement explicit and will catch a future type change (e.g. to
+// &[&str]) before it silently breaks the runtime coverage test.
+const _: () = assert!(
+    EVEN_WORDS.len() == 256,
+    "EVEN_WORDS must have exactly 256 entries"
+);
+const _: () = assert!(
+    ODD_WORDS.len() == 256,
+    "ODD_WORDS must have exactly 256 entries"
+);
+
 /// Convert a byte slice to PGP Word List representation
 ///
 /// Each byte is converted to a word from either the even or odd word list
