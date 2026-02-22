@@ -91,18 +91,11 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    // In debug mode, allow CLI to override; in release mode, always false
-    let force_weak_kdf = if cfg!(debug_assertions) {
-        cli.force_weak_kdf
-    } else {
-        false
-    };
-
     let mut builder = GenerateOptions::builder(secret_key_file, public_key_file)
         .force(cli.force)
         .no_password(cli.no_password)
         .allow_kdf_fallback(cli.allow_kdf_fallback)
-        .force_weak_kdf(force_weak_kdf);
+        .force_weak_kdf(resolve_force_weak_kdf(cli));
 
     if let Some(comment) = comment {
         builder = builder.comment(comment);
@@ -575,17 +568,10 @@ fn handle_change(cli: &Cli) -> Result<()> {
         )?)
     };
 
-    // In debug mode, allow CLI to override; in release mode, always false
-    let force_weak_kdf = if cfg!(debug_assertions) {
-        cli.force_weak_kdf
-    } else {
-        false
-    };
-
     let options = ChangeOptions::builder(secret_key_file)
         .remove_password(cli.no_password && new_password.is_none())
         .allow_kdf_fallback(cli.allow_kdf_fallback)
-        .force_weak_kdf(force_weak_kdf)
+        .force_weak_kdf(resolve_force_weak_kdf(cli))
         .build();
 
     let result = change(
@@ -844,6 +830,14 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
 /// Check if stdin is a terminal (interactive mode)
 fn is_interactive() -> bool {
     io::stdin().is_terminal()
+}
+
+/// Resolve `--force-weak-kdf` flag, gated to debug builds only.
+///
+/// In release builds this always returns `false`, preventing accidental use
+/// of weak KDF parameters in production.
+fn resolve_force_weak_kdf(cli: &Cli) -> bool {
+    cfg!(debug_assertions) && cli.force_weak_kdf
 }
 
 /// Prompt for password using rpassword or read from file
