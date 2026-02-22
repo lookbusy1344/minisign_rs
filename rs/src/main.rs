@@ -647,8 +647,8 @@ fn display_inspect_result(result: &InspectResult) {
     // For encrypted secret keys, key ID is not available without decryption
     if result.key_type == KeyType::SecretEncrypted && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
     {
-        println!("├─ Key ID: [encrypted - password required to view]");
-        println!("├─ Key ID (words): [decrypt key to view]");
+        println!("├─ Key ID: [encrypted - password required]");
+        println!("├─ Key ID (words): [encrypted]");
     } else {
         println!("├─ Key ID: {}", result.key_id);
         println!("├─ Key ID (words): {}", result.key_id_words);

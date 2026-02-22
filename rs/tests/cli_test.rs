@@ -2765,7 +2765,7 @@ fn test_inspect_uses_saved_password_for_decryption() {
     credential_store::save_password(&credential_id, password).unwrap();
 
     // Inspect with decryption (should use saved password, not prompt)
-    // This should show the actual key ID, not "[encrypted - password required to view]"
+    // This should show the actual key ID, not "[encrypted - password required]"
     let inspect_output = minisign_cmd()
         .arg("-I")
         .arg("-s")
@@ -2784,9 +2784,9 @@ fn test_inspect_uses_saved_password_for_decryption() {
         "Inspect should use saved password. Stderr:\n{stderr_str}"
     );
 
-    // Should NOT show "[encrypted - password required to view]"
+    // Should NOT show "[encrypted - password required]"
     assert!(
-        !stdout_str.contains("[encrypted - password required to view]"),
+        !stdout_str.contains("[encrypted - password required]"),
         "Key ID should be decrypted using saved password. Output:\n{stdout_str}"
     );
 

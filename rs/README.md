@@ -212,8 +212,8 @@ Inspecting: mykey.key
 Security Level: HIGH [OK]
 
 Key Information:
-├─ Key ID: [encrypted - password required to view]
-├─ Key ID (words): [decrypt key to view]
+├─ Key ID: [encrypted - password required]
+├─ Key ID (words): [encrypted]
 ├─ Encrypted: Yes
 ├─ KDF Algorithm: Scrypt
 └─ KDF Parameters:
