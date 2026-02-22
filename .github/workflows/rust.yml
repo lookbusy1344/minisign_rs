@@ -35,7 +35,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libdbus-1-dev pkg-config
+        sudo apt-get install -y libdbus-1-dev pkg-config minisign
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -61,6 +61,6 @@ jobs:
     - name: Run Clippy (pedantic)
       run: cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 
-    - name: Run tests (fast)
+    - name: Run tests
       run: cargo test --verbose
-      timeout-minutes: 5
+      timeout-minutes: 10

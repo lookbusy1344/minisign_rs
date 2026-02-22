@@ -295,7 +295,6 @@ fn test_derive_key_104_byte_output_regression() {
 /// If this test fails after a scrypt crate upgrade, re-derive and verify
 /// the new output is cryptographically correct before updating the constant.
 #[test]
-#[ignore = "slow test with full scrypt parameters"]
 fn test_derive_key_full_params() {
     let password = b"minisign-full-params-kat-password";
     let salt = [0x01u8; 32];

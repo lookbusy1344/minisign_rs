@@ -4,15 +4,14 @@ All `cargo test` commands must be wrapped with `gtimeout`. Run from `rs/` (the R
 
 ## Commands
 
-**Fast tests** (~9s, run frequently):
+**All tests** (~30s):
 ```bash
-gtimeout 60 cargo test --no-default-features
+gtimeout 120 cargo test --no-default-features
 ```
 
-**Slow/security tests** (~16s, run before committing):
-```bash
-gtimeout 60 cargo test --no-default-features -- --ignored
-```
+Tests requiring the C minisign binary (`cross_binary_test`, `compatibility`) will skip with a
+warning when the binary is not installed. OS credential store tests are gated behind the
+`credential_store_tests` feature flag to avoid system prompts.
 
 ## Pre-Commit Order
 
@@ -21,8 +20,7 @@ Always run in this exact order before committing:
 ```bash
 gtimeout 60 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 cargo fmt
-gtimeout 60 cargo test --no-default-features
-gtimeout 60 cargo test --no-default-features -- --ignored
+gtimeout 120 cargo test --no-default-features
 ```
 
 `cargo fmt` must be the last formatting step before commit.

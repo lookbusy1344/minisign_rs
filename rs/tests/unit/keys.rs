@@ -286,7 +286,6 @@ fn test_get_unencrypted_secret_key() {
 }
 
 #[test]
-#[ignore = "expensive test with log_n=20, run with --ignored"]
 fn test_decrypt_c_generated_encrypted_key() {
     // Load the C-generated encrypted secret key
     let contents = fs::read_to_string("tests/fixtures/keys/test.key")
@@ -310,7 +309,6 @@ fn test_decrypt_c_generated_encrypted_key() {
 }
 
 #[test]
-#[ignore = "expensive test with log_n=20, run with --ignored"]
 fn test_decrypt_c_generated_encrypted_key_wrong_password() {
     // Load the C-generated encrypted secret key
     let contents = fs::read_to_string("tests/fixtures/keys/test.key")

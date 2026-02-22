@@ -9,8 +9,9 @@ use rand::Rng;
 /// Fast KDF work factor used across ops tests (N = 2^14, ~50 ms).
 ///
 /// Production keys use `log_n` = 20 (N = 2^20, ~1-5 s). Using 14 here keeps
-/// tests that involve encryption/decryption fast enough to run in CI without
-/// marking them `#[ignore]`.
+/// tests that involve encryption/decryption fast without running the full KDF
+/// on every test invocation. Tests that specifically validate production-strength
+/// parameters (e.g. `test_generate_encrypted_key`) use `log_n` = 20 directly.
 pub const TEST_LOG_N: u8 = 14;
 
 /// Create an encrypted [`SeckeyStruct`] using fast KDF parameters.

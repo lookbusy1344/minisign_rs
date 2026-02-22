@@ -3,16 +3,16 @@
 # Run all tests for minisign-rs
 #
 # Usage:
-#   ./run_all_tests.sh                          # Fast + slow tests (default, no keychain popups)
+#   ./run_all_tests.sh                          # All tests (default, no keychain popups)
 #   ./run_all_tests.sh --credential-store       # Credential store tests only (requires user interaction)
 #   ./run_all_tests.sh --all                    # All tests including credential store
 #
 # Test categories:
-#   - Fast tests: Default test suite (~9s, N=2^14 for scrypt)
-#   - Slow tests: Security tests with production KDF params (~16s, N=2^20 for scrypt)
+#   - Default tests: Full suite including production-strength scrypt and C compatibility
+#                    tests (C tests skip with a warning if minisign is not installed)
 #   - Credential store tests: Tests requiring OS keyring authorization (macOS Keychain, etc.)
 #
-# Note: Fast and slow tests run with --no-default-features to disable credential_store
+# Note: Default tests run with --no-default-features to disable the credential_store
 #       feature, preventing keychain popup dialogs during development.
 #       Credential store tests explicitly enable the feature and credential_store_tests.
 #
@@ -28,13 +28,10 @@ fi
 
 case "$RUN_MODE" in
     "default")
-        echo "Running fast tests (without credential store)..."
+        echo "Running tests (without credential store)..."
         gtimeout 120 cargo test --no-default-features
         echo ""
-        echo "Running slow tests (without credential store)..."
-        gtimeout 300 cargo test --no-default-features -- --ignored
-        echo ""
-        echo "✓ Fast and slow tests completed successfully!"
+        echo "✓ Tests completed successfully!"
         ;;
 
     "credential-store")
@@ -49,11 +46,8 @@ case "$RUN_MODE" in
         ;;
 
     "all")
-        echo "Running fast tests (without credential store)..."
+        echo "Running tests (without credential store)..."
         gtimeout 120 cargo test --no-default-features
-        echo ""
-        echo "Running slow tests (without credential store)..."
-        gtimeout 300 cargo test --no-default-features -- --ignored
         echo ""
         echo "Running credential store tests..."
         echo "Note: These tests require OS keyring authorization."

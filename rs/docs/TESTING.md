@@ -25,30 +25,19 @@ Minisign-rs has a comprehensive test suite ensuring cryptographic correctness, C
 - Edge case tests for unicode, symlinks, and large files
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
-- **11 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (468 tests) using optimized scrypt parameters (~3-6 seconds)
-- **Slow test suite** (11 tests) with production scrypt parameters (~10 seconds)
+- Production-strength scrypt parameter tests (N=2^20)
+- C compatibility tests skip with a warning when C minisign is not installed
 
 ## Test Categories
 
-Minisign-rs organizes tests into three main categories: fast tests, slow tests, and credential store tests.
+Minisign-rs organizes tests into two main categories: standard tests and credential store tests.
 
-### Fast Tests
+### Standard Tests
 
-**Count:** 454 tests (+ 14 doc tests = 468 total)
-**Runtime:** ~3-6 seconds
-**Scrypt parameters:** N=2^14 (optimized for speed)
+**Runtime:** ~30 seconds
+**Scrypt parameters:** Most tests use N=2^14 (fast); a handful validate production N=2^20 parameters
 
-Fast tests are the primary development test suite, using reduced scrypt parameters (N=2^14 instead of production N=2^20) to enable rapid iteration. These tests verify:
-
-- Logic correctness (encryption XOR, checksum calculation)
-- Error handling paths
-- Serialization/deserialization
-- CLI argument parsing
-- All crypto operations with fast parameters
-- Key handling and file formats
-
-**When to use:** During development for rapid feedback.
+The standard test suite covers all operations. Tests that require the C minisign binary will skip with a warning if it is not installed; all other tests run unconditionally.
 
 **Run with:**
 ```bash
@@ -57,28 +46,6 @@ cargo test --no-default-features
 
 # With keychain access (may show popups on macOS/Windows)
 cargo test
-```
-
-### Slow Tests
-
-**Count:** 11 tests
-**Runtime:** ~10 seconds
-**Scrypt parameters:** N=2^20 (production strength)
-
-Slow tests use production scrypt parameters to verify security properties and C minisign compatibility with real-world KDF settings. These tests are marked with `#[ignore]` and run separately.
-
-**When to use:** Before commits that modify crypto or key handling code.
-
-**Run with:**
-```bash
-# Slow tests only
-cargo test --no-default-features -- --ignored
-
-# Both fast and slow tests
-cargo test --no-default-features && cargo test --no-default-features -- --ignored
-
-# Use test runner script
-./run_all_tests.sh
 ```
 
 ### Credential Store Tests
@@ -113,14 +80,8 @@ cargo test --features credential_store_tests -- --test-threads=1
 ### Quick Reference
 
 ```bash
-# Fast tests only (recommended for development)
+# All tests, no keychain popups (recommended for development)
 cargo test --no-default-features
-
-# Slow security tests
-cargo test --no-default-features -- --ignored
-
-# All standard tests (fast + slow, ~25 seconds)
-./run_all_tests.sh
 
 # Credential store tests (requires user interaction)
 ./run_all_tests.sh --credential-store
@@ -136,12 +97,6 @@ By default, the `credential_store` feature is enabled, which may trigger macOS K
 ```bash
 # Recommended: Run tests without credential store (no keychain popups)
 cargo test --no-default-features
-
-# Run slow security tests without credential store
-cargo test --no-default-features -- --ignored
-
-# Run all standard tests without credential store (~25 seconds)
-cargo test --no-default-features && cargo test --no-default-features -- --ignored
 
 # Use the test runner script (no keychain popups by default)
 ./run_all_tests.sh
@@ -182,8 +137,6 @@ cargo test --test compatibility
 # Run only cross-binary tests
 cargo test --test cross_binary_test
 
-# Run all tests including slow ones
-cargo test --no-default-features -- --include-ignored
 ```
 
 ### Test Runner Script Options
@@ -191,7 +144,7 @@ cargo test --no-default-features -- --include-ignored
 The `run_all_tests.sh` script provides convenient test execution:
 
 ```bash
-./run_all_tests.sh                     # Fast + slow tests (default, no keychain popups)
+./run_all_tests.sh                     # All tests (default, no keychain popups)
 ./run_all_tests.sh --credential-store  # Credential store tests only
 ./run_all_tests.sh --all               # All tests including credential store
 ```
@@ -263,9 +216,6 @@ minisign -v
 ```bash
 # Run all cross-binary tests
 cargo test --test cross_binary_test
-
-# Run with slow tests in CI
-cargo test -- --ignored
 ```
 
 ### Test Coverage
@@ -299,10 +249,9 @@ fn test_cross_something() {
 Tests in minisign-rs follow strict organization principles:
 
 1. **All tests in `tests/` directory** - Not in `src/` (enables CodeQL exclusions)
-2. **Fast by default** - Use N=2^14 for scrypt in regular tests
-3. **Mark slow tests** - Use `#[ignore]` for production scrypt parameters
-4. **Separate credential store tests** - Avoid accidental user prompts during development
-5. **Cross-binary tests require C minisign** - Use `require_c_minisign!()` macro
+2. **Fast by default** - Use N=2^14 for scrypt in regular tests; use N=2^20 only when specifically validating production KDF behaviour
+3. **Separate credential store tests** - Avoid accidental user prompts during development
+4. **Cross-binary tests require C minisign** - Use `require_c_minisign!()` macro to skip with a warning when unavailable
 
 ### Naming Convention
 
@@ -329,29 +278,6 @@ let key = SeckeyStruct::new_encrypted(..., 14, 8, 1)?; // Fast test params (N=2^
 
 // ✅ GOOD - Use pre-generated fixtures for compatibility tests
 let key_bytes = include_bytes!("../fixtures/keys/c_encrypted_password123.key");
-```
-
-### Fast vs Slow Test Guidelines
-
-**Add a fast test when:**
-- Testing logic correctness
-- Testing error handling
-- Testing serialization/deserialization
-- Testing CLI argument parsing
-
-**Add a slow test when:**
-- Testing byte-level compatibility with C implementation
-- Validating production parameter handling
-- The behavior differs between fast and production parameters
-
-**Mark slow tests with `#[ignore]`:**
-
-```rust
-#[test]
-#[ignore = "Slow: uses production scrypt parameters"]
-fn test_decrypt_c_generated_encrypted_key() {
-    // Uses real KDF parameters, takes 15-30 seconds
-}
 ```
 
 ### Writing Cross-Binary Tests
@@ -431,31 +357,20 @@ cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 # 2. Format code (ALWAYS run AFTER clippy, BEFORE commit)
 cargo fmt
 
-# 3. Run fast test suite (~9 seconds)
+# 3. Run tests (~30 seconds)
 cargo test --no-default-features
-
-# 4. Run slow security tests (~16 seconds)
-cargo test --no-default-features -- --ignored
 ```
 
 **Note:** `cargo fmt` MUST be the last formatting step before commit to ensure consistent style.
 
 ## CI/CD Testing
 
-### Fast Tests (runs on all commits)
+### All Tests (runs on all commits)
 
 - **Workflow**: `.github/workflows/rust.yml`
 - **Platforms**: Linux, macOS, Windows
-- **Tests**: All unit, integration, and fast compatibility tests
+- **Tests**: Full test suite; C compatibility tests run on Linux (where C minisign is installed) and skip on macOS/Windows
 - **Timeout**: 10 minutes
-
-### Slow Tests (runs on all commits + nightly)
-
-- **Workflow**: `.github/workflows/slow-tests.yml`
-- **Platform**: Linux only
-- **Tests**: All `#[ignore]` tests + cross-binary tests
-- **Requires**: C minisign installed
-- **Timeout**: 30 minutes for ignored tests, 15 minutes for cross-binary
 
 ### Memory Safety (runs weekly + on push)
 
@@ -491,9 +406,8 @@ If cross-binary tests fail:
 ### Timeout Failures
 
 If tests timeout:
-- Check if using production scrypt parameters (N=2^20)
-- Tests using fast parameters (N=2^14) should complete in <1s
-- Production parameter tests should be marked `#[ignore]`
+- Check if using production scrypt parameters (N=2^20) where N=2^14 would suffice
+- Tests using fast parameters (N=2^14) should complete in <1s per test
 
 ### Credential Store Test Failures
 
@@ -557,10 +471,8 @@ While we don't enforce specific coverage percentages, comprehensive testing is e
 
 ## Summary
 
-- **479 total tests** with ~9 second fast suite and ~11 second slow suite
 - Use `--no-default-features` to avoid keychain popups during development
 - Use `./run_all_tests.sh` for convenient test execution
-- C minisign required for full compatibility testing (~18 cross-binary tests)
+- C compatibility tests skip with a warning when C minisign is not installed; on Linux CI it is installed so they run fully
 - All tests in `tests/` directory for proper CI/CD integration
-- Mark slow tests with `#[ignore]` for production scrypt parameters
 - Credential store tests are completely separate to avoid accidental prompts

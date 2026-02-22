@@ -14,6 +14,14 @@ use minisign::{
 };
 use std::{fs, process::Command};
 
+fn c_minisign_available() -> bool {
+    Command::new("minisign")
+        .arg("-v")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 /// Test parsing a C-generated public key file
 #[test]
 fn test_parse_c_generated_public_key() {
@@ -145,8 +153,11 @@ fn test_verify_c_generated_signature_wrong_key() {
 
 /// Test cross-compatibility: C minisign legacy signature -> Rust verify
 #[test]
-#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_verify_c_legacy_signature() {
+    if !c_minisign_available() {
+        eprintln!("SKIP: C minisign binary not found — install via: brew install minisign");
+        return;
+    }
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
     let message_file = temp_dir.path().join("legacy_test.txt");
     let sig_file = temp_dir.path().join("legacy_test.txt.minisig");
@@ -228,8 +239,11 @@ fn test_verify_c_legacy_signature() {
 
 /// Test cross-compatibility: Rust legacy signature -> C minisign verify
 #[test]
-#[ignore = "requires C minisign binary (brew install minisign)"]
 fn test_c_verify_rust_legacy_signature() {
+    if !c_minisign_available() {
+        eprintln!("SKIP: C minisign binary not found — install via: brew install minisign");
+        return;
+    }
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
     let message_file = temp_dir.path().join("rust_legacy.txt");
     let sig_file = temp_dir.path().join("rust_legacy.txt.minisig");

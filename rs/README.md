@@ -3,7 +3,6 @@
 [![Rust CI](https://github.com/lookbusy1344/minisign/actions/workflows/rust.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/rust.yml)
 [![CodeQL scan](https://github.com/lookbusy1344/minisign/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/codeql-analysis.yml)
 [![Coverage](https://github.com/lookbusy1344/minisign/actions/workflows/coverage.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/coverage.yml)
-[![Slow Tests](https://github.com/lookbusy1344/minisign/actions/workflows/slow-tests.yml/badge.svg)](https://github.com/lookbusy1344/minisign/actions/workflows/slow-tests.yml)
 
 A pure Rust implementation of the classic C project [minisign](https://jedisct1.github.io/minisign/), a dead simple tool to sign files and verify signatures.
 
@@ -41,9 +40,8 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - Edge case tests for unicode, symlinks, and large files
 - Fuzzing tests using proptest for property-based testing
 - Concurrent access tests for multi-process safety
-- **25 slow security tests** using production scrypt parameters (marked `#[ignore]`)
-- **Fast test suite** (463 tests) using optimized scrypt parameters (~10 seconds)
-- **Slow test suite** (25 tests) with production scrypt parameters (~11 seconds)
+- Production-strength scrypt parameter tests (N=2^20)
+- C compatibility tests skip with a warning when C minisign is not installed
 
 ### Code Quality
 
@@ -83,13 +81,11 @@ Release binaries are available for:
 cargo build --release
 
 # Run tests without keychain popups (recommended for development)
-./run_all_tests.sh                                         # Fast + slow tests (~21s)
-cargo test --no-default-features                           # Fast tests only (~10s)
-cargo test --no-default-features -- --ignored              # Slow tests only (~11s)
+./run_all_tests.sh                                         # All tests (~30s)
+cargo test --no-default-features                           # All tests (~30s)
 
 # Run tests with credential store enabled (may show keychain popups)
-cargo test                                                 # Fast tests
-cargo test -- --ignored                                    # Slow tests
+cargo test
 
 # Check code quality
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
@@ -126,11 +122,7 @@ See [docs/TESTING.md](docs/TESTING.md) for complete testing guide.
 
 **Quick commands:**
 ```bash
-# Fast tests (~9s)
 cargo test --no-default-features
-
-# Slow tests (~16s)
-cargo test --no-default-features -- --ignored
 ```
 
 ## Architecture
