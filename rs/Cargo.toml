@@ -19,7 +19,6 @@ rand_core = "=0.6.4"
 libc = "0.2"
 
 # Other dependencies
-itertools = "0.14"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"], optional = true }
 base64 = "0.22"
 clap = { version = "4.5", features = ["derive"] }
@@ -67,3 +66,18 @@ overflow-checks = true
 lto = true
 panic = "abort"
 codegen-units = 1
+opt-level = "z"
+
+# Keep crypto hot-paths at full optimisation
+[profile.release.package.scrypt]
+opt-level = 3
+[profile.release.package.salsa20]
+opt-level = 3
+[profile.release.package.blake2]
+opt-level = 3
+[profile.release.package.sha2]
+opt-level = 3
+[profile.release.package.ed25519-dalek]
+opt-level = 3
+[profile.release.package.curve25519-dalek]
+opt-level = 3

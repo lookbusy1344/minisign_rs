@@ -12,7 +12,6 @@
 //! - <https://philzimmermann.com/docs/PGP_word_list.pdf>
 
 use crate::crypto::KeyNum;
-use itertools::Itertools;
 
 /// PGP Word List for even byte positions (two-syllable words)
 ///
@@ -587,6 +586,7 @@ pub fn bytes_to_words(bytes: &[u8]) -> String {
                 ODD_WORDS[usize::from(byte)]
             }
         })
+        .collect::<Vec<&str>>()
         .join(" ")
 }
 
