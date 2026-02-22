@@ -85,20 +85,50 @@ impl<'a> InspectOptions<'a> {
 /// Result of inspecting a key file
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InspectResult {
-    /// Key ID in base64 format
-    pub key_id: String,
-    /// Key ID in PGP Word List format (human-readable)
-    pub key_id_words: String,
-    /// Whether this is a secret or public key
-    pub key_type: KeyType,
-    /// Security level (for secret keys)
-    pub security_level: Option<SecurityLevel>,
-    /// KDF information (for encrypted secret keys)
-    pub kdf_info: Option<KdfInfo>,
-    /// Whether a password is saved in the OS credential store for this key
-    pub password_saved: bool,
-    /// Credential ID used for keychain lookups (None for public keys)
-    pub credential_id: Option<String>,
+    key_id: String,
+    key_id_words: String,
+    key_type: KeyType,
+    security_level: Option<SecurityLevel>,
+    kdf_info: Option<KdfInfo>,
+    password_saved: bool,
+    credential_id: Option<String>,
+}
+
+impl InspectResult {
+    #[must_use]
+    pub fn key_id(&self) -> &str {
+        &self.key_id
+    }
+
+    #[must_use]
+    pub fn key_id_words(&self) -> &str {
+        &self.key_id_words
+    }
+
+    #[must_use]
+    pub const fn key_type(&self) -> KeyType {
+        self.key_type
+    }
+
+    #[must_use]
+    pub const fn security_level(&self) -> Option<SecurityLevel> {
+        self.security_level
+    }
+
+    #[must_use]
+    pub fn kdf_info(&self) -> Option<&KdfInfo> {
+        self.kdf_info.as_ref()
+    }
+
+    #[must_use]
+    pub const fn password_saved(&self) -> bool {
+        self.password_saved
+    }
+
+    #[must_use]
+    pub fn credential_id(&self) -> Option<&str> {
+        self.credential_id.as_deref()
+    }
 }
 
 /// Type of key being inspected
@@ -112,13 +142,50 @@ pub enum KeyType {
 /// KDF parameter information
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KdfInfo {
-    pub opslimit: u64,
-    pub memlimit: u64,
-    pub log_n: u8,
-    pub r: u32,
-    pub p: u32,
-    pub is_fallback: bool,
-    pub weakness_multiplier: Option<u64>,
+    opslimit: u64,
+    memlimit: u64,
+    log_n: u8,
+    r: u32,
+    p: u32,
+    is_fallback: bool,
+    weakness_multiplier: Option<u64>,
+}
+
+impl KdfInfo {
+    #[must_use]
+    pub const fn opslimit(&self) -> u64 {
+        self.opslimit
+    }
+
+    #[must_use]
+    pub const fn memlimit(&self) -> u64 {
+        self.memlimit
+    }
+
+    #[must_use]
+    pub const fn log_n(&self) -> u8 {
+        self.log_n
+    }
+
+    #[must_use]
+    pub const fn r(&self) -> u32 {
+        self.r
+    }
+
+    #[must_use]
+    pub const fn p(&self) -> u32 {
+        self.p
+    }
+
+    #[must_use]
+    pub const fn is_fallback(&self) -> bool {
+        self.is_fallback
+    }
+
+    #[must_use]
+    pub const fn weakness_multiplier(&self) -> Option<u64> {
+        self.weakness_multiplier
+    }
 }
 
 /// Inspect a key file and return detailed information
@@ -335,12 +402,26 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
 /// Result of inspecting a signature file
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureInspectResult {
-    /// Key ID in hex format
-    pub key_id: String,
-    /// Key ID in PGP Word List format
-    pub key_id_words: String,
-    /// Signature algorithm type
-    pub algorithm: SignatureAlgorithm,
+    key_id: String,
+    key_id_words: String,
+    algorithm: SignatureAlgorithm,
+}
+
+impl SignatureInspectResult {
+    #[must_use]
+    pub fn key_id(&self) -> &str {
+        &self.key_id
+    }
+
+    #[must_use]
+    pub fn key_id_words(&self) -> &str {
+        &self.key_id_words
+    }
+
+    #[must_use]
+    pub const fn algorithm(&self) -> SignatureAlgorithm {
+        self.algorithm
+    }
 }
 
 /// Inspect a signature file and return key ID information

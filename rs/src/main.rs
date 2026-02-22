@@ -622,10 +622,10 @@ fn display_signature_inspect_result(result: &SignatureInspectResult) {
     use minisign::signature::SignatureAlgorithm;
 
     println!("Signature Information:");
-    println!("├─ Key ID: {}", result.key_id);
-    println!("├─ Key ID (words): {}", result.key_id_words);
+    println!("├─ Key ID: {}", result.key_id());
+    println!("├─ Key ID (words): {}", result.key_id_words());
 
-    let algorithm_desc = match result.algorithm {
+    let algorithm_desc = match result.algorithm() {
         SignatureAlgorithm::Normal => "Normal (Ed25519)",
         SignatureAlgorithm::Prehashed => "Prehashed (Blake2b-512)",
     };
@@ -635,7 +635,7 @@ fn display_signature_inspect_result(result: &SignatureInspectResult) {
 /// Display the inspection result
 fn display_inspect_result(result: &InspectResult) {
     // Display security level prominently first (for secret keys)
-    if let Some(security_level) = result.security_level {
+    if let Some(security_level) = result.security_level() {
         match security_level {
             SecurityLevel::High => println!("Security Level: HIGH [OK]\n"),
             SecurityLevel::Medium => println!("Security Level: MEDIUM [WARNING]\n"),
@@ -648,44 +648,48 @@ fn display_inspect_result(result: &InspectResult) {
     println!("Key Information:");
 
     // For encrypted secret keys, key ID is not available without decryption
-    if result.key_type == KeyType::SecretEncrypted && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
+    if result.key_type() == KeyType::SecretEncrypted
+        && result.key_id() == ENCRYPTED_KEYNUM_PLACEHOLDER
     {
         println!("├─ Key ID: [encrypted - password required]");
         println!("├─ Key ID (words): [encrypted]");
     } else {
-        println!("├─ Key ID: {}", result.key_id);
-        println!("├─ Key ID (words): {}", result.key_id_words);
+        println!("├─ Key ID: {}", result.key_id());
+        println!("├─ Key ID (words): {}", result.key_id_words());
     }
 
     // Display credential ID for secret keys
-    if let Some(ref credential_id) = result.credential_id {
+    if let Some(credential_id) = result.credential_id() {
         println!("├─ Credential ID: {credential_id}");
     }
 
-    match result.key_type {
+    match result.key_type() {
         KeyType::SecretEncrypted => {
             println!("├─ Encrypted: Yes");
             println!("├─ KDF Algorithm: Scrypt");
             println!(
                 "├─ Password saved: {}",
-                if result.password_saved { "Yes" } else { "No" }
+                if result.password_saved() { "Yes" } else { "No" }
             );
 
-            if let Some(kdf) = &result.kdf_info {
+            if let Some(kdf) = result.kdf_info() {
                 println!("└─ KDF Parameters:");
                 println!(
                     "   ├─ opslimit: {} (N=2^{}, r={}, p={})",
-                    kdf.opslimit, kdf.log_n, kdf.r, kdf.p
+                    kdf.opslimit(),
+                    kdf.log_n(),
+                    kdf.r(),
+                    kdf.p()
                 );
                 println!(
                     "   ├─ memlimit: {} ({} MB)",
-                    kdf.memlimit,
-                    kdf.memlimit / 1_048_576
+                    kdf.memlimit(),
+                    kdf.memlimit() / 1_048_576
                 );
 
-                if kdf.is_fallback {
+                if kdf.is_fallback() {
                     println!("   ├─ Creation: Fallback (reduced parameters)");
-                    if let Some(multiplier) = kdf.weakness_multiplier {
+                    if let Some(multiplier) = kdf.weakness_multiplier() {
                         println!(
                             "   └─ Brute-force resistance: {multiplier}x weaker than production strength"
                         );
@@ -695,7 +699,7 @@ fn display_inspect_result(result: &InspectResult) {
                 }
 
                 // Add recommendation for weak keys
-                if result.security_level == Some(SecurityLevel::Low) {
+                if result.security_level() == Some(SecurityLevel::Low) {
                     println!();
                     println!(
                         "*** RECOMMENDATION: Regenerate this key on a system with >=2GB RAM for full security."
@@ -707,7 +711,7 @@ fn display_inspect_result(result: &InspectResult) {
             println!("├─ Encrypted: No");
             println!(
                 "└─ Password saved: {}",
-                if result.password_saved { "Yes" } else { "No" }
+                if result.password_saved() { "Yes" } else { "No" }
             );
             println!();
             println!("*** WARNING: This key is stored in plaintext.");
@@ -795,8 +799,8 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
 
     // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt
     let mut decrypted = false;
-    if result.key_type == KeyType::SecretEncrypted
-        && result.key_id == ENCRYPTED_KEYNUM_PLACEHOLDER
+    if result.key_type() == KeyType::SecretEncrypted
+        && result.key_id() == ENCRYPTED_KEYNUM_PLACEHOLDER
         && !cli.no_decrypt
         && let Some(path) = key_file_path
     {
