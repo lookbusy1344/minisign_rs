@@ -832,18 +832,17 @@ fn test_sign_multiple_files_deduplication() {
     assert!(sig_path.exists());
 }
 
-/// Verifies that the clock-fallback path (timestamp=0) does not panic and produces a valid signature.
+/// Verifies that `create_signature` accepts a zero timestamp as a custom `trusted_comment`
+/// and produces a globally-verifiable signature.
 ///
-/// The `generate_default_trusted_comment` function uses `unwrap_or_else` to fall back to
-/// `Duration::ZERO` when the system clock is before the UNIX epoch.  This means it will
-/// produce `"timestamp:0"` instead of panicking.  Directly injecting a failing clock is not
-/// straightforward without mocking, so this test simulates the fallback by passing
-/// `trusted_comment = Some("timestamp:0")` to `create_signature`, which is the exact string
-/// the fallback path would produce.
-///
-// TODO: add mock-clock injection to enable a full stderr-capture test of the fallback branch.
+/// This exercises the `Some(trusted_comment)` branch of `create_signature` with the exact
+/// string `"timestamp:0"` — the value that `generate_default_trusted_comment` would produce
+/// if the system clock were before the UNIX epoch.  The clock-fallback branch itself
+/// (`unwrap_or_else` in `generate_default_trusted_comment`) cannot be triggered without
+/// clock-injection infrastructure; see `test_generate_default_trusted_comment` for the
+/// happy-path coverage of that function.
 #[test]
-fn test_sign_clock_fallback_behavior() {
+fn test_create_signature_accepts_zero_timestamp_comment() {
     let temp_dir = TempDir::new().unwrap();
     let message_path = temp_dir.path().join("message.txt");
     fs::write(&message_path, b"clock fallback test message").unwrap();
@@ -863,7 +862,7 @@ fn test_sign_clock_fallback_behavior() {
 
     assert!(
         result.is_ok(),
-        "zero timestamp (clock fallback) must not cause an error or panic; got: {:?}",
+        "create_signature must accept a zero timestamp trusted_comment; got: {:?}",
         result.err()
     );
 
