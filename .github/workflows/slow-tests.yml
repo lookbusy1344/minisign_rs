@@ -35,5 +35,5 @@ jobs:
       run: cargo build --release
 
     - name: Run slow cross-binary tests
-      run: cargo test --release --test cross_binary_test -- --ignored --test-threads=1 --nocapture
+      run: cargo test --release --test cross_binary_test --test compatibility -- --ignored --test-threads=1 --nocapture
       timeout-minutes: 30
