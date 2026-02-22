@@ -458,4 +458,3 @@ fn test_debug_implementations() {
         "PublicKey and Signature should have consistent truncation markers"
     );
 }
-
