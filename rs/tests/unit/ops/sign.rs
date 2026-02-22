@@ -831,3 +831,46 @@ fn test_sign_multiple_files_deduplication() {
     let sig_path = PathBuf::from(sig_path);
     assert!(sig_path.exists());
 }
+
+/// Verifies that `create_signature` accepts a zero timestamp as a custom `trusted_comment`
+/// and produces a globally-verifiable signature.
+///
+/// This exercises the `Some(trusted_comment)` branch of `create_signature` with the exact
+/// string `"timestamp:0"` — the value that `generate_default_trusted_comment` would produce
+/// if the system clock were before the UNIX epoch.  The clock-fallback branch itself
+/// (`unwrap_or_else` in `generate_default_trusted_comment`) cannot be triggered without
+/// clock-injection infrastructure; see `test_generate_default_trusted_comment` for the
+/// happy-path coverage of that function.
+#[test]
+fn test_create_signature_accepts_zero_timestamp_comment() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, b"clock fallback test message").unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+
+    // Simulate the fallback: timestamp:0 is what the code produces when
+    // SystemTime::now().duration_since(UNIX_EPOCH) returns an error.
+    let result = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        true,
+        Some("timestamp:0"),
+        None,
+    );
+
+    assert!(
+        result.is_ok(),
+        "create_signature must accept a zero timestamp trusted_comment; got: {:?}",
+        result.err()
+    );
+
+    let sig_box = result.unwrap();
+    assert_eq!(sig_box.trusted_comment(), "timestamp:0");
+
+    // Verify the global signature is valid — confirming the signing path completed correctly.
+    sig_box
+        .verify_global_signature(&public_key)
+        .expect("global signature from zero-timestamp path must verify");
+}
