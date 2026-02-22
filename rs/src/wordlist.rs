@@ -574,20 +574,28 @@ const _: () = assert!(
 /// let words = bytes_to_words(&bytes);
 /// assert_eq!(words, "aardvark adviser");
 /// ```
+/// Join string slices from an iterator with a single space, using a pre-allocated buffer.
+fn join_spaced<'a>(iter: impl Iterator<Item = &'a str>, capacity: usize) -> String {
+    iter.fold(String::with_capacity(capacity), |mut acc, word| {
+        if !acc.is_empty() {
+            acc.push(' ');
+        }
+        acc.push_str(word);
+        acc
+    })
+}
+
 #[must_use]
 pub fn bytes_to_words(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .enumerate()
-        .map(|(i, &byte)| {
-            if i % 2 == 0 {
-                EVEN_WORDS[usize::from(byte)]
-            } else {
-                ODD_WORDS[usize::from(byte)]
-            }
-        })
-        .collect::<Vec<&str>>()
-        .join(" ")
+    // Longest PGP word is 11 chars + 1 separator byte per input byte.
+    let words = bytes.iter().enumerate().map(|(i, &byte)| {
+        if i % 2 == 0 {
+            EVEN_WORDS[usize::from(byte)]
+        } else {
+            ODD_WORDS[usize::from(byte)]
+        }
+    });
+    join_spaced(words, bytes.len() * 12)
 }
 
 /// Convert a `KeyNum` (8-byte key identifier) to PGP Word List representation
