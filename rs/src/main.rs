@@ -770,6 +770,30 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         };
 
+    // Handle --forget-password: remove saved credential and exit without decrypting
+    if cli.forget_password
+        && let Some(path) = key_file_path
+    {
+        let seckey = load_secret_key(path)?;
+        let credential_id = seckey.credential_id();
+        let had_password = minisign::credential_store::has_password(&credential_id);
+        return match minisign::credential_store::forget_password(&credential_id) {
+            Ok(()) => {
+                if !cli.quiet {
+                    if had_password {
+                        println!("Password removed from credential store");
+                    } else {
+                        println!("No saved password found for this key");
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => Err(Error::CredentialStoreError(format!(
+                "Failed to remove password: {e}"
+            ))),
+        };
+    }
+
     // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt
     let mut decrypted = false;
     if result.key_type == KeyType::SecretEncrypted

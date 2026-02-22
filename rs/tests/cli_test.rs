@@ -3059,3 +3059,53 @@ fn test_long_password_file_no_warning() {
         .success()
         .stderr(predicate::str::contains("short password").not());
 }
+
+#[test]
+#[serial_test::serial]
+#[cfg(feature = "credential_store_tests")]
+fn test_forget_password_via_inspect() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let password = "inspect_forget_test_pwd";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    // Generate key and immediately save password to credential store
+    minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    let credential_id = get_credential_id_from_file(&sk_path);
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    assert!(
+        credential_store::has_password(&credential_id),
+        "password should be saved before forget"
+    );
+
+    // Forget via -I rather than -K: this is the reported bug
+    minisign_cmd()
+        .arg("-I")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .assert()
+        .success();
+
+    assert!(
+        !credential_store::has_password(&credential_id),
+        "-I --forget-password must remove the saved password"
+    );
+}
