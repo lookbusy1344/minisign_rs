@@ -16,6 +16,7 @@
 //! - [`errors`] - Error types and Result alias
 //! - [`cli`] - Command-line interface (for binary)
 
+#[doc(hidden)]
 pub mod cli;
 pub mod constants;
 pub mod credential_store;

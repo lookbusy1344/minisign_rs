@@ -50,18 +50,18 @@ fn test_inspect_production_strength_encrypted_key() {
     let result = inspect(&options).unwrap();
 
     // Verify results
-    assert_eq!(result.key_type, KeyType::SecretEncrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::High));
-    assert!(result.kdf_info.is_some());
+    assert_eq!(result.key_type(), KeyType::SecretEncrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::High));
+    assert!(result.kdf_info().is_some());
 
-    let kdf_info = result.kdf_info.unwrap();
-    assert_eq!(kdf_info.opslimit, 33_554_432);
-    assert_eq!(kdf_info.memlimit, 1_073_741_824);
-    assert_eq!(kdf_info.log_n, 20);
-    assert_eq!(kdf_info.r, 8);
-    assert_eq!(kdf_info.p, 1);
-    assert!(!kdf_info.is_fallback);
-    assert_eq!(kdf_info.weakness_multiplier, None);
+    let kdf_info = result.kdf_info().unwrap();
+    assert_eq!(kdf_info.opslimit(), 33_554_432);
+    assert_eq!(kdf_info.memlimit(), 1_073_741_824);
+    assert_eq!(kdf_info.log_n(), 20);
+    assert_eq!(kdf_info.r(), 8);
+    assert_eq!(kdf_info.p(), 1);
+    assert!(!kdf_info.is_fallback());
+    assert_eq!(kdf_info.weakness_multiplier(), None);
 }
 
 #[test]
@@ -93,15 +93,15 @@ fn test_inspect_medium_strength_fallback_key() {
 
     let result = inspect(&options).unwrap();
 
-    assert_eq!(result.key_type, KeyType::SecretEncrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::Medium));
+    assert_eq!(result.key_type(), KeyType::SecretEncrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::Medium));
 
-    let kdf_info = result.kdf_info.unwrap();
-    assert_eq!(kdf_info.opslimit, 16_777_216);
-    assert_eq!(kdf_info.memlimit, 536_870_912);
-    assert_eq!(kdf_info.log_n, 19);
-    assert!(kdf_info.is_fallback);
-    assert_eq!(kdf_info.weakness_multiplier, Some(2));
+    let kdf_info = result.kdf_info().unwrap();
+    assert_eq!(kdf_info.opslimit(), 16_777_216);
+    assert_eq!(kdf_info.memlimit(), 536_870_912);
+    assert_eq!(kdf_info.log_n(), 19);
+    assert!(kdf_info.is_fallback());
+    assert_eq!(kdf_info.weakness_multiplier(), Some(2));
 }
 
 #[test]
@@ -133,15 +133,15 @@ fn test_inspect_low_strength_fallback_key() {
 
     let result = inspect(&options).unwrap();
 
-    assert_eq!(result.key_type, KeyType::SecretEncrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::Low));
+    assert_eq!(result.key_type(), KeyType::SecretEncrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::Low));
 
-    let kdf_info = result.kdf_info.unwrap();
-    assert_eq!(kdf_info.opslimit, 4_194_304);
-    assert_eq!(kdf_info.memlimit, 134_217_728);
-    assert_eq!(kdf_info.log_n, 17);
-    assert!(kdf_info.is_fallback);
-    assert_eq!(kdf_info.weakness_multiplier, Some(8));
+    let kdf_info = result.kdf_info().unwrap();
+    assert_eq!(kdf_info.opslimit(), 4_194_304);
+    assert_eq!(kdf_info.memlimit(), 134_217_728);
+    assert_eq!(kdf_info.log_n(), 17);
+    assert!(kdf_info.is_fallback());
+    assert_eq!(kdf_info.weakness_multiplier(), Some(8));
 }
 
 #[test]
@@ -157,9 +157,9 @@ fn test_inspect_unencrypted_secret_key() {
 
     let result = inspect(&options).unwrap();
 
-    assert_eq!(result.key_type, KeyType::SecretUnencrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::None));
-    assert!(result.kdf_info.is_none());
+    assert_eq!(result.key_type(), KeyType::SecretUnencrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::None));
+    assert!(result.kdf_info().is_none());
 }
 
 #[test]
@@ -174,13 +174,13 @@ fn test_inspect_public_key() {
 
     let result = inspect(&options).unwrap();
 
-    assert_eq!(result.key_type, KeyType::Public);
-    assert_eq!(result.security_level, None);
-    assert!(result.kdf_info.is_none());
-    assert!(!result.key_id.is_empty());
-    assert!(!result.key_id_words.is_empty());
+    assert_eq!(result.key_type(), KeyType::Public);
+    assert_eq!(result.security_level(), None);
+    assert!(result.kdf_info().is_none());
+    assert!(!result.key_id().is_empty());
+    assert!(!result.key_id_words().is_empty());
     // Should have exactly 8 words (one per byte in keynum)
-    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
+    assert_eq!(result.key_id_words().split_whitespace().count(), 8);
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn test_security_level_classification() {
     let high_contents = high_key.to_file_contents("high");
     let high_file = create_temp_key_file(&high_contents);
     let result = inspect(&InspectOptions::new(high_file.path())).unwrap();
-    assert_eq!(result.security_level, Some(SecurityLevel::High));
+    assert_eq!(result.security_level(), Some(SecurityLevel::High));
 
     // Medium: After 1 fallback (N=2^19, 512 MB)
     rand::thread_rng().fill(&mut salt);
@@ -243,7 +243,7 @@ fn test_security_level_classification() {
     let medium_contents = medium_key.to_file_contents("medium");
     let medium_file = create_temp_key_file(&medium_contents);
     let result = inspect(&InspectOptions::new(medium_file.path())).unwrap();
-    assert_eq!(result.security_level, Some(SecurityLevel::Medium));
+    assert_eq!(result.security_level(), Some(SecurityLevel::Medium));
 
     // Low: After 3 fallbacks (N=2^17, 128 MB)
     rand::thread_rng().fill(&mut salt);
@@ -261,7 +261,7 @@ fn test_security_level_classification() {
     let low_contents = low_key.to_file_contents("low");
     let low_file = create_temp_key_file(&low_contents);
     let result = inspect(&InspectOptions::new(low_file.path())).unwrap();
-    assert_eq!(result.security_level, Some(SecurityLevel::Low));
+    assert_eq!(result.security_level(), Some(SecurityLevel::Low));
 }
 
 #[test]
@@ -305,9 +305,10 @@ fn test_weakness_multiplier_calculation() {
 
         let result = inspect(&InspectOptions::new(file.path())).unwrap();
 
-        let kdf_info = result.kdf_info.unwrap();
+        let kdf_info = result.kdf_info().unwrap();
         assert_eq!(
-            kdf_info.weakness_multiplier, expected_multiplier,
+            kdf_info.weakness_multiplier(),
+            expected_multiplier,
             "Failed for memlimit={memlimit}"
         );
     }
@@ -324,13 +325,13 @@ fn test_inspect_c_generated_production_key() {
     let result = inspect(&InspectOptions::new(temp_file.path())).unwrap();
 
     // C-generated test key should be production strength
-    assert_eq!(result.key_type, KeyType::SecretEncrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::High));
+    assert_eq!(result.key_type(), KeyType::SecretEncrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::High));
 
-    let kdf_info = result.kdf_info.unwrap();
-    assert_eq!(kdf_info.opslimit, 33_554_432);
-    assert_eq!(kdf_info.memlimit, 1_073_741_824);
-    assert!(!kdf_info.is_fallback);
+    let kdf_info = result.kdf_info().unwrap();
+    assert_eq!(kdf_info.opslimit(), 33_554_432);
+    assert_eq!(kdf_info.memlimit(), 1_073_741_824);
+    assert!(!kdf_info.is_fallback());
 }
 
 #[test]
@@ -343,9 +344,9 @@ fn test_inspect_c_generated_unencrypted_key() {
 
     let result = inspect(&InspectOptions::new(temp_file.path())).unwrap();
 
-    assert_eq!(result.key_type, KeyType::SecretUnencrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::None));
-    assert!(result.kdf_info.is_none());
+    assert_eq!(result.key_type(), KeyType::SecretUnencrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::None));
+    assert!(result.kdf_info().is_none());
 }
 
 #[test]
@@ -358,9 +359,9 @@ fn test_inspect_c_generated_public_key() {
 
     let result = inspect(&InspectOptions::new(temp_file.path())).unwrap();
 
-    assert_eq!(result.key_type, KeyType::Public);
-    assert_eq!(result.security_level, None);
-    assert!(result.kdf_info.is_none());
+    assert_eq!(result.key_type(), KeyType::Public);
+    assert_eq!(result.security_level(), None);
+    assert!(result.kdf_info().is_none());
 }
 
 #[test]
@@ -370,16 +371,16 @@ fn test_inspect_base64_public_key() {
 
     let result = inspect_base64(base64).unwrap();
 
-    assert_eq!(result.key_type, KeyType::Public);
-    assert_eq!(result.security_level, None);
-    assert!(result.kdf_info.is_none());
-    assert!(!result.key_id.is_empty());
+    assert_eq!(result.key_type(), KeyType::Public);
+    assert_eq!(result.security_level(), None);
+    assert!(result.kdf_info().is_none());
+    assert!(!result.key_id().is_empty());
     // Key ID should be 16 uppercase hex characters (matches C minisign format)
-    assert_eq!(result.key_id.len(), 16);
-    assert!(result.key_id.chars().all(|c| c.is_ascii_hexdigit()));
-    assert!(!result.key_id_words.is_empty());
+    assert_eq!(result.key_id().len(), 16);
+    assert!(result.key_id().chars().all(|c| c.is_ascii_hexdigit()));
+    assert!(!result.key_id_words().is_empty());
     // Should have exactly 8 words (one per byte in keynum)
-    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
+    assert_eq!(result.key_id_words().split_whitespace().count(), 8);
 }
 
 #[test]
@@ -431,12 +432,12 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
 
     // Verify the real keynum is shown (not zeros)
     let expected_key_id = keynum.to_key_id();
-    assert_eq!(result.key_id, expected_key_id);
-    assert_ne!(result.key_id, ENCRYPTED_KEYNUM_PLACEHOLDER);
+    assert_eq!(result.key_id(), expected_key_id);
+    assert_ne!(result.key_id(), ENCRYPTED_KEYNUM_PLACEHOLDER);
 
     // Verify key type and security level
-    assert_eq!(result.key_type, KeyType::SecretEncrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::Low));
+    assert_eq!(result.key_type(), KeyType::SecretEncrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::Low));
 }
 
 #[test]
@@ -480,8 +481,8 @@ fn test_inspect_private_works_with_unencrypted_key() {
     // Should work without password (password is ignored for unencrypted keys)
     let result = inspect_private(temp_file.path(), b"").unwrap();
 
-    assert_eq!(result.key_type, KeyType::SecretUnencrypted);
-    assert_eq!(result.key_id, keynum.to_key_id());
+    assert_eq!(result.key_type(), KeyType::SecretUnencrypted);
+    assert_eq!(result.key_id(), keynum.to_key_id());
 }
 
 #[test]
@@ -498,8 +499,8 @@ fn test_inspect_private_works_with_public_key() {
     // Should work with public key (password is ignored)
     let result = inspect_private(temp_file.path(), b"").unwrap();
 
-    assert_eq!(result.key_type, KeyType::Public);
-    assert_eq!(result.key_id, keynum.to_key_id());
+    assert_eq!(result.key_type(), KeyType::Public);
+    assert_eq!(result.key_id(), keynum.to_key_id());
 }
 
 // Tests for signature inspection
@@ -530,15 +531,15 @@ fn test_inspect_signature_normal() {
     let result = inspect_signature(temp_file.path()).unwrap();
 
     // Should extract key ID matching the keynum
-    assert_eq!(result.key_id, keynum.to_key_id());
-    assert_eq!(result.key_id.len(), 16); // 16 hex chars
+    assert_eq!(result.key_id(), keynum.to_key_id());
+    assert_eq!(result.key_id().len(), 16); // 16 hex chars
 
     // Should have word list matching the keynum
-    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
+    assert_eq!(result.key_id_words().split_whitespace().count(), 8);
 
     // Should detect normal algorithm
     assert_eq!(
-        result.algorithm,
+        result.algorithm(),
         minisign::signature::SignatureAlgorithm::Normal
     );
 }
@@ -552,23 +553,23 @@ fn test_inspect_signature_prehashed() {
         inspect_signature(Path::new("tests/fixtures/signatures/hello.txt.minisig")).unwrap();
 
     // Should extract key ID
-    assert!(!result.key_id.is_empty());
-    assert_eq!(result.key_id.len(), 16); // 16 hex chars
-    assert!(result.key_id.chars().all(|c| c.is_ascii_hexdigit()));
+    assert!(!result.key_id().is_empty());
+    assert_eq!(result.key_id().len(), 16); // 16 hex chars
+    assert!(result.key_id().chars().all(|c| c.is_ascii_hexdigit()));
     assert!(
         result
-            .key_id
+            .key_id()
             .chars()
             .all(|c| c.is_uppercase() || c.is_ascii_digit())
     );
 
     // Should have word list
-    assert!(!result.key_id_words.is_empty());
-    assert_eq!(result.key_id_words.split_whitespace().count(), 8);
+    assert!(!result.key_id_words().is_empty());
+    assert_eq!(result.key_id_words().split_whitespace().count(), 8);
 
     // Should detect prehashed algorithm
     assert_eq!(
-        result.algorithm,
+        result.algorithm(),
         minisign::signature::SignatureAlgorithm::Prehashed
     );
 }
@@ -620,13 +621,13 @@ fn test_inspect_with_credential_store_check_disabled() {
     let result = inspect(&options).unwrap();
 
     // All structural fields must still be populated
-    assert_eq!(result.key_type, KeyType::SecretEncrypted);
-    assert_eq!(result.security_level, Some(SecurityLevel::High));
-    assert!(result.kdf_info.is_some());
-    assert!(result.credential_id.is_some());
+    assert_eq!(result.key_type(), KeyType::SecretEncrypted);
+    assert_eq!(result.security_level(), Some(SecurityLevel::High));
+    assert!(result.kdf_info().is_some());
+    assert!(result.credential_id().is_some());
 
     // Credential store was not consulted — password_saved must be false
-    assert!(!result.password_saved);
+    assert!(!result.password_saved());
 }
 
 #[test]
@@ -657,8 +658,8 @@ fn test_inspect_result_includes_credential_id() {
     let result = inspect(&options).unwrap();
 
     // Verify credential_id is present for secret keys
-    assert!(result.credential_id.is_some());
-    let credential_id = result.credential_id.unwrap();
+    assert!(result.credential_id().is_some());
+    let credential_id = result.credential_id().unwrap();
 
     // Verify it matches the seckey's credential_id
     let expected_credential_id = seckey.credential_id();

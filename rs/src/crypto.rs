@@ -37,11 +37,11 @@ pub const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
 pub const SCRYPT_OPSLIMIT_MIN: u64 = 32_768; // 2^15
 pub const SCRYPT_MEMLIMIT_MIN: u64 = 16_777_216; // 16 MB
 
-/// Buffer size for streaming hash operations (8 KB)
+/// Buffer size for streaming hash operations (64 KB)
 ///
-/// This buffer size provides good performance for streaming large files
-/// through Blake2b without excessive memory usage.
-const STREAM_BUFFER_SIZE: usize = 8192;
+/// 64 KB aligns with typical OS readahead and page-cache granularity,
+/// reducing syscall overhead when streaming large files through Blake2b.
+const STREAM_BUFFER_SIZE: usize = 65536;
 
 /// Ed25519 secret key (64 bytes) with automatic zeroization
 #[derive(Zeroize, ZeroizeOnDrop)]
@@ -323,7 +323,7 @@ pub fn blake2b_512(data: &[u8]) -> [u8; 64] {
 /// Returns an error if reading from the input fails
 pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
     let mut hasher = Blake2b512::new();
-    let mut buffer = [0u8; STREAM_BUFFER_SIZE];
+    let mut buffer = vec![0u8; STREAM_BUFFER_SIZE].into_boxed_slice();
 
     loop {
         let n = reader

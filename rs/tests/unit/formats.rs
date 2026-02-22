@@ -30,54 +30,26 @@ fn test_base64_invalid() {
 }
 
 #[test]
-fn test_u64_le_roundtrip() {
-    let test_values = vec![
-        0u64,
-        1,
-        255,
-        256,
-        65535,
-        65536,
-        u64::MAX,
-        0x0123_4567_89AB_CDEF,
-    ];
-
-    for value in test_values {
-        let mut buf = [0u8; 8];
-        write_u64_le(&mut buf, value).unwrap();
-        let read_value = read_u64_le(&buf).unwrap();
-        assert_eq!(value, read_value, "u64 roundtrip failed for {value:#x}");
-    }
-}
-
-#[test]
-fn test_u64_le_known_values() {
+fn test_read_u64_le_known_values() {
     // Test specific byte patterns to ensure correct endianness
     let test_cases = vec![
         (
-            0x0102_0304_0506_0708_u64,
             [0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01],
+            0x0102_0304_0506_0708_u64,
         ),
         (
-            0x0000_0000_0000_0001_u64,
             [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            0x0000_0000_0000_0001_u64,
         ),
         (
-            0x0100_0000_0000_0000_u64,
             [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01],
+            0x0100_0000_0000_0000_u64,
         ),
     ];
 
-    for (value, expected_bytes) in test_cases {
-        let mut buf = [0u8; 8];
-        write_u64_le(&mut buf, value).unwrap();
-        assert_eq!(
-            buf, expected_bytes,
-            "write_u64_le produced wrong bytes for {value:#x}"
-        );
-
-        let read_value = read_u64_le(&expected_bytes).unwrap();
-        assert_eq!(read_value, value, "read_u64_le read wrong value from bytes");
+    for (bytes, expected_value) in test_cases {
+        let read_value = read_u64_le(&bytes).unwrap();
+        assert_eq!(read_value, expected_value, "read_u64_le read wrong value");
     }
 }
 
@@ -85,14 +57,6 @@ fn test_u64_le_known_values() {
 fn test_read_u64_le_short_buffer() {
     let buf = [0u8; 7];
     let result = read_u64_le(&buf);
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("at least 8 bytes"));
-}
-
-#[test]
-fn test_write_u64_le_short_buffer() {
-    let mut buf = [0u8; 7];
-    let result = write_u64_le(&mut buf, 42);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("at least 8 bytes"));
 }
@@ -109,11 +73,10 @@ proptest! {
         prop_assert_eq!(data, decoded);
     }
 
-    /// Property test: u64 little-endian roundtrip
+    /// Property test: u64 little-endian round-trip via to_le_bytes / read_u64_le
     #[test]
     fn prop_u64_le_roundtrip(value: u64) {
-        let mut buf = [0u8; 8];
-        write_u64_le(&mut buf, value).unwrap();
+        let buf = value.to_le_bytes();
         let decoded = read_u64_le(&buf).unwrap();
         prop_assert_eq!(value, decoded);
     }

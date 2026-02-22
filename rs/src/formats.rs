@@ -40,19 +40,3 @@ pub fn read_u64_le(bytes: &[u8]) -> Result<u64> {
         .map_err(|_| Error::Other("slice conversion to [u8; 8] failed".into()))?;
     Ok(u64::from_le_bytes(buf))
 }
-
-/// Write a little-endian u64 to a mutable byte slice
-///
-/// # Errors
-///
-/// Returns error if the slice is shorter than 8 bytes.
-pub fn write_u64_le(bytes: &mut [u8], value: u64) -> Result<()> {
-    if bytes.len() < 8 {
-        return Err(Error::Other(format!(
-            "write_u64_le requires at least 8 bytes, got {}",
-            bytes.len()
-        )));
-    }
-    bytes[..8].copy_from_slice(&value.to_le_bytes());
-    Ok(())
-}
