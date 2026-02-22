@@ -323,7 +323,7 @@ pub fn blake2b_512(data: &[u8]) -> [u8; 64] {
 /// Returns an error if reading from the input fails
 pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
     let mut hasher = Blake2b512::new();
-    let mut buffer = [0u8; STREAM_BUFFER_SIZE];
+    let mut buffer = vec![0u8; STREAM_BUFFER_SIZE].into_boxed_slice();
 
     loop {
         let n = reader
