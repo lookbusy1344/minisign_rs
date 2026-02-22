@@ -51,17 +51,34 @@ impl SecurityLevel {
 pub struct InspectOptions<'a> {
     /// Path to the key file (can be secret or public key)
     key_file: &'a Path,
+    /// Whether to check the OS credential store for a saved password.
+    /// Set to `false` when `--no-decrypt` is active to avoid triggering
+    /// a Keychain/credential-store authorization prompt.
+    check_credential_store: bool,
 }
 
 impl<'a> InspectOptions<'a> {
     #[must_use]
     pub const fn new(key_file: &'a Path) -> Self {
-        Self { key_file }
+        Self {
+            key_file,
+            check_credential_store: true,
+        }
     }
 
     #[must_use]
     pub const fn key_file(&self) -> &Path {
         self.key_file
+    }
+
+    /// Disable the OS credential store lookup.
+    ///
+    /// When called, `inspect()` will set `password_saved = false` without
+    /// touching the keychain, preventing any authorization prompt.
+    #[must_use]
+    pub fn skip_credential_store_check(mut self) -> Self {
+        self.check_credential_store = false;
+        self
     }
 }
 
@@ -118,7 +135,7 @@ pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
 
     // Try to parse as secret key first
     if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
-        return inspect_secret_key(&seckey);
+        return inspect_secret_key(&seckey, options.check_credential_store);
     }
 
     // Try to parse as public key
@@ -149,7 +166,7 @@ pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
 ///
 /// Returns an error if the KDF parameters cannot be parsed
 pub fn inspect_with_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
-    inspect_secret_key(seckey)
+    inspect_secret_key(seckey, true)
 }
 
 /// Inspect a pre-loaded secret key by decrypting it first (if encrypted)
@@ -173,14 +190,14 @@ pub fn inspect_with_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
 pub fn inspect_private_with_key(seckey: &SeckeyStruct, password: &[u8]) -> Result<InspectResult> {
     if !seckey.is_encrypted() {
         // Unencrypted secret key - behave like regular inspect
-        return inspect_secret_key(seckey);
+        return inspect_secret_key(seckey, true);
     }
 
     // Encrypted - decrypt to get the real keynum
     let (_secret_key, decrypted_keynum) = seckey.decrypt(password)?;
 
     // Get the base inspection result
-    let mut result = inspect_secret_key(seckey)?;
+    let mut result = inspect_secret_key(seckey, true)?;
 
     // Update with the real keynum
     result.key_id = decrypted_keynum.to_key_id();
@@ -233,14 +250,18 @@ pub fn inspect_private(key_file: &Path, password: &[u8]) -> Result<InspectResult
 }
 
 /// Inspect a secret key structure
-fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
+fn inspect_secret_key(
+    seckey: &SeckeyStruct,
+    check_credential_store: bool,
+) -> Result<InspectResult> {
     let key_id = seckey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(seckey.keynum());
     let credential_id = seckey.credential_id();
 
     if !seckey.is_encrypted() {
         // Unencrypted key
-        let password_saved = crate::credential_store::has_password(&credential_id);
+        let password_saved =
+            check_credential_store && crate::credential_store::has_password(&credential_id);
         return Ok(InspectResult {
             key_id,
             key_id_words,
@@ -273,7 +294,8 @@ fn inspect_secret_key(seckey: &SeckeyStruct) -> Result<InspectResult> {
     // Classify security level
     let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
-    let password_saved = crate::credential_store::has_password(&credential_id);
+    let password_saved =
+        check_credential_store && crate::credential_store::has_password(&credential_id);
 
     Ok(InspectResult {
         key_id,

@@ -592,6 +592,44 @@ fn test_inspect_signature_nonexistent_file() {
 }
 
 #[test]
+fn test_inspect_with_credential_store_check_disabled() {
+    // When check_credential_store is disabled, inspect() must not access the
+    // OS keychain. password_saved must be false regardless of keychain state.
+    // This covers the --no-decrypt regression: inspecting an encrypted key
+    // should never trigger a Keychain prompt when the user opts out of decryption.
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"test_password";
+    let mut kdf_salt = [0u8; 32];
+    rand::thread_rng().fill(&mut kdf_salt);
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        kdf_salt,
+        33_554_432,
+        1_073_741_824,
+        false,
+    )
+    .unwrap();
+
+    let file_contents = seckey.to_file_contents("test key");
+    let temp_file = create_temp_key_file(&file_contents);
+
+    let options = InspectOptions::new(temp_file.path()).skip_credential_store_check();
+    let result = inspect(&options).unwrap();
+
+    // All structural fields must still be populated
+    assert_eq!(result.key_type, KeyType::SecretEncrypted);
+    assert_eq!(result.security_level, Some(SecurityLevel::High));
+    assert!(result.kdf_info.is_some());
+    assert!(result.credential_id.is_some());
+
+    // Credential store was not consulted — password_saved must be false
+    assert!(!result.password_saved);
+}
+
+#[test]
 fn test_inspect_result_includes_credential_id() {
     // Create an encrypted key
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();

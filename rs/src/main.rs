@@ -716,6 +716,15 @@ fn display_inspect_result(result: &InspectResult) {
     }
 }
 
+fn build_inspect_options(path: &std::path::Path, no_decrypt: bool) -> InspectOptions<'_> {
+    let opts = InspectOptions::new(path);
+    if no_decrypt {
+        opts.skip_credential_store_check()
+    } else {
+        opts
+    }
+}
+
 fn handle_inspect(cli: &Cli) -> Result<()> {
     // Check if we're inspecting a signature file
     if let Some(ref sig_file) = cli.signature_file {
@@ -731,14 +740,14 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     let default_secret_key = Cli::default_secret_key_path();
     let (mut result, source_description, key_file_path) =
         if let Some(ref sk_file) = cli.secret_key_file {
-            let options = InspectOptions::new(sk_file.as_path());
+            let options = build_inspect_options(sk_file.as_path(), cli.no_decrypt);
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", sk_file.display()),
                 Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
-            let options = InspectOptions::new(pk_file.as_path());
+            let options = build_inspect_options(pk_file.as_path(), cli.no_decrypt);
             (
                 inspect(&options)?,
                 format!("Inspecting: {}", pk_file.display()),
@@ -753,7 +762,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         } else {
             // Default to secret key path
-            let options = InspectOptions::new(&default_secret_key);
+            let options = build_inspect_options(&default_secret_key, cli.no_decrypt);
             (
                 inspect(&options)?,
                 format!("Inspecting: {} (default)", default_secret_key.display()),
