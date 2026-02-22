@@ -393,8 +393,7 @@ fn test_scrypt_minimum_constants_are_valid_params() {
     let result = opslimit_memlimit_to_params(SCRYPT_OPSLIMIT_MIN, memlimit_for_min_opslimit);
     assert!(
         result.is_ok(),
-        "SCRYPT_OPSLIMIT_MIN must correspond to valid scrypt parameters; got: {:?}",
-        result
+        "SCRYPT_OPSLIMIT_MIN must correspond to valid scrypt parameters; got: {result:?}"
     );
     let (log_n, r, p) = result.unwrap();
     assert!(log_n < 64, "log_n={log_n} must be < 64");
@@ -408,8 +407,7 @@ fn test_scrypt_minimum_constants_are_valid_params() {
     let result2 = opslimit_memlimit_to_params(opslimit_for_min_memlimit, SCRYPT_MEMLIMIT_MIN);
     assert!(
         result2.is_ok(),
-        "SCRYPT_MEMLIMIT_MIN must correspond to valid scrypt parameters; got: {:?}",
-        result2
+        "SCRYPT_MEMLIMIT_MIN must correspond to valid scrypt parameters; got: {result2:?}"
     );
     let (log_n2, r2, p2) = result2.unwrap();
     assert!(log_n2 < 64, "log_n={log_n2} must be < 64");

@@ -291,7 +291,7 @@ fn test_derive_key_104_byte_output_regression() {
 /// This catches any change in scrypt crate output at production parameters,
 /// whether from a crate upgrade or an accidental parameter change.
 ///
-/// Pre-computed with scrypt v0.11.0, log_n=20, r=8, p=1.
+/// Pre-computed with `scrypt` v0.11.0, `log_n=20`, `r=8`, `p=1`.
 /// If this test fails after a scrypt crate upgrade, re-derive and verify
 /// the new output is cryptographically correct before updating the constant.
 #[test]
@@ -328,8 +328,7 @@ fn test_derive_key_output_len_too_large() {
     );
     assert!(
         matches!(result, Err(Error::KdfError(_))),
-        "expected Error::KdfError, got {:?}",
-        result
+        "expected Error::KdfError, got {result:?}"
     );
 }
 
