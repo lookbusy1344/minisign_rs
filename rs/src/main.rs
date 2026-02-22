@@ -210,6 +210,26 @@ fn save_password_to_credential_store(
     }
 }
 
+/// Remove a saved credential and print feedback, unless `quiet` is set.
+fn forget_password_with_feedback(credential_id: &str, quiet: bool) -> Result<()> {
+    let had_password = minisign::credential_store::has_password(credential_id);
+    match minisign::credential_store::forget_password(credential_id) {
+        Ok(()) => {
+            if !quiet {
+                if had_password {
+                    println!("Password removed from credential store");
+                } else {
+                    println!("No saved password found for this key");
+                }
+            }
+            Ok(())
+        }
+        Err(e) => Err(Error::CredentialStoreError(format!(
+            "Failed to remove password: {e}"
+        ))),
+    }
+}
+
 fn handle_sign(cli: &Cli) -> Result<()> {
     let message_files = cli.all_message_files();
 
@@ -280,6 +300,10 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             &credential_id,
             password.as_ref(),
         )?;
+    }
+
+    if cli.forget_password {
+        forget_password_with_feedback(&credential_id, cli.quiet)?;
     }
 
     Ok(())
@@ -488,10 +512,10 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
 
     // Load the key to check if it's encrypted
     let seckey = load_secret_key(secret_key_file)?;
+    let credential_id = seckey.credential_id();
 
     // Get password: check credential store first, then prompt if needed
     let password = if seckey.is_encrypted() {
-        let credential_id = seckey.credential_id();
         Some(get_password_with_credential_store(
             &credential_id,
             "Password: ",
@@ -518,6 +542,10 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
         );
     }
 
+    if cli.forget_password {
+        forget_password_with_feedback(&credential_id, cli.quiet)?;
+    }
+
     Ok(())
 }
 
@@ -532,22 +560,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     // Handle --forget-password (standalone usage)
     if cli.forget_password {
-        let had_password = minisign::credential_store::has_password(&old_credential_id);
-        return match minisign::credential_store::forget_password(&old_credential_id) {
-            Ok(()) => {
-                if !cli.quiet {
-                    if had_password {
-                        println!("Password removed from credential store");
-                    } else {
-                        println!("No saved password found for this key");
-                    }
-                }
-                Ok(())
-            }
-            Err(e) => Err(Error::CredentialStoreError(format!(
-                "Failed to remove password: {e}"
-            ))),
-        };
+        return forget_password_with_feedback(&old_credential_id, cli.quiet);
     }
 
     // Get current password: check credential store first, then prompt if needed
@@ -776,22 +789,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     {
         let seckey = load_secret_key(path)?;
         let credential_id = seckey.credential_id();
-        let had_password = minisign::credential_store::has_password(&credential_id);
-        return match minisign::credential_store::forget_password(&credential_id) {
-            Ok(()) => {
-                if !cli.quiet {
-                    if had_password {
-                        println!("Password removed from credential store");
-                    } else {
-                        println!("No saved password found for this key");
-                    }
-                }
-                Ok(())
-            }
-            Err(e) => Err(Error::CredentialStoreError(format!(
-                "Failed to remove password: {e}"
-            ))),
-        };
+        return forget_password_with_feedback(&credential_id, cli.quiet);
     }
 
     // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt

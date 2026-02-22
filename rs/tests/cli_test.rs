@@ -3109,3 +3109,127 @@ fn test_forget_password_via_inspect() {
         "-I --forget-password must remove the saved password"
     );
 }
+
+#[test]
+#[serial_test::serial]
+#[cfg(feature = "credential_store_tests")]
+fn test_forget_password_after_sign() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let msg_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let password = "sign_forget_test_pwd";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+    fs::write(&msg_path, "data to sign").unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    let credential_id = get_credential_id_from_file(&sk_path);
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    assert!(
+        credential_store::has_password(&credential_id),
+        "password should be saved before sign"
+    );
+
+    // Sign using stored password, then forget the credential
+    minisign_cmd()
+        .arg("-S")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-m")
+        .arg(&msg_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Password removed from credential store",
+        ));
+
+    // Signature must exist — the sign operation must have completed
+    assert!(sig_path.exists(), "signature file must be written");
+
+    // Credential must be gone
+    assert!(
+        !credential_store::has_password(&credential_id),
+        "-S --forget-password must remove the saved password after signing"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg(feature = "credential_store_tests")]
+fn test_forget_password_after_recreate() {
+    use minisign::credential_store;
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let recreated_pk_path = temp_dir.path().join("recreated.pub");
+    let password = "recreate_forget_test_pwd";
+    let password_file = temp_dir.path().join("password.txt");
+    fs::write(&password_file, password).unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("--save-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("--password-file")
+        .arg(&password_file)
+        .arg("-f")
+        .assert()
+        .success();
+
+    let credential_id = get_credential_id_from_file(&sk_path);
+    let _guard = credential_guard::CredentialGuard::new(&credential_id);
+
+    assert!(
+        credential_store::has_password(&credential_id),
+        "password should be saved before recreate"
+    );
+
+    // Recreate using stored password, then forget the credential
+    minisign_cmd()
+        .arg("-R")
+        .arg("--forget-password")
+        .arg("-s")
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&recreated_pk_path)
+        .arg("-f")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Password removed from credential store",
+        ));
+
+    // Public key must exist — the recreate operation must have completed
+    assert!(
+        recreated_pk_path.exists(),
+        "recreated public key must be written"
+    );
+
+    // Credential must be gone
+    assert!(
+        !credential_store::has_password(&credential_id),
+        "-R --forget-password must remove the saved password after recreating"
+    );
+}
