@@ -84,31 +84,6 @@ impl<'a> VerifyOptions<'a> {
         self
     }
 
-    /// Create new verify options
-    ///
-    /// # Deprecated
-    ///
-    /// Use [`VerifyOptions::builder`] instead.
-    #[deprecated(since = "1.3.0", note = "Use VerifyOptions::builder instead")]
-    #[must_use]
-    pub const fn new(
-        public_key: PublicKeySource<'a>,
-        signature_file: &'a Path,
-        message_file: &'a Path,
-        output: bool,
-        quiet: bool,
-        force_prehashed: bool,
-    ) -> Self {
-        Self {
-            public_key,
-            signature_file,
-            message_file,
-            output,
-            quiet,
-            force_prehashed,
-        }
-    }
-
     #[must_use]
     pub const fn public_key(&self) -> &PublicKeySource<'a> {
         &self.public_key
@@ -210,14 +185,7 @@ pub struct FileVerifyResult {
 /// let data_path = Path::new("file.txt");
 /// let pubkey_source = PublicKeySource::File(Path::new("minisign.pub"));
 ///
-/// let options = VerifyOptions::new(
-///     pubkey_source,
-///     signature_path,
-///     data_path,
-///     false, // output mode
-///     false, // quiet mode
-///     false, // force prehashed (reject legacy signatures)
-/// );
+/// let options = VerifyOptions::builder(pubkey_source, signature_path, data_path).build();
 ///
 /// let result = verify(&options)?;
 /// println!("Signature verified: {}", result.trusted_comment());
