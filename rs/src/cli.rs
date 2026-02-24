@@ -1,167 +1,185 @@
-//! Command-line interface definition using clap
+//! Command-line interface definition using pico-args
 //!
 //! This module defines the CLI structure matching the C minisign interface exactly.
 
 use crate::errors::{Error, Result};
-use clap::Parser;
-use git_version::git_version;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
-const VERSION: &str = git_version!(
-    args = ["--tags", "--abbrev=7", "--always"],
-    prefix = concat!(env!("CARGO_PKG_VERSION"), " ("),
-    suffix = ")",
-    fallback = "unknown"
-);
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// A dead simple Rust tool to sign files and verify signatures
-#[derive(Debug, Parser)]
-#[command(name = "minisign_rs")]
-#[command(version = VERSION)]
-#[command(disable_help_flag = true)]
-#[command(disable_version_flag = true)]
-// clap derive requires boolean fields for CLI flags - builder pattern is not applicable here
-// This is an intentional exception to CLAUDE.md policy against excessive booleans
+const HELP: &str = "\
+minisign_rs - A dead simple Rust tool to sign files and verify signatures
+
+USAGE:
+    minisign_rs -G [-f] [-p pubkey] [-s seckey] [-W] [-c comment]
+    minisign_rs -S [-H | -l] [-x sigfile] [-s seckey] [-c comment] [-t comment] -m file [files...]
+    minisign_rs -V [-x sigfile] [-p pubkey | -P key] [-o] [-q|-Q] -m file [files...]
+    minisign_rs -R [-s seckey] [-p pubkey]
+    minisign_rs -K [-s seckey] [-W]
+    minisign_rs -I [-s seckey | -p pubkey | -P key | -x sigfile]
+
+ACTIONS:
+    -G, --generate          Generate a new keypair
+    -S, --sign              Sign files
+    -V, --verify            Verify a signature
+    -R, --recreate          Recreate a public key from a secret key
+    -K, --change-password   Change or remove password from a secret key
+    -I, --inspect           Inspect a key file
+
+OPTIONS:
+    -c, --untrusted-comment <COMMENT>   Untrusted comment
+    -f, --force                         Force overwrite existing files
+    -h, --help                          Show this help
+    -H, --prehashed                     Sign or verify a prehashed file
+    -l, --legacy                        Legacy mode (sign only)
+    -m, --input <FILE>                  Message file
+    -o, --output                        Output verification result to stdout
+    -p, --publickey-path <FILE>         Public key file
+    -P, --publickey <KEY>               Public key as base64 string
+    -q, --quiet                         Quiet mode (minimal output)
+    -Q, --pretty-quiet                  Pretty quiet mode (trusted comment only)
+    -s, --secretkey-path <FILE>         Secret key file
+    -t, --trusted-comment <COMMENT>     Trusted comment
+    -v, --version                       Show version
+    -W, --no-password                   Do not use password (generate and change only)
+    -x, --signature <FILE>              Signature file
+        --allow-kdf-fallback            Allow KDF parameter fallback if 128MB allocation fails
+        --forget-password, --fp         Remove saved password from credential store
+        --no-decrypt                    Skip decryption of encrypted keys
+        --password-file <FILE>          Read password from file (testing only - insecure)
+        --save-password, --sp           Save password to OS credential store
+";
+
+// clippy: boolean fields for CLI flags — builder pattern not applicable here
 #[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Default)]
 pub struct Cli {
-    /// Generate a new keypair
-    #[arg(short = 'G', long = "generate", group = "action")]
     pub generate: bool,
-
-    /// Sign files
-    #[arg(short = 'S', long = "sign", group = "action")]
     pub sign: bool,
-
-    /// Verify a signature
-    #[arg(short = 'V', long = "verify", group = "action")]
     pub verify: bool,
-
-    /// Recreate a public key from a secret key
-    #[arg(short = 'R', long = "recreate", group = "action")]
     pub recreate: bool,
-
-    /// Change or remove password from a secret key
-    #[arg(short = 'K', long = "change-password", group = "action")]
     pub change: bool,
-
-    /// Inspect a key file and display security parameters (prompts for password if encrypted)
-    #[arg(short = 'I', long = "inspect", group = "action")]
     pub inspect: bool,
 
-    /// Force overwrite existing files
-    #[arg(short = 'f', long = "force")]
     pub force: bool,
-
-    /// Skip decryption of encrypted keys (show [encrypted] instead of prompting)
-    #[arg(long = "no-decrypt")]
     pub no_decrypt: bool,
-
-    /// Sign or verify a prehashed file
-    #[arg(short = 'H', long = "prehashed")]
     pub prehashed: bool,
-
-    /// Legacy mode (sign only)
-    #[arg(short = 'l', long = "legacy")]
     pub legacy: bool,
-
-    /// Message file (required for sign and verify)
-    #[arg(short = 'm', long = "input", value_name = "FILE")]
-    pub message_file: Option<PathBuf>,
-
-    /// Additional files to sign (positional, C-compatible: -m file1 file2 file3)
-    #[arg(value_name = "FILE")]
-    pub extra_files: Vec<PathBuf>,
-
-    /// Output verification result to stdout
-    #[arg(short = 'o', long = "output")]
     pub output: bool,
-
-    /// Public key file
-    #[arg(short = 'p', long = "publickey-path", value_name = "FILE")]
-    pub public_key_file: Option<PathBuf>,
-
-    /// Public key as base64 string
-    #[arg(short = 'P', long = "publickey", value_name = "PUBLIC_KEY")]
-    pub public_key_base64: Option<String>,
-
-    /// Quiet mode (minimal output)
-    #[arg(short = 'q', long = "quiet")]
     pub quiet: bool,
-
-    /// Pretty quiet mode (trusted comment only)
-    #[arg(short = 'Q', long = "pretty-quiet")]
     pub pretty_quiet: bool,
-
-    /// Secret key file
-    #[arg(short = 's', long = "secretkey-path", value_name = "FILE")]
-    pub secret_key_file: Option<PathBuf>,
-
-    /// Trusted comment
-    #[arg(short = 't', long = "trusted-comment", value_name = "COMMENT")]
-    pub trusted_comment: Option<String>,
-
-    /// Untrusted comment
-    #[arg(short = 'c', long = "untrusted-comment", value_name = "COMMENT")]
-    pub untrusted_comment: Option<String>,
-
-    /// Signature file
-    #[arg(short = 'x', long = "signature", value_name = "FILE")]
-    pub signature_file: Option<PathBuf>,
-
-    #[cfg(feature = "parallel")]
-    #[doc = "Process files sequentially instead of in parallel"]
-    #[arg(long)]
-    pub sequential: bool,
-
-    /// Do not use password (generate and change only)
-    #[arg(short = 'W', long = "no-password")]
     pub no_password: bool,
-
-    /// Read password from file (for testing only - insecure for production use)
-    #[arg(long = "password-file", value_name = "FILE")]
-    pub password_file: Option<PathBuf>,
-
-    /// Allow KDF parameter fallback if 128MB allocation fails (permission only, does not force fallback)
-    #[arg(long = "allow-kdf-fallback")]
     pub allow_kdf_fallback: bool,
-
-    /// Force weak KDF parameters for testing (DEBUG ONLY - creates intentionally insecure keys)
-    /// In release builds, this field exists but the CLI arg is not available (always false)
-    #[cfg_attr(not(debug_assertions), arg(skip))]
-    #[cfg_attr(debug_assertions, arg(long = "force-weak-kdf", hide = true))]
-    pub force_weak_kdf: bool,
-
-    /// Save password to OS credential store after successful use
-    #[arg(long = "save-password", visible_alias = "sp")]
     pub save_password: bool,
-
-    /// Remove saved password from OS credential store
-    #[arg(long = "forget-password", visible_alias = "fp")]
     pub forget_password: bool,
 
-    /// Show help
-    #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]
-    pub help: Option<bool>,
+    pub message_file: Option<PathBuf>,
+    pub extra_files: Vec<PathBuf>,
+    pub public_key_file: Option<PathBuf>,
+    pub public_key_base64: Option<String>,
+    pub secret_key_file: Option<PathBuf>,
+    pub trusted_comment: Option<String>,
+    pub untrusted_comment: Option<String>,
+    pub signature_file: Option<PathBuf>,
+    pub password_file: Option<PathBuf>,
 
-    /// Show version
-    #[arg(short = 'v', long = "version", action = clap::ArgAction::Version)]
-    pub version: Option<bool>,
-}
+    #[cfg(feature = "parallel")]
+    pub sequential: bool,
 
-/// Determine which action was selected
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
-    Generate,
-    Sign,
-    Verify,
-    Recreate,
-    Change,
-    Inspect,
+    pub force_weak_kdf: bool,
 }
 
 impl Cli {
-    /// Get the selected action, or None if no action was specified
+    /// Parse arguments from the process environment.
+    ///
+    /// Exits the process (code 0) for `--help` and `--version`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if an unknown flag is encountered or a required value
+    /// is missing from a flag that takes an argument.
+    pub fn parse() -> Result<Self> {
+        let mut args = pico_args::Arguments::from_env();
+
+        // Handle --help / --version before anything else
+        if args.contains(["-h", "--help"]) {
+            print!("{HELP}");
+            std::process::exit(0);
+        }
+        if args.contains(["-v", "--version"]) {
+            println!("minisign_rs {VERSION}");
+            std::process::exit(0);
+        }
+
+        let mut cli = Self {
+            generate:           args.contains(["-G", "--generate"]),
+            sign:               args.contains(["-S", "--sign"]),
+            verify:             args.contains(["-V", "--verify"]),
+            recreate:           args.contains(["-R", "--recreate"]),
+            change:             args.contains(["-K", "--change-password"]),
+            inspect:            args.contains(["-I", "--inspect"]),
+
+            force:              args.contains(["-f", "--force"]),
+            no_decrypt:         args.contains("--no-decrypt"),
+            prehashed:          args.contains(["-H", "--prehashed"]),
+            legacy:             args.contains(["-l", "--legacy"]),
+            output:             args.contains(["-o", "--output"]),
+            quiet:              args.contains(["-q", "--quiet"]),
+            pretty_quiet:       args.contains(["-Q", "--pretty-quiet"]),
+            no_password:        args.contains(["-W", "--no-password"]),
+            allow_kdf_fallback: args.contains("--allow-kdf-fallback"),
+            save_password:      args.contains(["--save-password", "--sp"]),
+            forget_password:    args.contains(["--forget-password", "--fp"]),
+
+            message_file:       args.opt_value_from_str(["-m", "--input"])
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            public_key_file:    args.opt_value_from_str(["-p", "--publickey-path"])
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            public_key_base64:  args.opt_value_from_str(["-P", "--publickey"])
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            secret_key_file:    args.opt_value_from_str(["-s", "--secretkey-path"])
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            trusted_comment:    args.opt_value_from_str(["-t", "--trusted-comment"])
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            untrusted_comment:  args.opt_value_from_str(["-c", "--untrusted-comment"])
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            signature_file:     args.opt_value_from_str(["-x", "--signature"])
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            password_file:      args.opt_value_from_str("--password-file")
+                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+
+            #[cfg(feature = "parallel")]
+            sequential: args.contains("--sequential"),
+
+            // Debug-only flag: present in debug builds, always false in release
+            #[cfg(debug_assertions)]
+            force_weak_kdf: args.contains("--force-weak-kdf"),
+            #[cfg(not(debug_assertions))]
+            force_weak_kdf: false,
+
+            extra_files: Vec::new(),
+        };
+
+        // Collect remaining positional arguments as extra files.
+        // Reject anything that looks like an unknown flag.
+        let remaining = args.finish();
+        let unknown: Vec<_> = remaining
+            .iter()
+            .filter(|a| a.to_string_lossy().starts_with('-'))
+            .collect();
+        if !unknown.is_empty() {
+            let arg = unknown[0].to_string_lossy();
+            return Err(Error::Usage(format!("Unknown argument: {arg}").into()));
+        }
+        if !remaining.is_empty() {
+            cli.extra_files = remaining.into_iter().map(PathBuf::from).collect();
+        }
+
+        Ok(cli)
+    }
+
+    /// Get the selected action, or None if no action was specified.
     #[must_use]
     pub const fn action(&self) -> Option<Action> {
         if self.generate {
@@ -200,10 +218,9 @@ impl Cli {
         }
     }
 
-    /// Get the default secret key path based on platform
+    /// Get the default secret key path based on platform.
     ///
-    /// Checks the `MINISIGN_CONFIG_DIR` environment variable first.
-    /// Falls back to `~/.minisign/` if not set.
+    /// Checks `MINISIGN_CONFIG_DIR` first, then falls back to `~/.minisign/`.
     ///
     /// # Security
     ///
@@ -221,17 +238,17 @@ impl Cli {
         }
     }
 
-    /// Get the default public key path (current directory)
+    /// Get the default public key path (current directory).
     #[must_use]
     pub fn default_public_key_path() -> PathBuf {
         PathBuf::from("./minisign.pub")
     }
 
-    /// Get the default signature path for a message file
+    /// Get the default signature path for a message file.
     ///
     /// # Errors
     ///
-    /// Returns an error if the path has no valid filename component
+    /// Returns an error if the path has no valid filename component.
     pub fn default_signature_path(message_file: &Path) -> Result<PathBuf> {
         let mut sig_path = message_file.to_path_buf();
         let file_name = message_file
@@ -243,4 +260,15 @@ impl Cli {
         sig_path.set_file_name(file_name_string);
         Ok(sig_path)
     }
+}
+
+/// Determine which action was selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    Generate,
+    Sign,
+    Verify,
+    Recreate,
+    Change,
+    Inspect,
 }
