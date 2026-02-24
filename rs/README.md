@@ -24,14 +24,14 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 - ✅ Password management (add/remove/change passwords)
 - ✅ Key security inspection (KDF parameter auditing)
 - ✅ Weak key detection with persistent warnings
-- ✅ Multi-file signing with parallel execution (Rayon)
-- ✅ Multi-file verification with parallel execution (Rayon)
-- ✅ OS credential store integration for password caching (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- ✅ Multi-file signing with parallel execution (Rayon, optional `parallel` feature)
+- ✅ Multi-file verification with parallel execution (Rayon, optional `parallel` feature)
+- ✅ OS credential store integration for password caching (macOS Keychain, Windows Credential Manager, Linux Secret Service, optional `credential_store` feature)
 - ✅ Full compatibility with C minisign file formats
 
 ### Test Coverage
 
-- **487 total tests** covering all operations and CLI behavior
+- **484 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Credential store tests (skip gracefully when OS keyring unavailable)
@@ -47,9 +47,9 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **4,054 lines** of production code in `src/` (5,089 total with comments)
-- **10,470 lines** of test code in `tests/` (14,095 total with comments)
-- **Test-to-code ratio**: 2.58:1 demonstrating thorough test coverage
+- **4,177 lines** of production code in `src/` (5,204 total with comments)
+- **10,458 lines** of test code in `tests/` (14,070 total with comments)
+- **Test-to-code ratio**: 2.50:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
@@ -156,6 +156,7 @@ Additional flags not in C minisign:
 - **`--password-file <FILE>`** - Read password from file (testing only, insecure)
 - **`--allow-kdf-fallback`** - Allow weak KDF on low-memory systems (opt-in, reduces security)
 - **`--force-weak-kdf`** - Create intentionally weak keys (debug builds only, testing)
+- **`--sequential`** - Disable parallel processing for multi-file operations (`parallel` feature only)
 
 See [KDF Fallback Security Analysis](docs/kdf-fallback-security-analysis.md) for detailed security implications.
 
@@ -275,7 +276,7 @@ codesign --force --sign "Developer ID Application: Your Name" target/release/min
 
 **Performance:** Matches C minisign on single-file operations (≤10% variance, within noise); marginally faster on large-file work. Multi-file signing runs in parallel via Rayon — up to **8.4x faster** than C's sequential single-invocation mode (e.g. 10 × 10MB: 10ms vs 87ms). C has no multi-file verify; Rust parallel verify is up to **6.2x faster** than Rust sequential. See [Performance Benchmark Report](docs/benchmark-report.md).
 
-**Binary size:** 638 KB (vs C's 70KB) - larger binary for memory safety and zero C dependencies.
+**Binary size:** 525 KB with default features (vs C's 70KB) — reduced from ~910 KB by replacing `clap` with `pico-args` (saves ~385 KB). Smaller still with `--no-default-features` (658 KB, no keychain or parallel support). Larger than C due to memory safety guarantees and zero C dependencies.
 
 **Memory requirements:**
 - Scrypt KDF: ~128MB, ~1-2s (N=2^20 for security)
