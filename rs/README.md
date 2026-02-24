@@ -273,9 +273,9 @@ codesign --force --sign "Developer ID Application: Your Name" target/release/min
 
 ## Performance & Memory
 
-**Performance:** Matches C minisign on single-file operations (≤10% variance, within noise); marginally faster on large-file work. Multi-file signing runs in parallel via Rayon — up to **6.8x faster** than C's sequential single-invocation mode (e.g. 10 × 10MB: 12ms vs 80ms). C has no multi-file verify; Rust parallel verify is up to **6.4x faster** than Rust sequential. See [Performance Benchmark Report](docs/benchmark-report.md).
+**Performance:** Matches C minisign on single-file operations (≤10% variance, within noise); marginally faster on large-file work. Multi-file signing runs in parallel via Rayon — up to **8.4x faster** than C's sequential single-invocation mode (e.g. 10 × 10MB: 10ms vs 87ms). C has no multi-file verify; Rust parallel verify is up to **6.2x faster** than Rust sequential. See [Performance Benchmark Report](docs/benchmark-report.md).
 
-**Binary size:** 782 KB (vs C's 70KB) - larger binary for memory safety and zero C dependencies.
+**Binary size:** 638 KB (vs C's 70KB) - larger binary for memory safety and zero C dependencies.
 
 **Memory requirements:**
 - Scrypt KDF: ~128MB, ~1-2s (N=2^20 for security)
