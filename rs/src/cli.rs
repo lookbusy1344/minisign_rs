@@ -109,7 +109,8 @@ pub struct Cli {
     #[arg(short = 'x', long = "signature", value_name = "FILE")]
     pub signature_file: Option<PathBuf>,
 
-    /// Process files sequentially instead of in parallel
+    #[cfg(feature = "parallel")]
+    #[doc = "Process files sequentially instead of in parallel"]
     #[arg(long)]
     pub sequential: bool,
 
