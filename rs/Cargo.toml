@@ -26,7 +26,7 @@ thiserror = "2"
 rpassword = "7.4"
 dirs = "6"
 git-version = "0.3"
-rayon = "1"
+rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 rand = "0.8"
@@ -40,8 +40,9 @@ serial_test = "3.2"
 [features]
 # Enable OS credential store integration (macOS Keychain, Windows Credential Manager, etc.)
 # Enabled by default for production use. Disable during testing to avoid keychain popups.
-default = ["credential_store"]
+default = ["credential_store", "parallel"]
 credential_store = ["dep:keyring"]
+parallel = ["dep:rayon"]
 
 # Enable credential store tests that require user interaction
 # These tests interact with OS keyring and must run sequentially to avoid prompting multiple times
