@@ -11,13 +11,12 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const HELP: &str = "\
 minisign_rs - A dead simple Rust tool to sign files and verify signatures
 
-USAGE:
-    minisign_rs -G [-f] [-p pubkey] [-s seckey] [-W] [-c comment]
-    minisign_rs -S [-H | -l] [-x sigfile] [-s seckey] [-c comment] [-t comment] -m file [files...]
-    minisign_rs -V [-x sigfile] [-p pubkey | -P key] [-o] [-q|-Q] -m file [files...]
-    minisign_rs -R [-s seckey] [-p pubkey]
-    minisign_rs -K [-s seckey] [-W]
-    minisign_rs -I [-s seckey | -p pubkey | -P key | -x sigfile]
+Usage: minisign_rs -G [-f] [-p pubkey] [-s seckey] [-W] [-c comment]
+       minisign_rs -S [-H | -l] [-x sigfile] [-s seckey] [-c comment] [-t comment] -m file [files...]
+       minisign_rs -V [-x sigfile] [-p pubkey | -P key] [-o] [-q|-Q] -m file [files...]
+       minisign_rs -R [-s seckey] [-p pubkey]
+       minisign_rs -K [-s seckey] [-W]
+       minisign_rs -I [-s seckey | -p pubkey | -P key | -x sigfile]
 
 ACTIONS:
     -G, --generate          Generate a new keypair
@@ -97,6 +96,12 @@ impl Cli {
     ///
     /// # Errors
     ///
+    /// Parse arguments from the process environment.
+    ///
+    /// Exits the process (code 0) for `--help` and `--version`.
+    ///
+    /// # Errors
+    ///
     /// Returns an error if an unknown flag is encountered or a required value
     /// is missing from a flag that takes an argument.
     pub fn parse() -> Result<Self> {
@@ -112,42 +117,68 @@ impl Cli {
             std::process::exit(0);
         }
 
+        Self::parse_args(args)
+    }
+
+    /// Parse from an explicit list of arguments, skipping the first element
+    /// (program name). Intended for use in tests.
+    pub fn parse_from<I, S>(iter: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<std::ffi::OsString>,
+    {
+        // Skip the first element (program name), convert the rest to OsString.
+        let raw: Vec<std::ffi::OsString> = iter.into_iter().skip(1).map(Into::into).collect();
+        let args = pico_args::Arguments::from_vec(raw);
+        Self::parse_args(args)
+    }
+
+    /// Core parsing logic shared by `parse()` and `parse_from()`.
+    fn parse_args(mut args: pico_args::Arguments) -> Result<Self> {
         let mut cli = Self {
-            generate:           args.contains(["-G", "--generate"]),
-            sign:               args.contains(["-S", "--sign"]),
-            verify:             args.contains(["-V", "--verify"]),
-            recreate:           args.contains(["-R", "--recreate"]),
-            change:             args.contains(["-K", "--change-password"]),
-            inspect:            args.contains(["-I", "--inspect"]),
+            generate: args.contains(["-G", "--generate"]),
+            sign: args.contains(["-S", "--sign"]),
+            verify: args.contains(["-V", "--verify"]),
+            recreate: args.contains(["-R", "--recreate"]),
+            change: args.contains(["-K", "--change-password"]),
+            inspect: args.contains(["-I", "--inspect"]),
 
-            force:              args.contains(["-f", "--force"]),
-            no_decrypt:         args.contains("--no-decrypt"),
-            prehashed:          args.contains(["-H", "--prehashed"]),
-            legacy:             args.contains(["-l", "--legacy"]),
-            output:             args.contains(["-o", "--output"]),
-            quiet:              args.contains(["-q", "--quiet"]),
-            pretty_quiet:       args.contains(["-Q", "--pretty-quiet"]),
-            no_password:        args.contains(["-W", "--no-password"]),
+            force: args.contains(["-f", "--force"]),
+            no_decrypt: args.contains("--no-decrypt"),
+            prehashed: args.contains(["-H", "--prehashed"]),
+            legacy: args.contains(["-l", "--legacy"]),
+            output: args.contains(["-o", "--output"]),
+            quiet: args.contains(["-q", "--quiet"]),
+            pretty_quiet: args.contains(["-Q", "--pretty-quiet"]),
+            no_password: args.contains(["-W", "--no-password"]),
             allow_kdf_fallback: args.contains("--allow-kdf-fallback"),
-            save_password:      args.contains(["--save-password", "--sp"]),
-            forget_password:    args.contains(["--forget-password", "--fp"]),
+            save_password: args.contains("--save-password") || args.contains("--sp"),
+            forget_password: args.contains("--forget-password") || args.contains("--fp"),
 
-            message_file:       args.opt_value_from_str(["-m", "--input"])
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
-            public_key_file:    args.opt_value_from_str(["-p", "--publickey-path"])
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
-            public_key_base64:  args.opt_value_from_str(["-P", "--publickey"])
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
-            secret_key_file:    args.opt_value_from_str(["-s", "--secretkey-path"])
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
-            trusted_comment:    args.opt_value_from_str(["-t", "--trusted-comment"])
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
-            untrusted_comment:  args.opt_value_from_str(["-c", "--untrusted-comment"])
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
-            signature_file:     args.opt_value_from_str(["-x", "--signature"])
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
-            password_file:      args.opt_value_from_str("--password-file")
-                                    .map_err(|e| Error::Usage(e.to_string().into()))?,
+            message_file: args
+                .opt_value_from_str(["-m", "--input"])
+                .map_err(|e| Error::Usage(e.to_string()))?,
+            public_key_file: args
+                .opt_value_from_str(["-p", "--publickey-path"])
+                .map_err(|e| Error::Usage(e.to_string()))?,
+            public_key_base64: args
+                .opt_value_from_str(["-P", "--publickey"])
+                .map_err(|e| Error::Usage(e.to_string()))?,
+            secret_key_file: args
+                .opt_value_from_str(["-s", "--secretkey-path"])
+                .map_err(|e| Error::Usage(e.to_string()))?,
+            trusted_comment: args
+                .opt_value_from_str(["-t", "--trusted-comment"])
+                .map_err(|e| Error::Usage(e.to_string()))?,
+            untrusted_comment: args
+                .opt_value_from_str(["-c", "--untrusted-comment"])
+                .map_err(|e| Error::Usage(e.to_string()))?,
+            signature_file: args
+                .opt_value_from_str(["-x", "--signature"])
+                .map_err(|e| Error::Usage(e.to_string()))?,
+            password_file: args
+                .opt_value_from_str("--password-file")
+                .map_err(|e| Error::Usage(e.to_string()))?,
 
             #[cfg(feature = "parallel")]
             sequential: args.contains("--sequential"),
@@ -170,7 +201,7 @@ impl Cli {
             .collect();
         if !unknown.is_empty() {
             let arg = unknown[0].to_string_lossy();
-            return Err(Error::Usage(format!("Unknown argument: {arg}").into()));
+            return Err(Error::Usage(format!("Unknown argument: {arg}")));
         }
         if !remaining.is_empty() {
             cli.extra_files = remaining.into_iter().map(PathBuf::from).collect();
