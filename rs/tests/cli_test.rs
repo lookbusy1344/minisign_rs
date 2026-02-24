@@ -1632,6 +1632,7 @@ fn cli_sign_multiple_files() {
     assert!(file3.with_extension("txt.minisig").exists());
 }
 
+#[cfg(feature = "parallel")]
 #[test]
 fn cli_sign_multiple_files_sequential() {
     let temp_dir = TempDir::new().unwrap();

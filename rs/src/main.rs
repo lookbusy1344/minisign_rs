@@ -371,7 +371,10 @@ fn handle_sign_multiple(
         message_files,
         &options,
         password.map(|p| p.as_bytes()),
+        #[cfg(feature = "parallel")]
         cli.sequential,
+        #[cfg(not(feature = "parallel"))]
+        true,
     )?;
 
     save_password_to_credential_store(credential_id, password, cli.save_password, cli.quiet, None);
@@ -468,7 +471,14 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         .force_prehashed(cli.prehashed)
         .build();
 
-        verify_multiple_files(message_files.into_owned(), &options, cli.sequential)?;
+        verify_multiple_files(
+            message_files.into_owned(),
+            &options,
+            #[cfg(feature = "parallel")]
+            cli.sequential,
+            #[cfg(not(feature = "parallel"))]
+            true,
+        )?;
     }
 
     Ok(())

@@ -18,6 +18,7 @@ fn test_action_detection() {
         legacy: false,
         message_file: None,
         extra_files: vec![],
+        #[cfg(feature = "parallel")]
         sequential: false,
         output: false,
         public_key_file: None,
@@ -55,6 +56,7 @@ fn test_no_action() {
         legacy: false,
         message_file: None,
         extra_files: vec![],
+        #[cfg(feature = "parallel")]
         sequential: false,
         output: false,
         public_key_file: None,
@@ -92,6 +94,7 @@ fn test_inspect_action_detection() {
         legacy: false,
         message_file: None,
         extra_files: vec![],
+        #[cfg(feature = "parallel")]
         sequential: false,
         output: false,
         public_key_file: None,
@@ -177,6 +180,7 @@ fn test_allow_kdf_fallback_flag_defaults_to_false() {
         legacy: false,
         message_file: None,
         extra_files: vec![],
+        #[cfg(feature = "parallel")]
         sequential: false,
         output: false,
         public_key_file: None,
@@ -215,6 +219,7 @@ fn test_allow_kdf_fallback_flag_can_be_enabled() {
         legacy: false,
         message_file: None,
         extra_files: vec![],
+        #[cfg(feature = "parallel")]
         sequential: false,
         output: false,
         public_key_file: None,
@@ -342,6 +347,7 @@ fn cli_no_message_file_returns_empty() {
     assert!(all.is_empty());
 }
 
+#[cfg(feature = "parallel")]
 #[test]
 fn cli_sequential_flag_defaults_false() {
     let cli = Cli::try_parse_from(["minisign_rs", "-S", "-m", "file.txt"]).unwrap();
@@ -349,6 +355,7 @@ fn cli_sequential_flag_defaults_false() {
     assert!(!cli.sequential);
 }
 
+#[cfg(feature = "parallel")]
 #[test]
 fn cli_sequential_flag_can_be_set() {
     let cli = Cli::try_parse_from(["minisign_rs", "-S", "-m", "file.txt", "--sequential"]).unwrap();

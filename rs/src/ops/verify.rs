@@ -10,6 +10,7 @@ use crate::{
     keys::PubkeyStruct,
     signature::SignatureBox,
 };
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -417,14 +418,28 @@ pub fn verify_multiple_files(
             })
             .collect()
     } else {
-        files
-            .into_par_iter()
-            .map(|file| {
-                let result = verify_file_with_key(&file, &pubkey, options);
-                report_file_result(&file, &result, options);
-                FileVerifyResult { file, result }
-            })
-            .collect()
+        #[cfg(feature = "parallel")]
+        {
+            files
+                .into_par_iter()
+                .map(|file| {
+                    let result = verify_file_with_key(&file, &pubkey, options);
+                    report_file_result(&file, &result, options);
+                    FileVerifyResult { file, result }
+                })
+                .collect()
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            files
+                .into_iter()
+                .map(|file| {
+                    let result = verify_file_with_key(&file, &pubkey, options);
+                    report_file_result(&file, &result, options);
+                    FileVerifyResult { file, result }
+                })
+                .collect()
+        }
     };
 
     print_summary(&results, options)
