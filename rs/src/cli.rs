@@ -89,13 +89,53 @@ pub struct Cli {
     pub force_weak_kdf: bool,
 }
 
+/// Short flags that consume the next token as their value.
+///
+/// All other single-character flags are boolean. This list must stay in sync
+/// with the `opt_value_from_str` calls in [`Cli::parse_args`].
+const VALUE_FLAGS: &[char] = &['m', 'p', 'P', 's', 't', 'c', 'x'];
+
+/// Expand POSIX-style combined short flags into individual arguments.
+///
+/// Converts bundles like `-Ip key.pub` or `-GfW` into the equivalent
+/// separate tokens that pico-args can handle.  Stops expanding at the first
+/// value-taking flag and treats any remaining characters in the bundle as
+/// an embedded value (e.g. `-Iskey.sec` → `-I`, `-s`, `key.sec`).
+///
+/// Only single-dash arguments with more than one character are affected;
+/// long options (`--flag`) and already-separated flags (`-I`) pass through
+/// unchanged.
+fn expand_combined_flags(args: Vec<std::ffi::OsString>) -> Vec<std::ffi::OsString> {
+    let mut expanded = Vec::with_capacity(args.len());
+    for arg in args {
+        let Some(s) = arg.to_str() else {
+            expanded.push(arg);
+            continue;
+        };
+
+        let is_combined = s.starts_with('-') && !s.starts_with("--") && s.len() > 2;
+        if !is_combined {
+            expanded.push(arg);
+            continue;
+        }
+
+        let chars: Vec<char> = s[1..].chars().collect();
+        for (i, &ch) in chars.iter().enumerate() {
+            expanded.push(std::ffi::OsString::from(format!("-{ch}")));
+            if VALUE_FLAGS.contains(&ch) {
+                // Remaining chars in the bundle are the embedded value (may be empty).
+                if i + 1 < chars.len() {
+                    let embedded: String = chars[i + 1..].iter().collect();
+                    expanded.push(std::ffi::OsString::from(embedded));
+                }
+                break;
+            }
+        }
+    }
+    expanded
+}
+
 impl Cli {
-    /// Parse arguments from the process environment.
-    ///
-    /// Exits the process (code 0) for `--help` and `--version`.
-    ///
-    /// # Errors
-    ///
     /// Parse arguments from the process environment.
     ///
     /// Exits the process (code 0) for `--help` and `--version`.
@@ -105,7 +145,9 @@ impl Cli {
     /// Returns an error if an unknown flag is encountered or a required value
     /// is missing from a flag that takes an argument.
     pub fn parse() -> Result<Self> {
-        let mut args = pico_args::Arguments::from_env();
+        let raw: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+        let raw = expand_combined_flags(raw);
+        let mut args = pico_args::Arguments::from_vec(raw);
 
         // Handle --help / --version before anything else
         if args.contains(["-h", "--help"]) {
@@ -127,8 +169,8 @@ impl Cli {
         I: IntoIterator<Item = S>,
         S: Into<std::ffi::OsString>,
     {
-        // Skip the first element (program name), convert the rest to OsString.
         let raw: Vec<std::ffi::OsString> = iter.into_iter().skip(1).map(Into::into).collect();
+        let raw = expand_combined_flags(raw);
         let args = pico_args::Arguments::from_vec(raw);
         Self::parse_args(args)
     }

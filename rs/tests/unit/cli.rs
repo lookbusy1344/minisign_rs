@@ -387,3 +387,68 @@ fn cli_forget_password_short_alias() {
     let cli = Cli::parse_from(["minisign_rs", "-K", "--fp"]).unwrap();
     assert!(cli.forget_password);
 }
+
+// ── Combined short flag (POSIX bundling) tests ────────────────────────────────
+
+#[test]
+fn cli_combined_inspect_public_key() {
+    // -Ip key.pub  →  -I  -p key.pub
+    let cli = Cli::parse_from(["minisign_rs", "-Ip", "key.pub"]).unwrap();
+    assert!(cli.inspect);
+    assert_eq!(cli.public_key_file.as_deref(), Some(Path::new("key.pub")));
+}
+
+#[test]
+fn cli_combined_inspect_secret_key() {
+    // -Is key.sec  →  -I  -s key.sec
+    let cli = Cli::parse_from(["minisign_rs", "-Is", "key.sec"]).unwrap();
+    assert!(cli.inspect);
+    assert_eq!(
+        cli.secret_key_file.as_deref(),
+        Some(Path::new("key.sec"))
+    );
+}
+
+#[test]
+fn cli_combined_sign_message() {
+    // -Sm file.txt  →  -S  -m file.txt
+    let cli = Cli::parse_from(["minisign_rs", "-Sm", "file.txt"]).unwrap();
+    assert!(cli.sign);
+    assert_eq!(cli.message_file.as_deref(), Some(Path::new("file.txt")));
+}
+
+#[test]
+fn cli_combined_verify_message() {
+    // -Vm file.txt  →  -V  -m file.txt
+    let cli = Cli::parse_from(["minisign_rs", "-Vm", "file.txt"]).unwrap();
+    assert!(cli.verify);
+    assert_eq!(cli.message_file.as_deref(), Some(Path::new("file.txt")));
+}
+
+#[test]
+fn cli_combined_all_boolean_flags() {
+    // -GfW  →  -G  -f  -W
+    let cli = Cli::parse_from(["minisign_rs", "-GfW"]).unwrap();
+    assert!(cli.generate);
+    assert!(cli.force);
+    assert!(cli.no_password);
+}
+
+#[test]
+fn cli_combined_two_boolean_flags() {
+    // -Sf  →  -S  -f
+    let cli = Cli::parse_from(["minisign_rs", "-Sf", "-m", "f.txt"]).unwrap();
+    assert!(cli.sign);
+    assert!(cli.force);
+}
+
+#[test]
+fn cli_combined_value_embedded_in_bundle() {
+    // -Iskey.sec  →  -I  -s key.sec  (value embedded directly after the flag char)
+    let cli = Cli::parse_from(["minisign_rs", "-Iskey.sec"]).unwrap();
+    assert!(cli.inspect);
+    assert_eq!(
+        cli.secret_key_file.as_deref(),
+        Some(Path::new("key.sec"))
+    );
+}
