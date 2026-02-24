@@ -403,10 +403,7 @@ fn cli_combined_inspect_secret_key() {
     // -Is key.sec  →  -I  -s key.sec
     let cli = Cli::parse_from(["minisign_rs", "-Is", "key.sec"]).unwrap();
     assert!(cli.inspect);
-    assert_eq!(
-        cli.secret_key_file.as_deref(),
-        Some(Path::new("key.sec"))
-    );
+    assert_eq!(cli.secret_key_file.as_deref(), Some(Path::new("key.sec")));
 }
 
 #[test]
@@ -447,8 +444,5 @@ fn cli_combined_value_embedded_in_bundle() {
     // -Iskey.sec  →  -I  -s key.sec  (value embedded directly after the flag char)
     let cli = Cli::parse_from(["minisign_rs", "-Iskey.sec"]).unwrap();
     assert!(cli.inspect);
-    assert_eq!(
-        cli.secret_key_file.as_deref(),
-        Some(Path::new("key.sec"))
-    );
+    assert_eq!(cli.secret_key_file.as_deref(), Some(Path::new("key.sec")));
 }
