@@ -1,4 +1,3 @@
-use clap::Parser;
 use minisign::cli::*;
 use serial_test::serial;
 use std::path::Path;
@@ -35,8 +34,6 @@ fn test_action_detection() {
         force_weak_kdf: false,
         save_password: false,
         forget_password: false,
-        help: None,
-        version: None,
     };
     assert_eq!(cli.action(), Some(Action::Generate));
 }
@@ -73,8 +70,6 @@ fn test_no_action() {
         force_weak_kdf: false,
         save_password: false,
         forget_password: false,
-        help: None,
-        version: None,
     };
     assert_eq!(cli.action(), None);
 }
@@ -111,8 +106,6 @@ fn test_inspect_action_detection() {
         force_weak_kdf: false,
         save_password: false,
         forget_password: false,
-        help: None,
-        version: None,
     };
     assert_eq!(cli.action(), Some(Action::Inspect));
 }
@@ -193,8 +186,6 @@ fn test_allow_kdf_fallback_flag_defaults_to_false() {
         signature_file: None,
         no_password: false,
         password_file: None,
-        help: None,
-        version: None,
         allow_kdf_fallback: false,
         force_weak_kdf: false,
         save_password: false,
@@ -232,8 +223,6 @@ fn test_allow_kdf_fallback_flag_can_be_enabled() {
         signature_file: None,
         no_password: false,
         password_file: None,
-        help: None,
-        version: None,
         allow_kdf_fallback: true,
         force_weak_kdf: false,
         save_password: false,
@@ -291,7 +280,7 @@ fn test_minisign_config_dir_fallback_to_home() {
 fn cli_positional_args_are_extra_files() {
     // C-compatible syntax: -m specifies the first file, remaining positional
     // args are additional files.  Repeated -m must NOT be accepted.
-    let cli = Cli::try_parse_from([
+    let cli = Cli::parse_from([
         "minisign_rs",
         "-S",
         "-m",
@@ -312,7 +301,7 @@ fn cli_positional_args_are_extra_files() {
 
 #[test]
 fn cli_all_message_files_merges_m_and_positional() {
-    let cli = Cli::try_parse_from([
+    let cli = Cli::parse_from([
         "minisign_rs",
         "-S",
         "-m",
@@ -331,7 +320,7 @@ fn cli_all_message_files_merges_m_and_positional() {
 
 #[test]
 fn cli_single_message_file_no_positional() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-S", "-m", "file.txt"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-S", "-m", "file.txt"]).unwrap();
 
     let all = cli.all_message_files();
     assert_eq!(all.len(), 1);
@@ -341,7 +330,7 @@ fn cli_single_message_file_no_positional() {
 #[test]
 fn cli_no_message_file_returns_empty() {
     // -m is optional at the parser level; validation happens in handle_sign/handle_verify
-    let cli = Cli::try_parse_from(["minisign_rs", "-S"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-S"]).unwrap();
 
     let all = cli.all_message_files();
     assert!(all.is_empty());
@@ -350,7 +339,7 @@ fn cli_no_message_file_returns_empty() {
 #[cfg(feature = "parallel")]
 #[test]
 fn cli_sequential_flag_defaults_false() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-S", "-m", "file.txt"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-S", "-m", "file.txt"]).unwrap();
 
     assert!(!cli.sequential);
 }
@@ -358,43 +347,102 @@ fn cli_sequential_flag_defaults_false() {
 #[cfg(feature = "parallel")]
 #[test]
 fn cli_sequential_flag_can_be_set() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-S", "-m", "file.txt", "--sequential"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-S", "-m", "file.txt", "--sequential"]).unwrap();
 
     assert!(cli.sequential);
 }
 
 #[test]
 fn cli_save_password_flag_defaults_false() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-G"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-G"]).unwrap();
     assert!(!cli.save_password);
 }
 
 #[test]
 fn cli_save_password_long_flag() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-G", "--save-password"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-G", "--save-password"]).unwrap();
     assert!(cli.save_password);
 }
 
 #[test]
 fn cli_save_password_short_alias() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-G", "--sp"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-G", "--sp"]).unwrap();
     assert!(cli.save_password);
 }
 
 #[test]
 fn cli_forget_password_flag_defaults_false() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-K"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-K"]).unwrap();
     assert!(!cli.forget_password);
 }
 
 #[test]
 fn cli_forget_password_long_flag() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-K", "--forget-password"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-K", "--forget-password"]).unwrap();
     assert!(cli.forget_password);
 }
 
 #[test]
 fn cli_forget_password_short_alias() {
-    let cli = Cli::try_parse_from(["minisign_rs", "-K", "--fp"]).unwrap();
+    let cli = Cli::parse_from(["minisign_rs", "-K", "--fp"]).unwrap();
     assert!(cli.forget_password);
+}
+
+// ── Combined short flag (POSIX bundling) tests ────────────────────────────────
+
+#[test]
+fn cli_combined_inspect_public_key() {
+    // -Ip key.pub  →  -I  -p key.pub
+    let cli = Cli::parse_from(["minisign_rs", "-Ip", "key.pub"]).unwrap();
+    assert!(cli.inspect);
+    assert_eq!(cli.public_key_file.as_deref(), Some(Path::new("key.pub")));
+}
+
+#[test]
+fn cli_combined_inspect_secret_key() {
+    // -Is key.sec  →  -I  -s key.sec
+    let cli = Cli::parse_from(["minisign_rs", "-Is", "key.sec"]).unwrap();
+    assert!(cli.inspect);
+    assert_eq!(cli.secret_key_file.as_deref(), Some(Path::new("key.sec")));
+}
+
+#[test]
+fn cli_combined_sign_message() {
+    // -Sm file.txt  →  -S  -m file.txt
+    let cli = Cli::parse_from(["minisign_rs", "-Sm", "file.txt"]).unwrap();
+    assert!(cli.sign);
+    assert_eq!(cli.message_file.as_deref(), Some(Path::new("file.txt")));
+}
+
+#[test]
+fn cli_combined_verify_message() {
+    // -Vm file.txt  →  -V  -m file.txt
+    let cli = Cli::parse_from(["minisign_rs", "-Vm", "file.txt"]).unwrap();
+    assert!(cli.verify);
+    assert_eq!(cli.message_file.as_deref(), Some(Path::new("file.txt")));
+}
+
+#[test]
+fn cli_combined_all_boolean_flags() {
+    // -GfW  →  -G  -f  -W
+    let cli = Cli::parse_from(["minisign_rs", "-GfW"]).unwrap();
+    assert!(cli.generate);
+    assert!(cli.force);
+    assert!(cli.no_password);
+}
+
+#[test]
+fn cli_combined_two_boolean_flags() {
+    // -Sf  →  -S  -f
+    let cli = Cli::parse_from(["minisign_rs", "-Sf", "-m", "f.txt"]).unwrap();
+    assert!(cli.sign);
+    assert!(cli.force);
+}
+
+#[test]
+fn cli_combined_value_embedded_in_bundle() {
+    // -Iskey.sec  →  -I  -s key.sec  (value embedded directly after the flag char)
+    let cli = Cli::parse_from(["minisign_rs", "-Iskey.sec"]).unwrap();
+    assert!(cli.inspect);
+    assert_eq!(cli.secret_key_file.as_deref(), Some(Path::new("key.sec")));
 }

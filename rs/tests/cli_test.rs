@@ -602,7 +602,8 @@ fn test_sign_with_legacy_mode() {
 }
 
 #[test]
-fn test_version_includes_commit_hash() {
+fn test_version_format() {
+    // Version output is "minisign_rs X.Y.Z (git-describe)" e.g. "minisign_rs 0.2.0 (v0.2.0-3-gabc1234)"
     let output = minisign_cmd()
         .arg("--version")
         .assert()
@@ -612,43 +613,43 @@ fn test_version_includes_commit_hash() {
         .clone();
 
     let version_string = String::from_utf8_lossy(&output);
+    let trimmed = version_string.trim();
 
-    // Version should contain the package version
-    assert!(version_string.contains(env!("CARGO_PKG_VERSION")));
-
-    // Version should contain a commit hash in parentheses (e.g., "0.12.0 (abc1234)")
-    // Commit hash should be 7-8 hex characters
     assert!(
-        version_string.contains('(') && version_string.contains(')'),
-        "Version should contain parentheses with commit hash"
+        trimmed.starts_with("minisign_rs "),
+        "Version should start with 'minisign_rs ', got: {trimmed}"
+    );
+    assert!(
+        trimmed.contains(env!("CARGO_PKG_VERSION")),
+        "Version should contain the package version, got: {trimmed}"
     );
 
-    // Extract what's in the parentheses and verify it looks like a commit hash
-    let start = version_string.find('(').expect("Should have opening paren");
-    let end = version_string.find(')').expect("Should have closing paren");
-    let in_parens = &version_string[start + 1..end];
+    // Must include a parenthetical git describe suffix
+    assert!(
+        trimmed.contains('(') && trimmed.contains(')'),
+        "Version should contain a parenthetical git describe suffix, got: {trimmed}"
+    );
 
-    // Commit info can be:
-    // - Pure hex hash: "abc1234" (7-8 chars)
-    // - Git describe format: "v0.1.0-6-g347e92d" (when commits after tag)
-    // - Tag only: "v0.1.0" (when exactly on tag)
-    let is_valid_commit_info = if in_parens.contains('-') && in_parens.contains('g') {
-        // Git describe format: extract hash after 'g' prefix
-        in_parens
+    let start = trimmed.find('(').expect("opening paren");
+    let end = trimmed.find(')').expect("closing paren");
+    let in_parens = trimmed[start + 1..end].trim();
+
+    // git describe produces one of:
+    //   "v0.2.0"               — exactly on a tag
+    //   "v0.2.0-3-gabc1234"    — N commits after tag
+    //   "abc1234"              — no tags, bare hash
+    //   "unknown"              — git not available at build time
+    let is_valid = in_parens == "unknown"
+        || (in_parens.starts_with('v') && in_parens.contains('.'))
+        || in_parens
             .split('-')
             .next_back()
-            .is_some_and(|hash| hash.starts_with('g') && hash.len() >= 8)
-    } else if in_parens.starts_with('v') && in_parens.contains('.') {
-        // Tag only format (e.g., "v0.2.0")
-        true
-    } else {
-        // Pure hex hash (legacy format)
-        in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit())
-    };
+            .is_some_and(|s| s.starts_with('g') && s.len() >= 8)
+        || (in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit()));
 
     assert!(
-        is_valid_commit_info,
-        "Expected valid commit info in parentheses, got: {in_parens}"
+        is_valid,
+        "Expected valid git describe output in parens, got: {in_parens}"
     );
 }
 

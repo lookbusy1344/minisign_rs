@@ -21,11 +21,10 @@ libc = "0.2"
 # Other dependencies
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"], optional = true }
 base64 = "0.22"
-clap = { version = "4.5", features = ["derive"] }
+pico-args = { version = "0.5", features = ["eq-separator"] }
 thiserror = "2"
 rpassword = "7.4"
 dirs = "6"
-git-version = "0.3"
 rayon = { version = "1", optional = true }
 
 [dev-dependencies]
