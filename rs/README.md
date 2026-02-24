@@ -10,7 +10,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ## Project Status
 
-**Version 1.3.6 Release** - Production-ready Rust implementation with complete C minisign compatibility.
+**Version 1.4.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
@@ -276,7 +276,7 @@ codesign --force --sign "Developer ID Application: Your Name" target/release/min
 
 **Performance:** Matches C minisign on single-file operations (≤10% variance, within noise); marginally faster on large-file work. Multi-file signing runs in parallel via Rayon — up to **8.4x faster** than C's sequential single-invocation mode (e.g. 10 × 10MB: 10ms vs 87ms). C has no multi-file verify; Rust parallel verify is up to **6.2x faster** than Rust sequential. See [Performance Benchmark Report](docs/benchmark-report.md).
 
-**Binary size:** 525 KB with default features (vs C's 70KB) — reduced from ~910 KB by replacing `clap` with `pico-args` (saves ~385 KB). Smaller still with `--no-default-features` (658 KB, no keychain or parallel support). Larger than C due to memory safety guarantees and zero C dependencies.
+**Binary size:** 493 KB with default features (vs C's 70KB) — reduced from ~910 KB by replacing `clap` with `pico-args` (~385 KB) and cargo feature pruning (~32 KB). 442 KB with `--no-default-features` (no keychain or parallel support). Larger than C due to memory safety guarantees and zero C dependencies.
 
 **Memory requirements:**
 - Scrypt KDF: ~128MB, ~1-2s (N=2^20 for security)
