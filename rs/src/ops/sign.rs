@@ -14,6 +14,7 @@ use crate::{
     },
     validation::validate_comment_with_length,
 };
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -397,14 +398,28 @@ pub fn sign_multiple_files(
             })
             .collect()
     } else {
-        files
-            .into_par_iter()
-            .map(|file| {
-                let result = sign_file_with_key(&file, &secret_key, keynum, options);
-                report_file_result(&file, &result, options);
-                FileSignResult { file, result }
-            })
-            .collect()
+        #[cfg(feature = "parallel")]
+        {
+            files
+                .into_par_iter()
+                .map(|file| {
+                    let result = sign_file_with_key(&file, &secret_key, keynum, options);
+                    report_file_result(&file, &result, options);
+                    FileSignResult { file, result }
+                })
+                .collect()
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            files
+                .into_iter()
+                .map(|file| {
+                    let result = sign_file_with_key(&file, &secret_key, keynum, options);
+                    report_file_result(&file, &result, options);
+                    FileSignResult { file, result }
+                })
+                .collect()
+        }
     };
 
     print_summary(&results, options)
