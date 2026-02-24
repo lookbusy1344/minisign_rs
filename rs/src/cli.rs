@@ -7,7 +7,6 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_DESCRIBE: &str = env!("GIT_DESCRIBE");
 
 const HELP: &str = "\
 minisign_rs - A dead simple Rust tool to sign files and verify signatures
@@ -114,7 +113,7 @@ impl Cli {
             std::process::exit(0);
         }
         if args.contains(["-v", "--version"]) {
-            println!("minisign_rs {VERSION} ({GIT_DESCRIBE})");
+            println!("minisign_rs {VERSION}");
             std::process::exit(0);
         }
 
