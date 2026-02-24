@@ -603,7 +603,7 @@ fn test_sign_with_legacy_mode() {
 
 #[test]
 fn test_version_format() {
-    // Version output is "minisign_rs X.Y.Z" — no git hash appended (pico-args migration dropped it)
+    // Version output is "minisign_rs X.Y.Z (git-describe)" e.g. "minisign_rs 0.2.0 (v0.2.0-3-gabc1234)"
     let output = minisign_cmd()
         .arg("--version")
         .assert()
@@ -623,10 +623,33 @@ fn test_version_format() {
         trimmed.contains(env!("CARGO_PKG_VERSION")),
         "Version should contain the package version, got: {trimmed}"
     );
-    // No parenthetical suffix — git hash was intentionally removed in the pico-args migration
+
+    // Must include a parenthetical git describe suffix
     assert!(
-        !trimmed.contains('('),
-        "Version should not contain a parenthetical suffix, got: {trimmed}"
+        trimmed.contains('(') && trimmed.contains(')'),
+        "Version should contain a parenthetical git describe suffix, got: {trimmed}"
+    );
+
+    let start = trimmed.find('(').expect("opening paren");
+    let end = trimmed.find(')').expect("closing paren");
+    let in_parens = trimmed[start + 1..end].trim();
+
+    // git describe produces one of:
+    //   "v0.2.0"               — exactly on a tag
+    //   "v0.2.0-3-gabc1234"    — N commits after tag
+    //   "abc1234"              — no tags, bare hash
+    //   "unknown"              — git not available at build time
+    let is_valid = in_parens == "unknown"
+        || (in_parens.starts_with('v') && in_parens.contains('.'))
+        || in_parens
+            .split('-')
+            .next_back()
+            .is_some_and(|s| s.starts_with('g') && s.len() >= 8)
+        || (in_parens.len() >= 7 && in_parens.chars().all(|c| c.is_ascii_hexdigit()));
+
+    assert!(
+        is_valid,
+        "Expected valid git describe output in parens, got: {in_parens}"
     );
 }
 
