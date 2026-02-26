@@ -359,12 +359,14 @@ fn cli_save_password_flag_defaults_false() {
 }
 
 #[test]
+#[cfg(feature = "credential_store")]
 fn cli_save_password_long_flag() {
     let cli = Cli::parse_from(["minisign_rs", "-G", "--save-password"]).unwrap();
     assert!(cli.save_password);
 }
 
 #[test]
+#[cfg(feature = "credential_store")]
 fn cli_save_password_short_alias() {
     let cli = Cli::parse_from(["minisign_rs", "-G", "--sp"]).unwrap();
     assert!(cli.save_password);
@@ -445,4 +447,24 @@ fn cli_combined_value_embedded_in_bundle() {
     let cli = Cli::parse_from(["minisign_rs", "-Iskey.sec"]).unwrap();
     assert!(cli.inspect);
     assert_eq!(cli.secret_key_file.as_deref(), Some(Path::new("key.sec")));
+}
+
+/// --save-password / --sp should be rejected at parse time when the
+/// credential_store feature is not compiled in, so users get an immediate
+/// error rather than a silent no-op that reports false success.
+#[test]
+#[cfg(not(feature = "credential_store"))]
+fn cli_save_password_rejected_without_credential_store_feature() {
+    use minisign::errors::Error;
+    let result = Cli::parse_from(["minisign_rs", "-G", "-W", "--save-password"]);
+    assert!(
+        matches!(result, Err(Error::Usage(_))),
+        "expected Usage error when credential_store feature is disabled, got {result:?}"
+    );
+
+    let result_short = Cli::parse_from(["minisign_rs", "-G", "-W", "--sp"]);
+    assert!(
+        matches!(result_short, Err(Error::Usage(_))),
+        "expected Usage error for --sp when credential_store feature is disabled, got {result_short:?}"
+    );
 }

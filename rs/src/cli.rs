@@ -240,6 +240,17 @@ impl Cli {
             return Err(Error::Usage("-q and -Q are mutually exclusive".to_string()));
         }
 
+        // --save-password / --sp requires the credential_store feature to be compiled in.
+        // Without it the flag would silently succeed while saving nothing.
+        #[cfg(not(feature = "credential_store"))]
+        if cli.save_password {
+            return Err(Error::Usage(
+                "--save-password requires the credential_store feature \
+                 (recompile with default features)"
+                    .to_string(),
+            ));
+        }
+
         // Reject multiple action flags — only one of -G/-S/-V/-R/-K/-I is valid at a time.
         let action_count = [
             cli.generate,
