@@ -235,6 +235,29 @@ impl Cli {
             extra_files: Vec::new(),
         };
 
+        // Reject conflicting quiet-mode flags.
+        if cli.quiet && cli.pretty_quiet {
+            return Err(Error::Usage("-q and -Q are mutually exclusive".to_string()));
+        }
+
+        // Reject multiple action flags — only one of -G/-S/-V/-R/-K/-I is valid at a time.
+        let action_count = [
+            cli.generate,
+            cli.sign,
+            cli.verify,
+            cli.recreate,
+            cli.change,
+            cli.inspect,
+        ]
+        .iter()
+        .filter(|&&v| v)
+        .count();
+        if action_count > 1 {
+            return Err(Error::Usage(
+                "only one action flag (-G, -S, -V, -R, -K, -I) may be specified".to_string(),
+            ));
+        }
+
         // Collect remaining positional arguments as extra files.
         // Reject anything that looks like an unknown flag.
         let remaining = args.finish();

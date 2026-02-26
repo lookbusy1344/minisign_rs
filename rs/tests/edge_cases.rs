@@ -438,12 +438,12 @@ fn test_untrusted_comment_error_threshold() {
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
-    // Error threshold: COMMENTMAXBYTES - COMMENT_PREFIX_SIZE = 1024 - 20 = 1004
-    // Comments at or above this length should error (changed from warning for consistency)
-    let error_comment = "a".repeat(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE);
-    assert_eq!(error_comment.len(), 1004);
+    // Error threshold: comments strictly longer than COMMENTMAXBYTES - COMMENT_PREFIX_SIZE
+    // should be rejected. Exactly at the limit (1004 bytes) is valid; 1005 bytes is not.
+    let max_comment_len = COMMENTMAXBYTES - COMMENT_PREFIX_SIZE;
+    let error_comment = "a".repeat(max_comment_len + 1);
+    assert_eq!(error_comment.len(), 1005);
 
-    // Should now error instead of warning (for consistency with trusted comment behavior)
     let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
         .signature_file(sig_file.as_path())
         .force(true)
@@ -454,9 +454,18 @@ fn test_untrusted_comment_error_threshold() {
     let result = sign(&sign_opts, None);
     assert!(result.is_err());
 
-    // Note: The C implementation only warns for untrusted comments, but the Rust
-    // implementation now makes both untrusted and trusted comment length violations
-    // fatal errors for consistency and to prevent creating incompatible signature files.
+    // Also verify that a comment of exactly the maximum length is accepted.
+    let max_comment = "a".repeat(max_comment_len);
+    let ok_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .untrusted_comment(max_comment.as_str())
+        .quiet(true)
+        .build();
+    assert!(
+        sign(&ok_opts, None).is_ok(),
+        "comment at exact limit should be accepted"
+    );
 }
 
 #[test]
@@ -569,11 +578,13 @@ fn test_trusted_comment_error_threshold() {
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
-    // Error threshold: TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE = 8192 - 18 = 8174
-    let too_long_trusted = "b".repeat(TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE);
-    assert_eq!(too_long_trusted.len(), 8174);
+    // Error threshold: trusted comments strictly longer than
+    // TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE should be rejected.
+    // Exactly at the limit (8174 bytes) is valid; 8175 bytes is not.
+    let max_trusted_len = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE;
+    let too_long_trusted = "b".repeat(max_trusted_len + 1);
+    assert_eq!(too_long_trusted.len(), 8175);
 
-    // Should error
     let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
         .signature_file(sig_file.as_path())
         .force(true)
@@ -584,7 +595,7 @@ fn test_trusted_comment_error_threshold() {
     let result = sign(&sign_opts, None);
     assert!(
         result.is_err(),
-        "Should fail with trusted comment at error threshold"
+        "Should fail with trusted comment exceeding the limit"
     );
 
     // Verify error message mentions trusted comment
@@ -592,6 +603,19 @@ fn test_trusted_comment_error_threshold() {
     assert!(
         format!("{err}").to_lowercase().contains("trusted comment"),
         "Error should mention trusted comment"
+    );
+
+    // Also verify that a comment of exactly the maximum length is accepted.
+    let max_trusted = "b".repeat(max_trusted_len);
+    let ok_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+        .signature_file(sig_file.as_path())
+        .force(true)
+        .trusted_comment(max_trusted.as_str())
+        .quiet(true)
+        .build();
+    assert!(
+        sign(&ok_opts, None).is_ok(),
+        "trusted comment at exact limit should be accepted"
     );
 }
 

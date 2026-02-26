@@ -536,6 +536,16 @@ pub fn derive_key_with_params(
     scrypt(password, salt, &params, &mut output)
         .map_err(|e| Error::KdfError(format!("scrypt failed: {e}")))?;
 
+    // Verified against scrypt-0.11.0: the low-level scrypt() uses output.len() directly,
+    // ignoring Params.len. A future version that validates them would error here rather
+    // than silently producing truncated key material.
+    debug_assert_eq!(
+        output.len(),
+        output_len,
+        "scrypt output length mismatch: expected {output_len}, got {}",
+        output.len()
+    );
+
     Ok(output)
 }
 

@@ -363,10 +363,11 @@ fn test_trusted_comment_too_long() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create a trusted comment that exceeds the limit
+    // Create a trusted comment that exceeds the limit.
     // TRUSTEDCOMMENTMAXBYTES = 8192, TRUSTED_COMMENT_PREFIX_SIZE = 18
-    // So limit is 8192 - 18 = 8174 bytes
-    let too_long_comment = "a".repeat(8174);
+    // Maximum allowed comment length is 8174 bytes (= 8192 - 18).
+    // 8175 bytes is the first value that must be rejected.
+    let too_long_comment = "a".repeat(8175);
 
     let result = create_signature(
         &secret_key,
@@ -390,8 +391,8 @@ fn test_trusted_comment_at_limit() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create a trusted comment just under the limit (should succeed)
-    let at_limit_comment = "a".repeat(8173);
+    // Create a trusted comment at exactly the limit (should succeed)
+    let at_limit_comment = "a".repeat(8174);
 
     let result = create_signature(
         &secret_key,
@@ -413,10 +414,11 @@ fn test_untrusted_comment_too_long_errors() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create an untrusted comment that exceeds the limit
+    // Create an untrusted comment that exceeds the limit.
     // COMMENTMAXBYTES = 1024, COMMENT_PREFIX_SIZE = 20
-    // So limit is 1024 - 20 = 1004 bytes
-    let too_long_comment = "a".repeat(1004);
+    // Maximum allowed comment length is 1004 bytes (= 1024 - 20).
+    // 1005 bytes is the first value that must be rejected.
+    let too_long_comment = "a".repeat(1005);
 
     // Should now error (changed from warning for consistency with trusted comments)
     let result = create_signature(
