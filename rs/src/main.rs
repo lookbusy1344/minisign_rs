@@ -1,4 +1,3 @@
-use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
 use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
@@ -258,9 +257,6 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     // Display working message for signing operation
     if !cli.quiet {
         eprintln!("Working...");
-        io::stderr()
-            .flush()
-            .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
     }
 
     if message_files.len() == 1 {
@@ -388,6 +384,13 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     if message_files.is_empty() {
         return Err(Error::Usage(
             "Message file (-m) is required for verification".into(),
+        ));
+    }
+
+    // Verification never decrypts a key, so --password-file has no effect.
+    if cli.password_file.is_some() {
+        return Err(Error::Usage(
+            "--password-file is not applicable to verify operations".into(),
         ));
     }
 
@@ -627,8 +630,13 @@ fn display_signature_inspect_result(result: &SignatureInspectResult) {
     println!("└─ Algorithm: {algorithm_desc}");
 }
 
-/// Display the inspection result
-fn display_inspect_result(result: &InspectResult) {
+/// Display the inspection result.
+///
+/// `key_id_known` must be `true` when the key ID has been resolved (i.e. the
+/// key is unencrypted or has been decrypted by the caller). When `false` and
+/// the key type is `SecretEncrypted`, the display shows a placeholder instead
+/// of the raw (zeroed) keynum bytes.
+fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
     // Display security level prominently first (for secret keys)
     if let Some(security_level) = result.security_level() {
         match security_level {
@@ -642,10 +650,9 @@ fn display_inspect_result(result: &InspectResult) {
     // Display key information
     println!("Key Information:");
 
-    // For encrypted secret keys, key ID is not available without decryption
-    if result.key_type() == KeyType::SecretEncrypted
-        && result.key_id() == ENCRYPTED_KEYNUM_PLACEHOLDER
-    {
+    // For encrypted secret keys whose password has not been supplied, the key
+    // ID is unknown (the stored keynum bytes are zeroed, not the real keynum).
+    if result.key_type() == KeyType::SecretEncrypted && !key_id_known {
         println!("├─ Key ID: [encrypted - password required]");
         println!("├─ Key ID (words): [encrypted]");
     } else {
@@ -792,10 +799,11 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         };
 
-    // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt
+    // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt.
+    // key_type == SecretEncrypted is the authoritative encrypted check; no need to compare keynum
+    // bytes against ENCRYPTED_KEYNUM_PLACEHOLDER (which are zeroed by coincidence, not design).
     let mut decrypted = false;
     if result.key_type() == KeyType::SecretEncrypted
-        && result.key_id() == ENCRYPTED_KEYNUM_PLACEHOLDER
         && !cli.no_decrypt
         && let Some(path) = key_file_path
     {
@@ -831,7 +839,10 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         println!("{source_description}\n");
     }
 
-    display_inspect_result(&result);
+    display_inspect_result(
+        &result,
+        decrypted || result.key_type() != KeyType::SecretEncrypted,
+    );
 
     Ok(())
 }
@@ -861,6 +872,15 @@ fn prompt_password(
         eprintln!(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
+        // Reject non-regular files (FIFOs, device nodes, directories) to prevent blocking
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| Error::Io(format!("Failed to stat password file: {e}")))?;
+        if !metadata.is_file() {
+            return Err(Error::Io(format!(
+                "Password file '{}' is not a regular file",
+                path.display()
+            )));
+        }
         // Wrap password in Zeroizing immediately to prevent leakage
         let mut password = Zeroizing::new(
             std::fs::read_to_string(path)

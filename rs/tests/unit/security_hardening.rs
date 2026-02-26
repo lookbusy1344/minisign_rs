@@ -262,11 +262,10 @@ fn h6_parse_rejects_oversized_trusted_comment() {
 
 #[test]
 fn h6_parse_accepts_maximum_length_comments() {
-    // Test boundary: comments at exactly the limit should be accepted
-    // Note: We check against COMMENTMAXBYTES for the raw comment text,
-    // not including the "untrusted comment: " prefix
-    let max_untrusted = "x".repeat(COMMENTMAXBYTES - 1);
-    let max_trusted = "x".repeat(TRUSTEDCOMMENTMAXBYTES - 1);
+    // Test boundary: comments at exactly COMMENTMAXBYTES / TRUSTEDCOMMENTMAXBYTES
+    // chars in the comment text should be accepted by the parser.
+    let max_untrusted = "x".repeat(COMMENTMAXBYTES);
+    let max_trusted = "x".repeat(TRUSTEDCOMMENTMAXBYTES);
 
     // Create valid base64-encoded signature structure (74 bytes = SIG_STRUCT_SIZE)
     // Ed (2 bytes) + keynum (8 bytes) + signature (64 bytes) = 74 bytes

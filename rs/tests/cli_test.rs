@@ -1601,6 +1601,82 @@ fn test_generate_quiet_suppresses_working_message() {
 }
 
 #[test]
+fn test_sign_displays_working_message() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let msg = temp_dir.path().join("msg.txt");
+    fs::write(&msg, b"hello").unwrap();
+
+    // Generate unencrypted key (fast, no scrypt)
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    let stderr = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-W")
+        .arg("-m")
+        .arg(&msg)
+        .assert()
+        .success()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        stderr.contains("Working..."),
+        "Expected 'Working...' during sign but got:\n{stderr}"
+    );
+}
+
+#[test]
+fn test_sign_quiet_suppresses_working_message() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let msg = temp_dir.path().join("msg.txt");
+    fs::write(&msg, b"hello").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    let stderr = minisign_cmd()
+        .arg("-S")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-W")
+        .arg("-q")
+        .arg("-m")
+        .arg(&msg)
+        .assert()
+        .success()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        !stderr.contains("Working..."),
+        "Expected no 'Working...' with --quiet during sign but got:\n{stderr}"
+    );
+}
+
+#[test]
 fn cli_sign_multiple_files() {
     let temp_dir = TempDir::new().unwrap();
 
@@ -3233,5 +3309,244 @@ fn test_forget_password_after_recreate() {
     assert!(
         !credential_store::has_password(&credential_id),
         "-R --forget-password must remove the saved password after recreating"
+    );
+}
+
+/// T9: Verify that `-o` causes the verified message content to be written to stdout.
+///
+/// This was previously untested. The flag is handled in main.rs: after successful
+/// verification it reads the message file and writes it to stdout.
+#[test]
+fn test_verify_output_flag_writes_message_to_stdout() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let msg_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+
+    let message_content = "hello from the output flag test\n";
+    fs::write(&msg_path, message_content).unwrap();
+
+    // Generate key
+    minisign_cmd()
+        .args([
+            "-G",
+            "-W",
+            "-s",
+            sk_path.to_str().unwrap(),
+            "-p",
+            pk_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Sign (-W because key is unencrypted; avoids interactive password prompt)
+    minisign_cmd()
+        .args([
+            "-S",
+            "-W",
+            "-s",
+            sk_path.to_str().unwrap(),
+            "-x",
+            sig_path.to_str().unwrap(),
+            "-m",
+            msg_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Verify with -o — message content should appear on stdout
+    minisign_cmd()
+        .args([
+            "-V",
+            "-o",
+            "-p",
+            pk_path.to_str().unwrap(),
+            "-x",
+            sig_path.to_str().unwrap(),
+            "-m",
+            msg_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(message_content.trim()));
+}
+
+#[test]
+fn test_password_file_rejected_for_verify() {
+    // --password-file is only meaningful for operations that decrypt a key.
+    // Passing it with -V should produce a usage error rather than being silently ignored.
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let msg = temp_dir.path().join("msg.txt");
+    let pw = temp_dir.path().join("pw.txt");
+    fs::write(&msg, b"hello").unwrap();
+    fs::write(&pw, b"irrelevant").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .args(["-S", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-m")
+        .arg(&msg)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("-V")
+        .arg("-p")
+        .arg(&pk)
+        .arg("-m")
+        .arg(&msg)
+        .arg("--password-file")
+        .arg(&pw)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("password-file"));
+}
+
+#[test]
+fn test_password_file_directory_rejected() {
+    // Passing a directory as --password-file should fail, not block on read
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    // Use a sub-directory (always a regular directory, never a file)
+    let pw_dir = temp_dir.path().join("pw_dir");
+    fs::create_dir(&pw_dir).unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    // Re-generate with a directory as the password file — should error
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .arg("-f")
+        .arg("--password-file")
+        .arg(&pw_dir)
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_sign_batch_failure_summary_visible_in_quiet_mode() {
+    // The failure summary (count + file list) must appear even with -q.
+    // Per-file errors are always shown; the summary must be too.
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let good = temp_dir.path().join("good.txt");
+    let missing = temp_dir.path().join("nonexistent.txt"); // intentionally absent
+
+    fs::write(&good, b"hello").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    let stderr = minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-q")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-m")
+        .arg(&good)
+        .arg(&missing)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        stderr.contains("Summary:"),
+        "failure summary must appear even with -q, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("nonexistent"),
+        "failed file name must appear in summary, got:\n{stderr}"
+    );
+}
+
+#[test]
+fn test_verify_batch_failure_summary_visible_in_quiet_mode() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let good = temp_dir.path().join("good.txt");
+    let bad = temp_dir.path().join("bad.txt");
+
+    fs::write(&good, b"hello").unwrap();
+    fs::write(&bad, b"world").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    // Sign only the good file
+    minisign_cmd()
+        .args(["-S", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-m")
+        .arg(&good)
+        .assert()
+        .success();
+
+    // Verify both — bad.txt has no signature, so it will fail
+    let stderr = minisign_cmd()
+        .arg("-V")
+        .arg("-q")
+        .arg("-p")
+        .arg(&pk)
+        .arg("-m")
+        .arg(&good)
+        .arg(&bad)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        stderr.contains("Summary:"),
+        "failure summary must appear even with -q, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("bad"),
+        "failed file name must appear in summary, got:\n{stderr}"
     );
 }

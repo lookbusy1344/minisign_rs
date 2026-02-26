@@ -7,6 +7,11 @@ use crate::{
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
+#[cfg(unix)]
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(unix)]
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Unix file permissions for secret key files (read/write for owner only)
 #[cfg(unix)]
@@ -57,10 +62,12 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
     SeckeyStruct::from_file_contents(&contents)
 }
 
-/// Write a file, optionally setting Unix permissions on creation and on force-overwrite.
+/// Write a file, optionally setting Unix permissions on creation.
 ///
-/// All three public file-write functions delegate here. The `unix_mode` parameter is
-/// `Some(mode)` only for secret key files (0600); public key and signature files pass `None`.
+/// Used for non-secret files (public keys, signatures) and for new secret key creation.
+/// The `unix_mode` parameter is `Some(mode)` only for secret key files (0600).
+///
+/// For force-overwriting secret key files, use [`atomic_overwrite_secret_key`] instead.
 fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) -> Result<()> {
     validate_windows_path(path)?;
 
@@ -95,34 +102,115 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
         }
     })?;
 
-    // When forcing overwrite of a secret key, re-apply permissions so that an
-    // existing file with lax permissions (mode() only affects newly created files)
-    // is also secured.
-    #[cfg(unix)]
-    if force && let Some(mode) = unix_mode {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(mode);
-        std::fs::set_permissions(path, perms).map_err(|e| Error::file_write(path, e))?;
-    }
-
     file.write_all(contents.as_bytes())
         .map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
 }
 
+/// Atomically overwrite a secret key file by writing to a temp sibling, then renaming.
+///
+/// Protects against two hazards:
+/// - **Data loss (O1):** A crash mid-write on the original file would corrupt it. Here,
+///   the original is only replaced after the new content is fully fsynced.
+/// - **TOCTOU on permissions (S4):** `std::fs::set_permissions` operates on the path;
+///   between open and chmod an attacker could swap the file. `fchmod` on the fd is immune.
+///
+/// Algorithm:
+/// 1. Open `.{name}.tmp` in the same directory with mode 0600 and `O_NOFOLLOW`
+/// 2. `fchmod(fd, mode)` — sets permissions on the fd, not the path
+/// 3. Write all content
+/// 4. `fsync` — flush to disk before rename
+/// 5. `rename` — POSIX guarantees this is atomic; the destination is never half-written
+///
+/// The temp file is removed on any failure.
+///
+/// # Errors
+///
+/// Returns [`Error::FileWrite`] on any I/O failure.
+#[cfg(unix)]
+fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::io::AsRawFd;
+
+    validate_windows_path(path)?;
+
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+
+    // Include a monotonic counter to give each concurrent invocation a unique
+    // temp file, preventing races where two threads share the same .tmp path.
+    let seq = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp_name = format!(
+        ".{}.{seq}.tmp",
+        path.file_name()
+            .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned)
+            .to_string_lossy()
+    );
+    let tmp_path = dir.join(&tmp_name);
+
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(mode)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&tmp_path)
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+
+        // fchmod operates on the open fd — immune to path-based TOCTOU races.
+        // SAFETY: `file.as_raw_fd()` is valid for the lifetime of `file`.
+        // mode_t is u16 on some platforms; 0o600 (= 384) fits without truncation.
+        #[allow(clippy::cast_possible_truncation)]
+        let ret = unsafe { libc::fchmod(file.as_raw_fd(), mode as libc::mode_t) };
+        if ret != 0 {
+            return Err(Error::file_write(path, std::io::Error::last_os_error()));
+        }
+
+        file.write_all(contents.as_bytes())
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+
+        // Flush data to disk before the rename so a crash after rename doesn't
+        // leave the destination file with the old (or empty) content.
+        file.sync_all()
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+
+        std::fs::rename(&tmp_path, path).map_err(|e| Error::file_write(path, e))
+    })();
+
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    result
+}
+
 /// Write a secret key file with mode 0600 on Unix (read/write for owner only).
+///
+/// When `force` is true and the platform is Unix, uses an atomic write-temp-then-rename
+/// sequence to prevent data loss on crash and to apply permissions via `fchmod` (not the
+/// path-based `set_permissions`, which is subject to TOCTOU races).
 ///
 /// # Errors
 ///
 /// Returns [`Error::FileExists`] if the file exists and `force` is false.
 /// Returns [`Error::FileWrite`] on I/O failure.
 pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
+    let path = path.as_ref();
+
+    #[cfg(unix)]
+    if force {
+        return atomic_overwrite_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS);
+    }
+
     #[cfg(unix)]
     let unix_mode = Some(SECRET_KEY_FILE_PERMISSIONS);
     #[cfg(not(unix))]
     let unix_mode = None;
-    write_file(path.as_ref(), contents, force, unix_mode)
+    write_file(path, contents, force, unix_mode)
 }
 
 /// Write a public key file.

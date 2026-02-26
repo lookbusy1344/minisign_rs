@@ -61,11 +61,8 @@ pub enum Error {
     #[error("Legacy (non-prehashed) signature found")]
     LegacySignatureRejected,
 
-    #[error("key mismatch: signature keyid {sig_keynum} doesn't match")]
-    KeyMismatch {
-        sig_keynum: String,
-        pub_keynum: String,
-    },
+    #[error("key mismatch: signature keyid {sig_keynum}")]
+    KeyMismatch { sig_keynum: String },
 
     #[error("checksum verification failed")]
     ChecksumFailed,

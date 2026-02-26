@@ -209,6 +209,18 @@ fn test_concurrent_key_generation_with_force() {
     // Files should exist (created by one of the threads)
     assert!(secret_key.exists(), "Secret key should exist");
     assert!(public_key.exists(), "Public key should exist");
+
+    // The resulting key file must be a parseable, non-corrupt key — not just present.
+    // A corrupt file from interleaved writes (without atomic rename) would fail here.
+    let sk_contents =
+        std::fs::read_to_string(secret_key.as_ref()).expect("Secret key file should be readable");
+    minisign::keys::SeckeyStruct::from_file_contents(&sk_contents)
+        .expect("Secret key file must parse as a valid SeckeyStruct after concurrent writes");
+
+    let pk_contents =
+        std::fs::read_to_string(public_key.as_ref()).expect("Public key file should be readable");
+    minisign::keys::PubkeyStruct::from_file_contents(&pk_contents)
+        .expect("Public key file must parse as a valid PubkeyStruct after concurrent writes");
 }
 
 /// Test sequential file creation is reliable
@@ -416,71 +428,81 @@ fn test_concurrent_signing_same_key() {
 
 /// Test reading a key file while it's being written
 ///
-/// Verifies that partial reads during key generation fail gracefully
-/// rather than returning corrupted data.
+/// Verifies that atomic temp-file-then-rename writes ensure any concurrent
+/// read observes either the complete file or nothing — never partial content.
 #[test]
 fn test_read_during_write() {
-    use std::sync::mpsc;
-    use std::time::Duration;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let secret_key = Arc::new(temp_dir.path().join("write.key"));
     let public_key = Arc::new(temp_dir.path().join("write.pub"));
 
-    let secret_key_reader = Arc::clone(&secret_key);
     let read_attempts = Arc::new(std::sync::Mutex::new(vec![]));
-    let read_attempts_clone = Arc::clone(&read_attempts);
+    let read_attempts_reader = Arc::clone(&read_attempts);
 
-    // Channel for synchronization: writer signals when reader can start
-    let (tx, rx) = mpsc::channel();
+    // Reader loops until this flag is set, then does a few final reads to
+    // guarantee the atomicity assertion has data points to check.
+    let write_done = Arc::new(AtomicBool::new(false));
+    let write_done_reader = Arc::clone(&write_done);
 
-    // Spawn writer thread
-    let secret_key_writer = Arc::clone(&secret_key);
-    let public_key_writer = Arc::clone(&public_key);
-    let writer = thread::spawn(move || {
-        let opts = GenerateOptions::builder(secret_key_writer.as_ref(), public_key_writer.as_ref())
-            .force(true)
-            .no_password(true)
-            .build();
+    let secret_key_reader = Arc::clone(&secret_key);
 
-        // Signal reader that writer is ready to start
-        tx.send(()).expect("Failed to send signal");
-        generate(&opts, None).expect("Generate should succeed");
-    });
+    // Barrier releases writer and reader simultaneously, ensuring the reader
+    // is actively looping when generate() begins.
+    let barrier = Arc::new(Barrier::new(2));
+    let barrier_reader = Arc::clone(&barrier);
 
-    // Spawn reader thread that attempts to read during write
     let reader = thread::spawn(move || {
-        // Wait for writer to be ready before starting read attempts
-        rx.recv().expect("Failed to receive signal");
-
-        for _ in 0..50 {
+        barrier_reader.wait();
+        while !write_done_reader.load(Ordering::Acquire) {
             match fs::read(&*secret_key_reader) {
-                Ok(data) => {
-                    // If we successfully read, store the size
-                    read_attempts_clone.lock().unwrap().push((true, data.len()));
-                }
-                Err(_) => {
-                    // File doesn't exist yet or read failed
-                    read_attempts_clone.lock().unwrap().push((false, 0));
-                }
+                Ok(data) => read_attempts_reader
+                    .lock()
+                    .unwrap()
+                    .push((true, data.len())),
+                Err(_) => read_attempts_reader.lock().unwrap().push((false, 0)),
             }
-            thread::sleep(Duration::from_micros(100));
+            thread::yield_now();
+        }
+        // Five post-write reads guarantee the atomicity assertion below fires
+        // at least once, eliminating the vacuous-pass failure mode.
+        for _ in 0..5 {
+            if let Ok(data) = fs::read(&*secret_key_reader) {
+                read_attempts_reader
+                    .lock()
+                    .unwrap()
+                    .push((true, data.len()));
+            }
         }
     });
 
-    writer.join().expect("Writer panicked");
+    barrier.wait();
+    let opts = GenerateOptions::builder(secret_key.as_ref(), public_key.as_ref())
+        .force(true)
+        .no_password(true)
+        .build();
+    generate(&opts, None).expect("Generate should succeed");
+    write_done.store(true, Ordering::Release);
+
     reader.join().expect("Reader panicked");
 
-    // Check that the file exists and is valid after both threads complete
     assert!(secret_key.exists(), "Secret key should exist");
     let final_data = fs::read(&*secret_key).expect("Should read final file");
     assert!(!final_data.is_empty(), "Final file should not be empty");
 
-    // Atomicity check: generate() writes to a temp file then renames it, so any
-    // concurrent read must observe either the complete file or nothing — never
-    // a partial file.  Compare against the actual final size, not a magic number.
     let complete_size = final_data.len();
     let attempts = read_attempts.lock().unwrap();
+
+    // The 5 post-write reads mean this assertion always fires; if it doesn't,
+    // the reader thread never ran at all — a test infrastructure failure.
+    assert!(
+        attempts.iter().any(|(ok, sz)| *ok && *sz > 0),
+        "reader never observed a completed write — atomicity invariant untested"
+    );
+
+    // Atomicity check: generate() uses atomic temp-then-rename, so any
+    // successful read must return exactly complete_size bytes, never partial.
     for (success, size) in attempts.iter() {
         if *success && *size > 0 {
             assert_eq!(

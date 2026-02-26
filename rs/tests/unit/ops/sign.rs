@@ -363,10 +363,11 @@ fn test_trusted_comment_too_long() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create a trusted comment that exceeds the limit
+    // Create a trusted comment that exceeds the limit.
     // TRUSTEDCOMMENTMAXBYTES = 8192, TRUSTED_COMMENT_PREFIX_SIZE = 18
-    // So limit is 8192 - 18 = 8174 bytes
-    let too_long_comment = "a".repeat(8174);
+    // Maximum allowed comment length is 8174 bytes (= 8192 - 18).
+    // 8175 bytes is the first value that must be rejected.
+    let too_long_comment = "a".repeat(8175);
 
     let result = create_signature(
         &secret_key,
@@ -390,8 +391,8 @@ fn test_trusted_comment_at_limit() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create a trusted comment just under the limit (should succeed)
-    let at_limit_comment = "a".repeat(8173);
+    // Create a trusted comment at exactly the limit (should succeed)
+    let at_limit_comment = "a".repeat(8174);
 
     let result = create_signature(
         &secret_key,
@@ -413,10 +414,11 @@ fn test_untrusted_comment_too_long_errors() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create an untrusted comment that exceeds the limit
+    // Create an untrusted comment that exceeds the limit.
     // COMMENTMAXBYTES = 1024, COMMENT_PREFIX_SIZE = 20
-    // So limit is 1024 - 20 = 1004 bytes
-    let too_long_comment = "a".repeat(1004);
+    // Maximum allowed comment length is 1004 bytes (= 1024 - 20).
+    // 1005 bytes is the first value that must be rejected.
+    let too_long_comment = "a".repeat(1005);
 
     // Should now error (changed from warning for consistency with trusted comments)
     let result = create_signature(
@@ -482,27 +484,42 @@ fn test_atomic_file_creation_force_overwrites() {
 }
 
 #[test]
-fn test_sign_file_too_large_fails() {
+fn test_sign_small_file_succeeds() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Generate a test key
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
     std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // We can't actually create a > 1 GB file for testing, but we can verify
-    // the error message format and that the check exists
-    // This test documents the expected behavior
     let message_path = temp_dir.path().join("message.txt");
     std::fs::write(&message_path, b"small message").unwrap();
 
     let options = SignOptions::builder(sk_path.as_path(), message_path.as_path()).build();
+    assert!(sign(&options, None).is_ok(), "small file should succeed");
+}
 
-    // Small file should succeed
-    let result = sign(&options, None);
-    assert!(result.is_ok(), "small file should succeed");
+#[test]
+fn test_check_file_size_limit_rejects_oversized() {
+    use minisign::ops::file_utils::check_file_size_limit;
+
+    let temp_dir = TempDir::new().unwrap();
+    let path = temp_dir.path().join("big.bin");
+
+    // Create a sparse file that appears larger than MAX_MESSAGE_SIZE_BYTES (1 GB)
+    // without allocating disk space. set_len() extends the file with a sparse hole
+    // on all major platforms.
+    let file = std::fs::File::create(&path).unwrap();
+    file.set_len(1_100_000_000).unwrap(); // 1.1 GB — just over the 1 GB limit
+
+    let result = check_file_size_limit(&path);
+    assert!(result.is_err(), "file over 1 GB should be rejected");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("too large") || err_msg.contains("prehashed"),
+        "error should mention size limit: {err_msg}"
+    );
 }
 
 #[test]
@@ -749,52 +766,35 @@ fn test_sign_multiple_files_all_attempted() {
 
 #[test]
 fn test_sign_summary_shows_only_filenames_not_error_details() {
-    // This test documents the expected behavior for summary output.
-    // The summary should list only filenames of failed files, not repeat full error messages.
-    //
-    // Expected output format when signing multiple files with failures:
-    //
-    // Real-time output (as each file is processed):
-    //   Failed: missing1.txt (failed to read file: No such file or directory (os error 2))
-    //   Failed: missing2.txt (failed to read file: No such file or directory (os error 2))
-    //
-    // Summary output (at the end):
-    //   Summary: 1 signed, 2 failed
-    //   Failed files:
-    //     - missing1.txt
-    //     - missing2.txt
-    //
-    // The summary should NOT repeat: "failed to read file: No such file or directory..."
-    //
-    // This test verifies the implementation produces this concise summary format.
+    use minisign::ops::sign::{FileSignResult, format_batch_summary};
 
-    let temp_dir = TempDir::new().unwrap();
+    let io_error_msg = "No such file or directory (os error 2)";
+    let results = vec![
+        FileSignResult {
+            file: PathBuf::from("good.txt"),
+            result: Err(Error::Io(io_error_msg.to_string())),
+        },
+        FileSignResult {
+            file: PathBuf::from("missing1.txt"),
+            result: Err(Error::Io(io_error_msg.to_string())),
+        },
+        FileSignResult {
+            file: PathBuf::from("missing2.txt"),
+            result: Err(Error::Io(io_error_msg.to_string())),
+        },
+    ];
 
-    // Create one valid file and two that will fail
-    let file1 = temp_dir.path().join("good.txt");
-    let file2 = temp_dir.path().join("missing1.txt");
-    let file3 = temp_dir.path().join("missing2.txt");
+    let summary = format_batch_summary(&results).expect("failures should produce a summary");
 
-    fs::write(&file1, b"M1").unwrap();
-    // Don't create file2 and file3
+    // Summary must list the filenames of failed files.
+    assert!(summary.contains("missing1.txt"), "got:\n{summary}");
+    assert!(summary.contains("missing2.txt"), "got:\n{summary}");
 
-    let paths = vec![file1.clone(), file2.clone(), file3.clone()];
-
-    let opts = SignOptions::builder(
-        Path::new("tests/fixtures/keys/unencrypted.key"),
-        Path::new(""),
-    )
-    .force(true)
-    .build();
-
-    let result = sign_multiple_files(paths, &opts, None, true);
-
-    // Should return PartialFailure
-    assert!(result.is_err());
-    assert!(matches!(result, Err(Error::PartialFailure)));
-
-    // The actual output verification would need stderr capture.
-    // For now, this test documents expected behavior and will pass after the fix.
+    // Summary must not repeat per-file error details — those appear in real-time output.
+    assert!(
+        !summary.contains(io_error_msg),
+        "summary must not repeat OS error text, got:\n{summary}"
+    );
 }
 
 #[test]

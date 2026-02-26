@@ -235,6 +235,40 @@ impl Cli {
             extra_files: Vec::new(),
         };
 
+        // Reject conflicting quiet-mode flags.
+        if cli.quiet && cli.pretty_quiet {
+            return Err(Error::Usage("-q and -Q are mutually exclusive".to_string()));
+        }
+
+        // --save-password / --sp requires the credential_store feature to be compiled in.
+        // Without it the flag would silently succeed while saving nothing.
+        #[cfg(not(feature = "credential_store"))]
+        if cli.save_password {
+            return Err(Error::Usage(
+                "--save-password requires the credential_store feature \
+                 (recompile with default features)"
+                    .to_string(),
+            ));
+        }
+
+        // Reject multiple action flags — only one of -G/-S/-V/-R/-K/-I is valid at a time.
+        let action_count = [
+            cli.generate,
+            cli.sign,
+            cli.verify,
+            cli.recreate,
+            cli.change,
+            cli.inspect,
+        ]
+        .iter()
+        .filter(|&&v| v)
+        .count();
+        if action_count > 1 {
+            return Err(Error::Usage(
+                "only one action flag (-G, -S, -V, -R, -K, -I) may be specified".to_string(),
+            ));
+        }
+
         // Collect remaining positional arguments as extra files.
         // Reject anything that looks like an unknown flag.
         let remaining = args.finish();
@@ -329,9 +363,9 @@ impl Cli {
             .file_name()
             .ok_or_else(|| Error::InvalidPath(message_file.to_path_buf()))?;
 
-        let mut file_name_string = file_name.to_string_lossy().into_owned();
-        file_name_string.push_str(".minisig");
-        sig_path.set_file_name(file_name_string);
+        let mut sig_name = file_name.to_os_string();
+        sig_name.push(".minisig");
+        sig_path.set_file_name(sig_name);
         Ok(sig_path)
     }
 }

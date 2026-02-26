@@ -609,7 +609,7 @@ impl SeckeyStruct {
         secret_key: &[u8; SECRET_KEY_BYTES],
     ) -> [u8; CHECKSUM_BYTES] {
         // Matches C minisign: hash(sig_alg + keynum + sk)
-        let mut data = Vec::with_capacity(2 + KEYNUM_BYTES + SECRET_KEY_BYTES);
+        let mut data = Zeroizing::new(Vec::with_capacity(2 + KEYNUM_BYTES + SECRET_KEY_BYTES));
         data.extend_from_slice(SIG_ALG); // "Ed"
         data.extend_from_slice(keynum.as_bytes());
         data.extend_from_slice(secret_key);
@@ -860,9 +860,12 @@ impl SeckeyStruct {
     /// Serialize to file format (comment + base64)
     #[must_use]
     pub fn to_file_contents(&self, comment: &str) -> String {
-        let bytes = self.to_bytes();
-        let base64 = encode_base64(bytes);
-        format!("untrusted comment: {comment}\n{base64}\n")
+        // Zeroize both the raw bytes and base64 string: base64 is a reversible
+        // encoding so it equally constitutes secret key material in memory.
+        let bytes = Zeroizing::new(self.to_bytes());
+        let base64 = Zeroizing::new(encode_base64(*bytes));
+        let base64_str: &str = &base64;
+        format!("untrusted comment: {comment}\n{base64_str}\n")
     }
 }
 

@@ -111,10 +111,12 @@ pub fn validate_no_embedded_cr(s: &str) -> Result<()> {
     Ok(())
 }
 
-/// Validate a comment string for both printability and carriage returns
+/// Validate a comment string for printability
 ///
-/// This is a convenience function that applies both `is_printable()` and
-/// `validate_no_embedded_cr()` checks.
+/// This is a thin wrapper around `is_printable()`. Carriage returns (`\r`, U+000D)
+/// are rejected here as control characters — the separate `validate_no_embedded_cr()`
+/// call that previously followed was redundant because `is_printable()` already rejects
+/// `\r` before the CR-specific check could fire.
 ///
 /// # Arguments
 ///
@@ -122,13 +124,10 @@ pub fn validate_no_embedded_cr(s: &str) -> Result<()> {
 ///
 /// # Errors
 ///
-/// Returns `Error::InvalidComment` if:
-/// - The string contains unprintable characters (see `is_printable()`)
-/// - The string contains embedded '\r' characters (see `validate_no_embedded_cr()`)
+/// Returns `Error::InvalidComment` if the string contains unprintable characters
+/// (see `is_printable()`).
 pub fn validate_comment(s: &str) -> Result<()> {
-    is_printable(s)?;
-    validate_no_embedded_cr(s)?;
-    Ok(())
+    is_printable(s)
 }
 
 /// Validate a comment string with optional length limit
@@ -174,7 +173,7 @@ pub fn validate_comment_with_length(
 
     // Then validate length if provided
     if let Some(max_len) = max_length
-        && s.len() >= max_len
+        && s.len() > max_len
     {
         return Err(Error::InvalidComment(format!(
             "{comment_type} comment too long: {} bytes (limit: {} bytes)",
@@ -251,24 +250,24 @@ pub fn validate_windows_path(path: &std::path::Path) -> Result<()> {
         return Err(Error::InvalidPath(path.to_path_buf()));
     }
 
-    // Check COM1-COM9
+    // Check COM1-COM9 (COM0 is not a reserved Windows device name)
     if base_upper.starts_with("COM")
         && base_upper.len() == 4
         && base_upper
             .chars()
             .nth(3)
-            .is_some_and(|c| c.is_ascii_digit())
+            .is_some_and(|c| matches!(c, '1'..='9'))
     {
         return Err(Error::InvalidPath(path.to_path_buf()));
     }
 
-    // Check LPT1-LPT9
+    // Check LPT1-LPT9 (LPT0 is not a reserved Windows device name)
     if base_upper.starts_with("LPT")
         && base_upper.len() == 4
         && base_upper
             .chars()
             .nth(3)
-            .is_some_and(|c| c.is_ascii_digit())
+            .is_some_and(|c| matches!(c, '1'..='9'))
     {
         return Err(Error::InvalidPath(path.to_path_buf()));
     }
