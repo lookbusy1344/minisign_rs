@@ -484,27 +484,42 @@ fn test_atomic_file_creation_force_overwrites() {
 }
 
 #[test]
-fn test_sign_file_too_large_fails() {
+fn test_sign_small_file_succeeds() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Generate a test key
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
     std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
 
-    // We can't actually create a > 1 GB file for testing, but we can verify
-    // the error message format and that the check exists
-    // This test documents the expected behavior
     let message_path = temp_dir.path().join("message.txt");
     std::fs::write(&message_path, b"small message").unwrap();
 
     let options = SignOptions::builder(sk_path.as_path(), message_path.as_path()).build();
+    assert!(sign(&options, None).is_ok(), "small file should succeed");
+}
 
-    // Small file should succeed
-    let result = sign(&options, None);
-    assert!(result.is_ok(), "small file should succeed");
+#[test]
+fn test_check_file_size_limit_rejects_oversized() {
+    use minisign::ops::file_utils::check_file_size_limit;
+
+    let temp_dir = TempDir::new().unwrap();
+    let path = temp_dir.path().join("big.bin");
+
+    // Create a sparse file that appears larger than MAX_MESSAGE_SIZE_BYTES (1 GB)
+    // without allocating disk space. set_len() extends the file with a sparse hole
+    // on all major platforms.
+    let file = std::fs::File::create(&path).unwrap();
+    file.set_len(1_100_000_000).unwrap(); // 1.1 GB — just over the 1 GB limit
+
+    let result = check_file_size_limit(&path);
+    assert!(result.is_err(), "file over 1 GB should be rejected");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("too large") || err_msg.contains("prehashed"),
+        "error should mention size limit: {err_msg}"
+    );
 }
 
 #[test]

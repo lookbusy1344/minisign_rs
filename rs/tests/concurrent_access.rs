@@ -209,6 +209,18 @@ fn test_concurrent_key_generation_with_force() {
     // Files should exist (created by one of the threads)
     assert!(secret_key.exists(), "Secret key should exist");
     assert!(public_key.exists(), "Public key should exist");
+
+    // The resulting key file must be a parseable, non-corrupt key — not just present.
+    // A corrupt file from interleaved writes (without atomic rename) would fail here.
+    let sk_contents =
+        std::fs::read_to_string(secret_key.as_ref()).expect("Secret key file should be readable");
+    minisign::keys::SeckeyStruct::from_file_contents(&sk_contents)
+        .expect("Secret key file must parse as a valid SeckeyStruct after concurrent writes");
+
+    let pk_contents =
+        std::fs::read_to_string(public_key.as_ref()).expect("Public key file should be readable");
+    minisign::keys::PubkeyStruct::from_file_contents(&pk_contents)
+        .expect("Public key file must parse as a valid PubkeyStruct after concurrent writes");
 }
 
 /// Test sequential file creation is reliable

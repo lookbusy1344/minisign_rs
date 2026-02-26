@@ -3235,3 +3235,63 @@ fn test_forget_password_after_recreate() {
         "-R --forget-password must remove the saved password after recreating"
     );
 }
+
+/// T9: Verify that `-o` causes the verified message content to be written to stdout.
+///
+/// This was previously untested. The flag is handled in main.rs: after successful
+/// verification it reads the message file and writes it to stdout.
+#[test]
+fn test_verify_output_flag_writes_message_to_stdout() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let msg_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+
+    let message_content = "hello from the output flag test\n";
+    fs::write(&msg_path, message_content).unwrap();
+
+    // Generate key
+    minisign_cmd()
+        .args([
+            "-G",
+            "-W",
+            "-s",
+            sk_path.to_str().unwrap(),
+            "-p",
+            pk_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Sign (-W because key is unencrypted; avoids interactive password prompt)
+    minisign_cmd()
+        .args([
+            "-S",
+            "-W",
+            "-s",
+            sk_path.to_str().unwrap(),
+            "-x",
+            sig_path.to_str().unwrap(),
+            "-m",
+            msg_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    // Verify with -o — message content should appear on stdout
+    minisign_cmd()
+        .args([
+            "-V",
+            "-o",
+            "-p",
+            pk_path.to_str().unwrap(),
+            "-x",
+            sig_path.to_str().unwrap(),
+            "-m",
+            msg_path.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(message_content.trim()));
+}

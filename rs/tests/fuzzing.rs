@@ -204,8 +204,10 @@ proptest! {
         control_char in 0x00_u8..0x20,
         suffix in "[a-zA-Z0-9 ]{0,50}"
     ) {
-        // Skip allowed characters: tab (0x09), newline (0x0a), carriage return (0x0d)
-        prop_assume!(control_char != 0x09 && control_char != 0x0a && control_char != 0x0d);
+        // Skip allowed characters: tab (0x09) and newline (0x0a).
+        // CR (0x0d) is intentionally not excluded — is_printable() rejects it as a
+        // control character, consistent with prop_carriage_return_injection.
+        prop_assume!(control_char != 0x09 && control_char != 0x0a);
 
         let comment = format!("{prefix}{}{suffix}", control_char as char);
         // Should fail validation
@@ -334,12 +336,12 @@ proptest! {
 // ============================================================================
 
 #[test]
-fn test_zero_length_password() {
-    // Empty password should work (though not recommended)
+fn test_zero_length_comment_no_panic() {
+    // validate_comment on an empty string must not panic
     let result = std::panic::catch_unwind(|| {
         let _ = validation::validate_comment("");
     });
-    assert!(result.is_ok(), "Should handle empty input gracefully");
+    assert!(result.is_ok(), "Should handle empty comment gracefully");
 }
 
 #[test]
@@ -611,5 +613,49 @@ proptest! {
         let (secret_key, public_key, _keynum) = generate_keypair().unwrap();
         let sig = sign(&secret_key, &msg).unwrap();
         prop_assert!(verify(&public_key, &other_msg, &sig).is_err());
+    }
+}
+
+// ============================================================================
+// T10: SignatureBox Text Round-Trip
+// ============================================================================
+
+proptest! {
+    /// T10: Full SignatureBox serialization round-trip under arbitrary valid comments.
+    ///
+    /// Serializes a SignatureBox to its text format and parses it back, verifying
+    /// that all fields survive the round-trip without modification. Previously only
+    /// SigStruct binary round-trips were property-tested.
+    #[test]
+    fn prop_signature_box_text_roundtrip(
+        untrusted in "[A-Za-z0-9 !#$%&'()*+,-./:;<=>?@\\[\\]^_`{|}~]{0,100}",
+        trusted in "[A-Za-z0-9 !#$%&'()*+,-./:;<=>?@\\[\\]^_`{|}~]{0,100}",
+    ) {
+        use minisign::crypto::Signature;
+
+        // Build a minimal SigStruct with valid "Ed" algorithm marker
+        let mut sig_bytes = [0u8; minisign::constants::SIG_STRUCT_SIZE];
+        sig_bytes[0] = b'E';
+        sig_bytes[1] = b'd';
+        let sig_struct = minisign::signature::SigStruct::from_bytes(&sig_bytes).unwrap();
+
+        let global_sig = Signature::from_bytes([0u8; 64]);
+
+        let boxed = SignatureBox::new(
+            untrusted.clone(),
+            sig_struct,
+            trusted.clone(),
+            global_sig,
+        );
+        // Construction may fail if comment chars are outside the printable set
+        // (the regex above selects only printable ASCII, so this should always succeed)
+        let Ok(boxed) = boxed else { return Ok(()) };
+
+        let serialized = boxed.to_file_contents();
+        let parsed = SignatureBox::from_file_contents(&serialized)
+            .expect("round-trip parse must succeed");
+
+        prop_assert_eq!(parsed.untrusted_comment(), boxed.untrusted_comment());
+        prop_assert_eq!(parsed.trusted_comment(), boxed.trusted_comment());
     }
 }

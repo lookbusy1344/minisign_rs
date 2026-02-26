@@ -176,10 +176,9 @@ fn test_verify_with_wrong_keynum() {
 }
 
 #[test]
-fn test_verify_file_too_large_fails() {
+fn test_verify_small_file_succeeds() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Generate a test keypair
     let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
     let pubkey = PubkeyStruct::new(keynum, public_key);
@@ -189,7 +188,6 @@ fn test_verify_file_too_large_fails() {
     std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
     std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
 
-    // Create a small message and sign it in non-prehashed mode
     let message_path = temp_dir.path().join("message.txt");
     std::fs::write(&message_path, b"small message").unwrap();
 
@@ -197,10 +195,8 @@ fn test_verify_file_too_large_fails() {
     let sign_opts = SignOptions::builder(sk_path.as_path(), message_path.as_path())
         .signature_file(sig_path.as_path())
         .build();
-
     sign(&sign_opts, None).expect("signing should succeed");
 
-    // Verify with small file should succeed
     let verify_opts = VerifyOptions::builder(
         PublicKeySource::File(pk_path.as_path()),
         sig_path.as_path(),
@@ -209,9 +205,6 @@ fn test_verify_file_too_large_fails() {
     .build();
 
     verify(&verify_opts).expect("verification should succeed with small file");
-
-    // Note: We can't actually test with a > 1 GB file in unit tests,
-    // but the check_file_size_limit function is tested separately
 }
 
 #[test]
