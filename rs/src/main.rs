@@ -1,4 +1,3 @@
-use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
 use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
@@ -642,8 +641,13 @@ fn display_signature_inspect_result(result: &SignatureInspectResult) {
     println!("└─ Algorithm: {algorithm_desc}");
 }
 
-/// Display the inspection result
-fn display_inspect_result(result: &InspectResult) {
+/// Display the inspection result.
+///
+/// `key_id_known` must be `true` when the key ID has been resolved (i.e. the
+/// key is unencrypted or has been decrypted by the caller). When `false` and
+/// the key type is `SecretEncrypted`, the display shows a placeholder instead
+/// of the raw (zeroed) keynum bytes.
+fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
     // Display security level prominently first (for secret keys)
     if let Some(security_level) = result.security_level() {
         match security_level {
@@ -657,10 +661,9 @@ fn display_inspect_result(result: &InspectResult) {
     // Display key information
     println!("Key Information:");
 
-    // For encrypted secret keys, key ID is not available without decryption
-    if result.key_type() == KeyType::SecretEncrypted
-        && result.key_id() == ENCRYPTED_KEYNUM_PLACEHOLDER
-    {
+    // For encrypted secret keys whose password has not been supplied, the key
+    // ID is unknown (the stored keynum bytes are zeroed, not the real keynum).
+    if result.key_type() == KeyType::SecretEncrypted && !key_id_known {
         println!("├─ Key ID: [encrypted - password required]");
         println!("├─ Key ID (words): [encrypted]");
     } else {
@@ -807,10 +810,11 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             )
         };
 
-    // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt
+    // Smart decryption: If key is encrypted and --no-decrypt is not set, get password and decrypt.
+    // key_type == SecretEncrypted is the authoritative encrypted check; no need to compare keynum
+    // bytes against ENCRYPTED_KEYNUM_PLACEHOLDER (which are zeroed by coincidence, not design).
     let mut decrypted = false;
     if result.key_type() == KeyType::SecretEncrypted
-        && result.key_id() == ENCRYPTED_KEYNUM_PLACEHOLDER
         && !cli.no_decrypt
         && let Some(path) = key_file_path
     {
@@ -846,7 +850,10 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         println!("{source_description}\n");
     }
 
-    display_inspect_result(&result);
+    display_inspect_result(
+        &result,
+        decrypted || result.key_type() != KeyType::SecretEncrypted,
+    );
 
     Ok(())
 }

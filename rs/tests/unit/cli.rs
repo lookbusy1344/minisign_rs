@@ -449,8 +449,8 @@ fn cli_combined_value_embedded_in_bundle() {
     assert_eq!(cli.secret_key_file.as_deref(), Some(Path::new("key.sec")));
 }
 
-/// --save-password / --sp should be rejected at parse time when the
-/// credential_store feature is not compiled in, so users get an immediate
+/// `--save-password` / `--sp` should be rejected at parse time when the
+/// `credential_store` feature is not compiled in, so users get an immediate
 /// error rather than a silent no-op that reports false success.
 #[test]
 #[cfg(not(feature = "credential_store"))]
