@@ -31,7 +31,7 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 ### Test Coverage
 
-- **484 total tests** covering all operations and CLI behavior
+- **499 total tests** covering all operations and CLI behavior
 - Comprehensive unit tests covering all crypto operations, key handling, and file formats
 - CLI integration tests using assert_cmd for end-to-end validation
 - Credential store tests (skip gracefully when OS keyring unavailable)
@@ -47,9 +47,9 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 - **Zero unsafe code** - 100% safe Rust
 - **Zero clippy warnings** - passes `clippy::pedantic` checks
-- **4,177 lines** of production code in `src/` (5,204 total with comments)
-- **10,458 lines** of test code in `tests/` (14,070 total with comments)
-- **Test-to-code ratio**: 2.50:1 demonstrating thorough test coverage
+- **4,307 lines** of production code in `src/` (5,380 total with comments)
+- **10,887 lines** of test code in `tests/` (14,531 total with comments)
+- **Test-to-code ratio**: 2.53:1 demonstrating thorough test coverage
 - **Pure Rust crypto** - no C dependencies via RustCrypto ecosystem
 - **Memory safety verified** - Miri checks run weekly
 - **Multi-platform CI** - Linux, macOS, Windows on every commit
