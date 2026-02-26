@@ -13,9 +13,8 @@ fn test_error_display() {
 
     let err = Error::KeyMismatch {
         sig_keynum: "ABCD1234".into(),
-        pub_keynum: "EFGH5678".into(),
     };
-    // Only signature keyid is shown in error message (public keyid is in header)
+    // Public keyid is omitted — it is already shown in the "Verifying with key:" header
     assert!(err.to_string().contains("ABCD1234"));
     assert!(err.to_string().contains("key mismatch"));
     assert!(err.to_string().contains("keyid"));

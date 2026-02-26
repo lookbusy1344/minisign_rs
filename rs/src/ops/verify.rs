@@ -290,7 +290,6 @@ pub fn verify_message_signature(
     if !bool::from(pubkey.keynum().ct_eq(sig_box.sig_struct().keynum())) {
         return Err(Error::KeyMismatch {
             sig_keynum: sig_box.sig_struct().keynum().to_key_id(),
-            pub_keynum: pubkey.keynum().to_key_id(),
         });
     }
 

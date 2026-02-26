@@ -527,21 +527,18 @@ fn test_verify_summary_shows_only_filenames_not_error_details() {
             file: PathBuf::from("SSMS20.exe"),
             result: Err(Error::KeyMismatch {
                 sig_keynum: "AAAAAAAAAAAAAAAA".to_string(),
-                pub_keynum: "BBBBBBBBBBBBBBBB".to_string(),
             }),
         },
         FileVerifyResult {
             file: PathBuf::from("SSMS20B.exe"),
             result: Err(Error::KeyMismatch {
                 sig_keynum: "AAAAAAAAAAAAAAAA".to_string(),
-                pub_keynum: "BBBBBBBBBBBBBBBB".to_string(),
             }),
         },
         FileVerifyResult {
             file: PathBuf::from("SSMS20C.exe"),
             result: Err(Error::KeyMismatch {
                 sig_keynum: "AAAAAAAAAAAAAAAA".to_string(),
-                pub_keynum: "BBBBBBBBBBBBBBBB".to_string(),
             }),
         },
     ];
