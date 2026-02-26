@@ -366,9 +366,9 @@ pub fn blake2b_512_stream(mut reader: impl Read) -> Result<[u8; 64]> {
 /// - `log_n >= 64` (would cause undefined behavior in bit shift)
 /// - Arithmetic overflow occurs during parameter calculation
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if `force_weak_kdf` is true in release builds (enforced by assertion).
+/// Returns `ScryptParamError` if `force_weak_kdf` is true in release builds.
 pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> Result<(u64, u64)> {
     #[cfg(debug_assertions)]
     if force_weak_kdf {
@@ -380,10 +380,11 @@ pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> Result<(u64, u64
     }
 
     #[cfg(not(debug_assertions))]
-    assert!(
-        !force_weak_kdf,
-        "force_weak_kdf must be false in release builds"
-    );
+    if force_weak_kdf {
+        return Err(Error::ScryptParamError(
+            "force_weak_kdf is not permitted in release builds".to_string(),
+        ));
+    }
 
     // M1: Bounds check to prevent undefined behavior
     // 1u64 << log_n requires log_n < 64
