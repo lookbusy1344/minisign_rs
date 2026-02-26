@@ -1601,6 +1601,74 @@ fn test_generate_quiet_suppresses_working_message() {
 }
 
 #[test]
+fn test_sign_displays_working_message() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let msg = temp_dir.path().join("msg.txt");
+    fs::write(&msg, b"hello").unwrap();
+
+    // Generate unencrypted key (fast, no scrypt)
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s").arg(&sk)
+        .arg("-p").arg(&pk)
+        .assert()
+        .success();
+
+    let stderr = minisign_cmd()
+        .arg("-S")
+        .arg("-s").arg(&sk)
+        .arg("-W")
+        .arg("-m").arg(&msg)
+        .assert()
+        .success()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        stderr.contains("Working..."),
+        "Expected 'Working...' during sign but got:\n{stderr}"
+    );
+}
+
+#[test]
+fn test_sign_quiet_suppresses_working_message() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let msg = temp_dir.path().join("msg.txt");
+    fs::write(&msg, b"hello").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s").arg(&sk)
+        .arg("-p").arg(&pk)
+        .assert()
+        .success();
+
+    let stderr = minisign_cmd()
+        .arg("-S")
+        .arg("-s").arg(&sk)
+        .arg("-W")
+        .arg("-q")
+        .arg("-m").arg(&msg)
+        .assert()
+        .success()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        !stderr.contains("Working..."),
+        "Expected no 'Working...' with --quiet during sign but got:\n{stderr}"
+    );
+}
+
+#[test]
 fn cli_sign_multiple_files() {
     let temp_dir = TempDir::new().unwrap();
 
