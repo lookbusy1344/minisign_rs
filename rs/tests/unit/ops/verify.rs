@@ -518,72 +518,46 @@ fn test_verify_multiple_files_quiet_mode() {
 
 #[test]
 fn test_verify_summary_shows_only_filenames_not_error_details() {
-    // This test documents the expected behavior for summary output.
-    // The summary should list only filenames of failed files, not repeat full error messages.
-    //
-    // Expected output format when verifying multiple files with failures:
-    //
-    // Real-time output (as each file is processed):
-    //   Failed: file1.txt (key mismatch: signature keynum 31EE9C5E56F34B1D doesn't match public key keynum BB8DB640CDDA0EC2)
-    //   Failed: file2.txt (key mismatch: signature keynum 31EE9C5E56F34B1D doesn't match public key keynum BB8DB640CDDA0EC2)
-    //
-    // Summary output (at the end):
-    //   Summary: 0 verified, 2 failed
-    //   Failed files:
-    //     - file1.txt
-    //     - file2.txt
-    //
-    // The summary should NOT repeat: "key mismatch: signature keynum ... doesn't match ..."
-    //
-    // This test verifies the implementation produces this concise summary format.
+    use minisign::ops::verify::{FileVerifyResult, format_batch_summary};
+    use std::path::PathBuf;
 
-    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+    let error_detail = "key mismatch";
+    let results = vec![
+        FileVerifyResult {
+            file: PathBuf::from("SSMS20.exe"),
+            result: Err(Error::KeyMismatch {
+                sig_keynum: "AAAAAAAAAAAAAAAA".to_string(),
+                pub_keynum: "BBBBBBBBBBBBBBBB".to_string(),
+            }),
+        },
+        FileVerifyResult {
+            file: PathBuf::from("SSMS20B.exe"),
+            result: Err(Error::KeyMismatch {
+                sig_keynum: "AAAAAAAAAAAAAAAA".to_string(),
+                pub_keynum: "BBBBBBBBBBBBBBBB".to_string(),
+            }),
+        },
+        FileVerifyResult {
+            file: PathBuf::from("SSMS20C.exe"),
+            result: Err(Error::KeyMismatch {
+                sig_keynum: "AAAAAAAAAAAAAAAA".to_string(),
+                pub_keynum: "BBBBBBBBBBBBBBBB".to_string(),
+            }),
+        },
+    ];
 
-    let temp_dir = TempDir::new().unwrap();
+    let summary = format_batch_summary(&results).expect("failures should produce a summary");
 
-    // Generate two keypairs
-    let (secret_key1, _public_key1, keynum1) = generate_keypair().expect("RNG should work");
-    let (_, public_key2, keynum2) = generate_keypair().expect("RNG should work");
+    // Summary must list the filenames of failed files.
+    assert!(summary.contains("SSMS20.exe"), "got:\n{summary}");
+    assert!(summary.contains("SSMS20B.exe"), "got:\n{summary}");
+    assert!(summary.contains("SSMS20C.exe"), "got:\n{summary}");
 
-    let seckey1 = SeckeyStruct::new_unencrypted(keynum1, &secret_key1);
-    let pubkey2 = PubkeyStruct::new(keynum2, public_key2);
-
-    let sk_path = temp_dir.path().join("test.key");
-    let pk_path = temp_dir.path().join("wrong.pub");
-    std::fs::write(&sk_path, seckey1.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey2.to_file_contents("wrong")).unwrap();
-
-    // Create and sign three files with key1
-    let file1 = temp_dir.path().join("SSMS20.exe");
-    let file2 = temp_dir.path().join("SSMS20B.exe");
-    let file3 = temp_dir.path().join("SSMS20C.exe");
-
-    fs::write(&file1, b"M1").unwrap();
-    fs::write(&file2, b"M2").unwrap();
-    fs::write(&file3, b"M3").unwrap();
-
-    let sign_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
-        .force(true)
-        .build();
-
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
-
-    // Try to verify with wrong key - all should fail
-    let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
-    let verify_opts = VerifyOptions::builder(
-        PublicKeySource::File(pk_path.as_path()),
-        Path::new(""),
-        Path::new(""),
-    )
-    .build();
-
-    let result = verify_multiple_files(verify_paths, &verify_opts, true);
-    assert!(result.is_err());
-    assert!(matches!(result, Err(Error::TotalFailure)));
-
-    // The actual output verification would need stderr capture.
-    // For now, this test documents expected behavior and will pass after the fix.
+    // Summary must not repeat per-file error details — those appear in real-time output.
+    assert!(
+        !summary.contains(error_detail),
+        "summary must not repeat key-mismatch details, got:\n{summary}"
+    );
 }
 
 #[test]

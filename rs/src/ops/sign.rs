@@ -440,37 +440,50 @@ fn report_file_result(file: &Path, result: &Result<SignResult>, options: &SignOp
     }
 }
 
-/// Print summary of batch signing operation
-fn print_summary(results: &[FileSignResult], _options: &SignOptions<'_>) -> Result<()> {
+/// Format the batch-signing summary as a string.
+///
+/// Returns `None` when all files succeeded. When failures exist, returns a string
+/// with counts and the filenames of failed files — but not per-file error details,
+/// which are reported in real-time by `report_file_result`.
+#[must_use]
+pub fn format_batch_summary(results: &[FileSignResult]) -> Option<String> {
     let failures: Vec<_> = results
         .iter()
         .filter_map(|r| r.result.as_ref().err().map(|_| &r.file))
         .collect();
 
-    let success_count = results.len() - failures.len();
-
-    if !failures.is_empty() {
-        // Always show the failure summary even in quiet mode.
-        // Individual per-file errors are reported by report_file_result (also always shown).
-        // Suppressing the summary in quiet mode would leave users without a machine-readable
-        // failure list when running unattended batch operations.
-        eprintln!(
-            "\nSummary: {} signed, {} failed",
-            success_count,
-            failures.len()
-        );
-        eprintln!("Failed files:");
-        for file in &failures {
-            eprintln!("  - {}", file.display());
-        }
-        return if success_count == 0 {
-            Err(Error::TotalFailure)
-        } else {
-            Err(Error::PartialFailure)
-        };
+    if failures.is_empty() {
+        return None;
     }
 
-    Ok(())
+    let success_count = results.len() - failures.len();
+    let mut out = format!(
+        "\nSummary: {} signed, {} failed\nFailed files:\n",
+        success_count,
+        failures.len()
+    );
+    for file in failures {
+        use std::fmt::Write as _;
+        let _ = writeln!(out, "  - {}", file.display());
+    }
+    Some(out)
+}
+
+/// Print summary of batch signing operation
+fn print_summary(results: &[FileSignResult], _options: &SignOptions<'_>) -> Result<()> {
+    let Some(summary) = format_batch_summary(results) else {
+        return Ok(());
+    };
+    // Always show the failure summary even in quiet mode.
+    // Individual per-file errors are reported by report_file_result (also always shown).
+    // Suppressing the summary in quiet mode would leave users without a machine-readable
+    // failure list when running unattended batch operations.
+    eprint!("{summary}");
+    if results.iter().all(|r| r.result.is_err()) {
+        Err(Error::TotalFailure)
+    } else {
+        Err(Error::PartialFailure)
+    }
 }
 
 /// Create a signature for a message
