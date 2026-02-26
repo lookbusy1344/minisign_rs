@@ -23,7 +23,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 base64 = "0.22"
 pico-args = { version = "0.5", features = ["eq-separator"] }
 thiserror = { version = "2", default-features = false }
-rpassword = "7.4"
+rpassword = "=7.4.0"
 dirs = "6"
 rayon = { version = "1", optional = true }
 
