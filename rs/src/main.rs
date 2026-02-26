@@ -256,10 +256,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
 
     // Display working message for signing operation
     if !cli.quiet {
-        eprint!("Working...");
-        io::stderr()
-            .flush()
-            .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
+        eprintln!("Working...");
     }
 
     if message_files.len() == 1 {
@@ -281,14 +278,6 @@ fn handle_sign(cli: &Cli) -> Result<()> {
             &credential_id,
             password.as_ref(),
         )?;
-    }
-
-    // Clear working message (matches handle_generate pattern)
-    if !cli.quiet {
-        eprint!("\r\x1b[K");
-        io::stderr()
-            .flush()
-            .map_err(|e| Error::Io(format!("Failed to flush stderr: {e}")))?;
     }
 
     if cli.forget_password {
