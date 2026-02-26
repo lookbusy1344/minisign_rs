@@ -1611,16 +1611,20 @@ fn test_sign_displays_working_message() {
     // Generate unencrypted key (fast, no scrypt)
     minisign_cmd()
         .args(["-G", "-W"])
-        .arg("-s").arg(&sk)
-        .arg("-p").arg(&pk)
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
         .assert()
         .success();
 
     let stderr = minisign_cmd()
         .arg("-S")
-        .arg("-s").arg(&sk)
+        .arg("-s")
+        .arg(&sk)
         .arg("-W")
-        .arg("-m").arg(&msg)
+        .arg("-m")
+        .arg(&msg)
         .assert()
         .success()
         .get_output()
@@ -1644,17 +1648,21 @@ fn test_sign_quiet_suppresses_working_message() {
 
     minisign_cmd()
         .args(["-G", "-W"])
-        .arg("-s").arg(&sk)
-        .arg("-p").arg(&pk)
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
         .assert()
         .success();
 
     let stderr = minisign_cmd()
         .arg("-S")
-        .arg("-s").arg(&sk)
+        .arg("-s")
+        .arg(&sk)
         .arg("-W")
         .arg("-q")
-        .arg("-m").arg(&msg)
+        .arg("-m")
+        .arg(&msg)
         .assert()
         .success()
         .get_output()
@@ -3378,23 +3386,30 @@ fn test_password_file_rejected_for_verify() {
 
     minisign_cmd()
         .args(["-G", "-W"])
-        .arg("-s").arg(&sk)
-        .arg("-p").arg(&pk)
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
         .assert()
         .success();
 
     minisign_cmd()
         .args(["-S", "-W"])
-        .arg("-s").arg(&sk)
-        .arg("-m").arg(&msg)
+        .arg("-s")
+        .arg(&sk)
+        .arg("-m")
+        .arg(&msg)
         .assert()
         .success();
 
     minisign_cmd()
         .arg("-V")
-        .arg("-p").arg(&pk)
-        .arg("-m").arg(&msg)
-        .arg("--password-file").arg(&pw)
+        .arg("-p")
+        .arg(&pk)
+        .arg("-m")
+        .arg(&msg)
+        .arg("--password-file")
+        .arg(&pw)
         .assert()
         .failure()
         .stderr(predicate::str::contains("password-file"));
@@ -3412,18 +3427,126 @@ fn test_password_file_directory_rejected() {
 
     minisign_cmd()
         .args(["-G", "-W"])
-        .arg("-s").arg(&sk)
-        .arg("-p").arg(&pk)
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
         .assert()
         .success();
 
     // Re-generate with a directory as the password file — should error
     minisign_cmd()
         .arg("-G")
-        .arg("-s").arg(&sk)
-        .arg("-p").arg(&pk)
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
         .arg("-f")
-        .arg("--password-file").arg(&pw_dir)
+        .arg("--password-file")
+        .arg(&pw_dir)
         .assert()
         .failure();
+}
+
+#[test]
+fn test_sign_batch_failure_summary_visible_in_quiet_mode() {
+    // The failure summary (count + file list) must appear even with -q.
+    // Per-file errors are always shown; the summary must be too.
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let good = temp_dir.path().join("good.txt");
+    let missing = temp_dir.path().join("nonexistent.txt"); // intentionally absent
+
+    fs::write(&good, b"hello").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    let stderr = minisign_cmd()
+        .arg("-S")
+        .arg("-W")
+        .arg("-q")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-m")
+        .arg(&good)
+        .arg(&missing)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        stderr.contains("Summary:"),
+        "failure summary must appear even with -q, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("nonexistent"),
+        "failed file name must appear in summary, got:\n{stderr}"
+    );
+}
+
+#[test]
+fn test_verify_batch_failure_summary_visible_in_quiet_mode() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let good = temp_dir.path().join("good.txt");
+    let bad = temp_dir.path().join("bad.txt");
+
+    fs::write(&good, b"hello").unwrap();
+    fs::write(&bad, b"world").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    // Sign only the good file
+    minisign_cmd()
+        .args(["-S", "-W"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-m")
+        .arg(&good)
+        .assert()
+        .success();
+
+    // Verify both — bad.txt has no signature, so it will fail
+    let stderr = minisign_cmd()
+        .arg("-V")
+        .arg("-q")
+        .arg("-p")
+        .arg(&pk)
+        .arg("-m")
+        .arg(&good)
+        .arg(&bad)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        stderr.contains("Summary:"),
+        "failure summary must appear even with -q, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("bad"),
+        "failed file name must appear in summary, got:\n{stderr}"
+    );
 }

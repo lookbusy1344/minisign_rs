@@ -465,7 +465,7 @@ fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &Veri
 }
 
 /// Print summary of batch verification operation
-fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> Result<()> {
+fn print_summary(results: &[FileVerifyResult], _options: &VerifyOptions<'_>) -> Result<()> {
     let failures: Vec<_> = results
         .iter()
         .filter_map(|r| r.result.as_ref().err().map(|_| &r.file))
@@ -474,16 +474,17 @@ fn print_summary(results: &[FileVerifyResult], options: &VerifyOptions<'_>) -> R
     let success_count = results.len() - failures.len();
 
     if !failures.is_empty() {
-        if !options.quiet {
-            eprintln!(
-                "\nSummary: {} verified, {} failed",
-                success_count,
-                failures.len()
-            );
-            eprintln!("Failed files:");
-            for file in &failures {
-                eprintln!("  - {}", file.display());
-            }
+        // Always show the failure summary even in quiet mode; per-file errors are also
+        // always shown. Suppressing the summary would lose the failure list in unattended
+        // batch runs.
+        eprintln!(
+            "\nSummary: {} verified, {} failed",
+            success_count,
+            failures.len()
+        );
+        eprintln!("Failed files:");
+        for file in &failures {
+            eprintln!("  - {}", file.display());
         }
         return if success_count == 0 {
             Err(Error::TotalFailure)

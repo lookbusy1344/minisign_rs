@@ -441,7 +441,7 @@ fn report_file_result(file: &Path, result: &Result<SignResult>, options: &SignOp
 }
 
 /// Print summary of batch signing operation
-fn print_summary(results: &[FileSignResult], options: &SignOptions<'_>) -> Result<()> {
+fn print_summary(results: &[FileSignResult], _options: &SignOptions<'_>) -> Result<()> {
     let failures: Vec<_> = results
         .iter()
         .filter_map(|r| r.result.as_ref().err().map(|_| &r.file))
@@ -450,18 +450,18 @@ fn print_summary(results: &[FileSignResult], options: &SignOptions<'_>) -> Resul
     let success_count = results.len() - failures.len();
 
     if !failures.is_empty() {
-        // Only print summary in non-quiet mode
-        // Individual errors are already reported by report_file_result
-        if !options.quiet {
-            eprintln!(
-                "\nSummary: {} signed, {} failed",
-                success_count,
-                failures.len()
-            );
-            eprintln!("Failed files:");
-            for file in &failures {
-                eprintln!("  - {}", file.display());
-            }
+        // Always show the failure summary even in quiet mode.
+        // Individual per-file errors are reported by report_file_result (also always shown).
+        // Suppressing the summary in quiet mode would leave users without a machine-readable
+        // failure list when running unattended batch operations.
+        eprintln!(
+            "\nSummary: {} signed, {} failed",
+            success_count,
+            failures.len()
+        );
+        eprintln!("Failed files:");
+        for file in &failures {
+            eprintln!("  - {}", file.display());
         }
         return if success_count == 0 {
             Err(Error::TotalFailure)
