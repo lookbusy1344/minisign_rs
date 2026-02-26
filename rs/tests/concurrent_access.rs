@@ -457,7 +457,10 @@ fn test_read_during_write() {
         barrier_reader.wait();
         while !write_done_reader.load(Ordering::Acquire) {
             match fs::read(&*secret_key_reader) {
-                Ok(data) => read_attempts_reader.lock().unwrap().push((true, data.len())),
+                Ok(data) => read_attempts_reader
+                    .lock()
+                    .unwrap()
+                    .push((true, data.len())),
                 Err(_) => read_attempts_reader.lock().unwrap().push((false, 0)),
             }
             thread::yield_now();
@@ -466,7 +469,10 @@ fn test_read_during_write() {
         // at least once, eliminating the vacuous-pass failure mode.
         for _ in 0..5 {
             if let Ok(data) = fs::read(&*secret_key_reader) {
-                read_attempts_reader.lock().unwrap().push((true, data.len()));
+                read_attempts_reader
+                    .lock()
+                    .unwrap()
+                    .push((true, data.len()));
             }
         }
     });
