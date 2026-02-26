@@ -399,6 +399,13 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         ));
     }
 
+    // Verification never decrypts a key, so --password-file has no effect.
+    if cli.password_file.is_some() {
+        return Err(Error::Usage(
+            "--password-file is not applicable to verify operations".into(),
+        ));
+    }
+
     // Get public key source (either -p or -P, one is required)
     let default_pk;
     let public_key = if let Some(ref pk_file) = cli.public_key_file {

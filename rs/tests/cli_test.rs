@@ -3365,6 +3365,42 @@ fn test_verify_output_flag_writes_message_to_stdout() {
 }
 
 #[test]
+fn test_password_file_rejected_for_verify() {
+    // --password-file is only meaningful for operations that decrypt a key.
+    // Passing it with -V should produce a usage error rather than being silently ignored.
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let msg = temp_dir.path().join("msg.txt");
+    let pw = temp_dir.path().join("pw.txt");
+    fs::write(&msg, b"hello").unwrap();
+    fs::write(&pw, b"irrelevant").unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s").arg(&sk)
+        .arg("-p").arg(&pk)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .args(["-S", "-W"])
+        .arg("-s").arg(&sk)
+        .arg("-m").arg(&msg)
+        .assert()
+        .success();
+
+    minisign_cmd()
+        .arg("-V")
+        .arg("-p").arg(&pk)
+        .arg("-m").arg(&msg)
+        .arg("--password-file").arg(&pw)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("password-file"));
+}
+
+#[test]
 fn test_password_file_directory_rejected() {
     // Passing a directory as --password-file should fail, not block on read
     let temp_dir = TempDir::new().unwrap();
