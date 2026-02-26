@@ -869,6 +869,15 @@ fn prompt_password(
         eprintln!(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
+        // Reject non-regular files (FIFOs, device nodes, directories) to prevent blocking
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| Error::Io(format!("Failed to stat password file: {e}")))?;
+        if !metadata.is_file() {
+            return Err(Error::Io(format!(
+                "Password file '{}' is not a regular file",
+                path.display()
+            )));
+        }
         // Wrap password in Zeroizing immediately to prevent leakage
         let mut password = Zeroizing::new(
             std::fs::read_to_string(path)

@@ -3363,3 +3363,31 @@ fn test_verify_output_flag_writes_message_to_stdout() {
         .success()
         .stdout(predicate::str::contains(message_content.trim()));
 }
+
+#[test]
+fn test_password_file_directory_rejected() {
+    // Passing a directory as --password-file should fail, not block on read
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    // Use a sub-directory (always a regular directory, never a file)
+    let pw_dir = temp_dir.path().join("pw_dir");
+    fs::create_dir(&pw_dir).unwrap();
+
+    minisign_cmd()
+        .args(["-G", "-W"])
+        .arg("-s").arg(&sk)
+        .arg("-p").arg(&pk)
+        .assert()
+        .success();
+
+    // Re-generate with a directory as the password file — should error
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s").arg(&sk)
+        .arg("-p").arg(&pk)
+        .arg("-f")
+        .arg("--password-file").arg(&pw_dir)
+        .assert()
+        .failure();
+}
