@@ -265,9 +265,14 @@ pub fn generate_with_log_n(
     let seckey_contents = seckey.to_file_contents(seckey_comment);
     write_secret_key_file(options.secret_key_file, &seckey_contents, options.force)?;
 
-    // Write the public key file
+    // Write the public key file. On failure, remove the secret key to avoid leaving
+    // an orphaned key pair (secret key with no corresponding public key).
     let pubkey_contents = pubkey.to_file_contents(comment);
-    write_public_key_file(options.public_key_file, &pubkey_contents, options.force)?;
+    if let Err(e) = write_public_key_file(options.public_key_file, &pubkey_contents, options.force)
+    {
+        let _ = std::fs::remove_file(options.secret_key_file);
+        return Err(e);
+    }
 
     // Encode the public key for command-line usage
     let public_key_base64 = encode_base64(pubkey.to_bytes());
