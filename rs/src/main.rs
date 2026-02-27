@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 use minisign::ops::file_utils::load_secret_key;
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;

@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! Minisign - A dead simple Rust tool to sign files and verify signatures
 //!
 //! This is a pure Rust implementation of minisign, maintaining byte-level
