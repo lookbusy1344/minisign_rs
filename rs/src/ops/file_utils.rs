@@ -113,12 +113,13 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
 /// Protects against two hazards:
 /// - **Data loss (O1):** A crash mid-write on the original file would corrupt it. Here,
 ///   the original is only replaced after the new content is fully fsynced.
-/// - **TOCTOU on permissions (S4):** `std::fs::set_permissions` operates on the path;
-///   between open and chmod an attacker could swap the file. `fchmod` on the fd is immune.
+/// - **TOCTOU on permissions (S4):** `std::fs::set_permissions(path, perms)` (free
+///   function) operates on the path; between open and chmod an attacker could swap the
+///   file. `File::set_permissions` operates on the open fd and is immune.
 ///
 /// Algorithm:
 /// 1. Open `.{name}.tmp` in the same directory with mode 0600 and `O_NOFOLLOW`
-/// 2. `fchmod(fd, mode)` — sets permissions on the fd, not the path
+/// 2. `File::set_permissions` — sets permissions on the fd, not the path
 /// 3. Write all content
 /// 4. `fsync` — flush to disk before rename
 /// 5. `rename` — POSIX guarantees this is atomic; the destination is never half-written
@@ -130,8 +131,7 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
 /// Returns [`Error::FileWrite`] on any I/O failure.
 #[cfg(unix)]
 fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result<()> {
-    use std::os::unix::fs::OpenOptionsExt;
-    use std::os::unix::io::AsRawFd;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     validate_windows_path(path)?;
 
@@ -161,14 +161,9 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result
             .open(&tmp_path)
             .map_err(|e| Error::file_write(&tmp_path, e))?;
 
-        // fchmod operates on the open fd — immune to path-based TOCTOU races.
-        // SAFETY: `file.as_raw_fd()` is valid for the lifetime of `file`.
-        // mode_t is u16 on some platforms; 0o600 (= 384) fits without truncation.
-        #[allow(clippy::cast_possible_truncation)]
-        let ret = unsafe { libc::fchmod(file.as_raw_fd(), mode as libc::mode_t) };
-        if ret != 0 {
-            return Err(Error::file_write(path, std::io::Error::last_os_error()));
-        }
+        // File::set_permissions operates on the open fd — immune to path-based TOCTOU races.
+        file.set_permissions(std::fs::Permissions::from_mode(mode))
+            .map_err(|e| Error::file_write(path, e))?;
 
         file.write_all(contents.as_bytes())
             .map_err(|e| Error::file_write(&tmp_path, e))?;
