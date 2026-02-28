@@ -51,16 +51,14 @@ OPTIONS:
         --save-password, --sp           Save password to OS credential store
 ";
 
-// clippy: boolean fields for CLI flags — builder pattern not applicable here
+// clippy: struct_excessive_bools — these are genuinely independent CLI flag booleans.
+// The mutually-exclusive action flags have been extracted into Option<Action>.
+// The remaining booleans represent orthogonal feature flags with no valid enum grouping.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Default)]
 pub struct Cli {
-    pub generate: bool,
-    pub sign: bool,
-    pub verify: bool,
-    pub recreate: bool,
-    pub change: bool,
-    pub inspect: bool,
+    /// The selected action (exactly one of -G/-S/-V/-R/-K/-I), or None if omitted.
+    pub action: Option<Action>,
 
     pub force: bool,
     pub no_decrypt: bool,
@@ -178,13 +176,51 @@ impl Cli {
 
     /// Core parsing logic shared by `parse()` and `parse_from()`.
     fn parse_args(mut args: pico_args::Arguments) -> Result<Self> {
+        // Parse action flags into individual booleans first so we can detect
+        // conflicts before committing to a single Action variant.
+        let is_generate = args.contains(["-G", "--generate"]);
+        let is_sign = args.contains(["-S", "--sign"]);
+        let is_verify = args.contains(["-V", "--verify"]);
+        let is_recreate = args.contains(["-R", "--recreate"]);
+        let is_change = args.contains(["-K", "--change-password"]);
+        let is_inspect = args.contains(["-I", "--inspect"]);
+
+        // Reject multiple action flags — only one of -G/-S/-V/-R/-K/-I is valid.
+        let action_count = [
+            is_generate,
+            is_sign,
+            is_verify,
+            is_recreate,
+            is_change,
+            is_inspect,
+        ]
+        .iter()
+        .filter(|&&v| v)
+        .count();
+        if action_count > 1 {
+            return Err(Error::Usage(
+                "only one action flag (-G, -S, -V, -R, -K, -I) may be specified".to_string(),
+            ));
+        }
+
+        let action = if is_generate {
+            Some(Action::Generate)
+        } else if is_sign {
+            Some(Action::Sign)
+        } else if is_verify {
+            Some(Action::Verify)
+        } else if is_recreate {
+            Some(Action::Recreate)
+        } else if is_change {
+            Some(Action::Change)
+        } else if is_inspect {
+            Some(Action::Inspect)
+        } else {
+            None
+        };
+
         let mut cli = Self {
-            generate: args.contains(["-G", "--generate"]),
-            sign: args.contains(["-S", "--sign"]),
-            verify: args.contains(["-V", "--verify"]),
-            recreate: args.contains(["-R", "--recreate"]),
-            change: args.contains(["-K", "--change-password"]),
-            inspect: args.contains(["-I", "--inspect"]),
+            action,
 
             force: args.contains(["-f", "--force"]),
             no_decrypt: args.contains("--no-decrypt"),
@@ -251,24 +287,6 @@ impl Cli {
             ));
         }
 
-        // Reject multiple action flags — only one of -G/-S/-V/-R/-K/-I is valid at a time.
-        let action_count = [
-            cli.generate,
-            cli.sign,
-            cli.verify,
-            cli.recreate,
-            cli.change,
-            cli.inspect,
-        ]
-        .iter()
-        .filter(|&&v| v)
-        .count();
-        if action_count > 1 {
-            return Err(Error::Usage(
-                "only one action flag (-G, -S, -V, -R, -K, -I) may be specified".to_string(),
-            ));
-        }
-
         // Collect remaining positional arguments as extra files.
         // Reject anything that looks like an unknown flag.
         let remaining = args.finish();
@@ -290,21 +308,7 @@ impl Cli {
     /// Get the selected action, or None if no action was specified.
     #[must_use]
     pub const fn action(&self) -> Option<Action> {
-        if self.generate {
-            Some(Action::Generate)
-        } else if self.sign {
-            Some(Action::Sign)
-        } else if self.verify {
-            Some(Action::Verify)
-        } else if self.recreate {
-            Some(Action::Recreate)
-        } else if self.change {
-            Some(Action::Change)
-        } else if self.inspect {
-            Some(Action::Inspect)
-        } else {
-            None
-        }
+        self.action
     }
 
     /// Merge `-m` file and positional extra files into a single list.
