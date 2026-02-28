@@ -265,12 +265,16 @@ pub fn generate_with_log_n(
     let seckey_contents = seckey.to_file_contents(seckey_comment);
     write_secret_key_file(options.secret_key_file, &seckey_contents, options.force)?;
 
-    // Write the public key file. On failure, remove the secret key to avoid leaving
-    // an orphaned key pair (secret key with no corresponding public key).
+    // Write the public key file. On failure, clean up only if we created the secret
+    // key fresh (non-force mode). In force mode the pre-existing secret key was
+    // already overwritten and cannot be recovered — deleting it here would cause
+    // irrecoverable key loss.
     let pubkey_contents = pubkey.to_file_contents(comment);
     if let Err(e) = write_public_key_file(options.public_key_file, &pubkey_contents, options.force)
     {
-        let _ = std::fs::remove_file(options.secret_key_file);
+        if !options.force {
+            let _ = std::fs::remove_file(options.secret_key_file);
+        }
         return Err(e);
     }
 
