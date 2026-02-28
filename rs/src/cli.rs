@@ -174,50 +174,31 @@ impl Cli {
         Self::parse_args(args)
     }
 
-    /// Core parsing logic shared by `parse()` and `parse_from()`.
-    fn parse_args(mut args: pico_args::Arguments) -> Result<Self> {
-        // Parse action flags into individual booleans first so we can detect
-        // conflicts before committing to a single Action variant.
-        let is_generate = args.contains(["-G", "--generate"]);
-        let is_sign = args.contains(["-S", "--sign"]);
-        let is_verify = args.contains(["-V", "--verify"]);
-        let is_recreate = args.contains(["-R", "--recreate"]);
-        let is_change = args.contains(["-K", "--change-password"]);
-        let is_inspect = args.contains(["-I", "--inspect"]);
-
-        // Reject multiple action flags — only one of -G/-S/-V/-R/-K/-I is valid.
-        let action_count = [
-            is_generate,
-            is_sign,
-            is_verify,
-            is_recreate,
-            is_change,
-            is_inspect,
-        ]
-        .iter()
-        .filter(|&&v| v)
-        .count();
-        if action_count > 1 {
+    /// Parse and validate the action flag from `args`, returning the selected
+    /// `Action` or `None` if no action flag was given. Returns an error if
+    /// more than one action flag is present.
+    fn parse_action(args: &mut pico_args::Arguments) -> Result<Option<Action>> {
+        let flags = [
+            (args.contains(["-G", "--generate"]), Action::Generate),
+            (args.contains(["-S", "--sign"]), Action::Sign),
+            (args.contains(["-V", "--verify"]), Action::Verify),
+            (args.contains(["-R", "--recreate"]), Action::Recreate),
+            (args.contains(["-K", "--change-password"]), Action::Change),
+            (args.contains(["-I", "--inspect"]), Action::Inspect),
+        ];
+        let mut found = flags.into_iter().filter(|(present, _)| *present);
+        let action = found.next().map(|(_, a)| a);
+        if found.next().is_some() {
             return Err(Error::Usage(
                 "only one action flag (-G, -S, -V, -R, -K, -I) may be specified".to_string(),
             ));
         }
+        Ok(action)
+    }
 
-        let action = if is_generate {
-            Some(Action::Generate)
-        } else if is_sign {
-            Some(Action::Sign)
-        } else if is_verify {
-            Some(Action::Verify)
-        } else if is_recreate {
-            Some(Action::Recreate)
-        } else if is_change {
-            Some(Action::Change)
-        } else if is_inspect {
-            Some(Action::Inspect)
-        } else {
-            None
-        };
+    /// Core parsing logic shared by `parse()` and `parse_from()`.
+    fn parse_args(mut args: pico_args::Arguments) -> Result<Self> {
+        let action = Self::parse_action(&mut args)?;
 
         let mut cli = Self {
             action,
