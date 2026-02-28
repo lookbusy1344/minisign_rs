@@ -51,16 +51,14 @@ OPTIONS:
         --save-password, --sp           Save password to OS credential store
 ";
 
-// clippy: boolean fields for CLI flags — builder pattern not applicable here
+// clippy: struct_excessive_bools — these are genuinely independent CLI flag booleans.
+// The mutually-exclusive action flags have been extracted into Option<Action>.
+// The remaining booleans represent orthogonal feature flags with no valid enum grouping.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Default)]
 pub struct Cli {
-    pub generate: bool,
-    pub sign: bool,
-    pub verify: bool,
-    pub recreate: bool,
-    pub change: bool,
-    pub inspect: bool,
+    /// The selected action (exactly one of -G/-S/-V/-R/-K/-I), or None if omitted.
+    pub action: Option<Action>,
 
     pub force: bool,
     pub no_decrypt: bool,
@@ -176,15 +174,34 @@ impl Cli {
         Self::parse_args(args)
     }
 
+    /// Parse and validate the action flag from `args`, returning the selected
+    /// `Action` or `None` if no action flag was given. Returns an error if
+    /// more than one action flag is present.
+    fn parse_action(args: &mut pico_args::Arguments) -> Result<Option<Action>> {
+        let flags = [
+            (args.contains(["-G", "--generate"]), Action::Generate),
+            (args.contains(["-S", "--sign"]), Action::Sign),
+            (args.contains(["-V", "--verify"]), Action::Verify),
+            (args.contains(["-R", "--recreate"]), Action::Recreate),
+            (args.contains(["-K", "--change-password"]), Action::Change),
+            (args.contains(["-I", "--inspect"]), Action::Inspect),
+        ];
+        let mut found = flags.into_iter().filter(|(present, _)| *present);
+        let action = found.next().map(|(_, a)| a);
+        if found.next().is_some() {
+            return Err(Error::Usage(
+                "only one action flag (-G, -S, -V, -R, -K, -I) may be specified".to_string(),
+            ));
+        }
+        Ok(action)
+    }
+
     /// Core parsing logic shared by `parse()` and `parse_from()`.
     fn parse_args(mut args: pico_args::Arguments) -> Result<Self> {
+        let action = Self::parse_action(&mut args)?;
+
         let mut cli = Self {
-            generate: args.contains(["-G", "--generate"]),
-            sign: args.contains(["-S", "--sign"]),
-            verify: args.contains(["-V", "--verify"]),
-            recreate: args.contains(["-R", "--recreate"]),
-            change: args.contains(["-K", "--change-password"]),
-            inspect: args.contains(["-I", "--inspect"]),
+            action,
 
             force: args.contains(["-f", "--force"]),
             no_decrypt: args.contains("--no-decrypt"),
@@ -251,24 +268,6 @@ impl Cli {
             ));
         }
 
-        // Reject multiple action flags — only one of -G/-S/-V/-R/-K/-I is valid at a time.
-        let action_count = [
-            cli.generate,
-            cli.sign,
-            cli.verify,
-            cli.recreate,
-            cli.change,
-            cli.inspect,
-        ]
-        .iter()
-        .filter(|&&v| v)
-        .count();
-        if action_count > 1 {
-            return Err(Error::Usage(
-                "only one action flag (-G, -S, -V, -R, -K, -I) may be specified".to_string(),
-            ));
-        }
-
         // Collect remaining positional arguments as extra files.
         // Reject anything that looks like an unknown flag.
         let remaining = args.finish();
@@ -290,21 +289,7 @@ impl Cli {
     /// Get the selected action, or None if no action was specified.
     #[must_use]
     pub const fn action(&self) -> Option<Action> {
-        if self.generate {
-            Some(Action::Generate)
-        } else if self.sign {
-            Some(Action::Sign)
-        } else if self.verify {
-            Some(Action::Verify)
-        } else if self.recreate {
-            Some(Action::Recreate)
-        } else if self.change {
-            Some(Action::Change)
-        } else if self.inspect {
-            Some(Action::Inspect)
-        } else {
-            None
-        }
+        self.action
     }
 
     /// Merge `-m` file and positional extra files into a single list.

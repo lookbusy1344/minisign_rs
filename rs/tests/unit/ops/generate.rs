@@ -437,3 +437,70 @@ fn test_write_public_key_file_force_overwrites() {
     let contents = fs::read_to_string(&pk_path).unwrap();
     assert_eq!(contents, "overwritten content");
 }
+
+// --- CR-5 regression tests: partial-failure force semantics ---
+
+/// With force=true, if pubkey write fails after the secret key has been
+/// written, the secret key must NOT be deleted. Destroying it would cause
+/// total key loss since the original was already overwritten.
+#[test]
+fn test_force_pubkey_fail_preserves_secret_key() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+
+    // Use a directory as the pubkey destination — guaranteed to cause a write
+    // failure on all platforms without requiring special permissions.
+    let pk_dir = temp_dir.path().join("pk_is_a_dir");
+    fs::create_dir(&pk_dir).unwrap();
+
+    // Write a pre-existing secret key that will be overwritten in force mode
+    fs::write(&sk_path, "existing secret key").unwrap();
+
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_dir.as_path())
+        .force(true)
+        .no_password(true)
+        .build();
+
+    let result = generate(&options, None);
+    assert!(
+        result.is_err(),
+        "generate must fail when pubkey destination is a directory"
+    );
+
+    // The secret key file must still exist — deleting it here would cause
+    // irrecoverable key loss (the original was already overwritten).
+    assert!(
+        sk_path.exists(),
+        "secret key must not be deleted on pubkey write failure in force mode"
+    );
+}
+
+/// With force=false, if pubkey write fails after a fresh secret key was
+/// created, the newly-created secret key should be cleaned up to avoid
+/// leaving an orphaned key with no matching public key.
+#[test]
+fn test_no_force_pubkey_fail_removes_secret_key() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+
+    // Use a directory as the pubkey destination
+    let pk_dir = temp_dir.path().join("pk_is_a_dir");
+    fs::create_dir(&pk_dir).unwrap();
+
+    // No pre-existing secret key — the key is created fresh
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_dir.as_path())
+        .no_password(true)
+        .build();
+
+    let result = generate(&options, None);
+    assert!(
+        result.is_err(),
+        "generate must fail when pubkey destination is a directory"
+    );
+
+    // The freshly-created secret key should be removed since it was never paired
+    assert!(
+        !sk_path.exists(),
+        "orphaned secret key should be removed on pubkey write failure in non-force mode"
+    );
+}
