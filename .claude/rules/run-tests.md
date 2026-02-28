@@ -19,6 +19,7 @@ Always run in this exact order before committing:
 
 ```bash
 gtimeout 60 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
+gtimeout 30 cargo clippy --lib --bins --all-features -- -F unsafe_code
 cargo fmt
 gtimeout 120 cargo test --no-default-features
 ```

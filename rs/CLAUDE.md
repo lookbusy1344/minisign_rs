@@ -24,9 +24,13 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - **Test files:** Use synthetic/mock data only
 
 ## Non-Negotiable Rules
-- **ZERO unsafe code** — no `unsafe` blocks, ever. Before reaching for `unsafe` to call
-  a syscall, check whether std provides a safe equivalent. Example: `File::set_permissions`
-  calls `fchmod` on the fd internally — no `unsafe` needed (see commit 53aa335).
+- **ZERO unsafe code** — no `unsafe` blocks in production code, ever. Enforced by
+  `#![forbid(unsafe_code)]` in `src/lib.rs` and `src/main.rs`, and by a dedicated CI clippy
+  step (`--lib --bins --all-features -- -F unsafe_code`). Before reaching for `unsafe` to call a syscall,
+  check whether std provides a safe equivalent. Example: `File::set_permissions` calls `fchmod`
+  on the fd internally — no `unsafe` needed (see commit 53aa335).
+  Test-only exception: `unsafe { env::set_var(...) }` is required by Rust 1.82+ for env
+  mutation; guard it with `#[serial]` for thread-safety and document the `// SAFETY:` reason.
 - **Minimize dependencies** — every new crate must be justified. Before adding one, check
   whether std or an already-present dependency covers the need. Prefer a few lines of code
   over a new transitive dependency tree.
