@@ -2,6 +2,7 @@
 //!
 //! This module implements changing or removing the password on a secret key.
 
+use super::EncryptionMode;
 use super::file_utils::{load_secret_key, write_secret_key_file};
 use crate::{
     Result, constants::SCRYPT_LOG_N, crypto::calculate_kdf_params, errors::Error,
@@ -11,12 +12,11 @@ use std::path::{Path, PathBuf};
 
 /// Options for changing secret key password
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct ChangeOptions<'a> {
     /// Path to the secret key file
     secret_key_file: &'a Path,
-    /// Remove password (make unencrypted)
-    remove_password: bool,
+    /// Target encryption state for the key after the change
+    encryption: EncryptionMode,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
     allow_kdf_fallback: bool,
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
@@ -29,7 +29,7 @@ impl<'a> ChangeOptions<'a> {
     pub const fn builder(secret_key_file: &'a Path) -> Self {
         Self {
             secret_key_file,
-            remove_password: false,
+            encryption: EncryptionMode::Protected,
             allow_kdf_fallback: false,
             force_weak_kdf: false,
         }
@@ -42,7 +42,11 @@ impl<'a> ChangeOptions<'a> {
 
     #[must_use]
     pub const fn remove_password(mut self, remove: bool) -> Self {
-        self.remove_password = remove;
+        self.encryption = if remove {
+            EncryptionMode::Unprotected
+        } else {
+            EncryptionMode::Protected
+        };
         self
     }
 
@@ -146,7 +150,7 @@ pub fn change_with_log_n(
     let (secret_key, keynum) = seckey.extract_key(old_password)?;
 
     // Create new secret key structure with new password (or remove password)
-    let new_seckey = if options.remove_password {
+    let new_seckey = if options.encryption == EncryptionMode::Unprotected {
         // Remove encryption
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
@@ -174,7 +178,7 @@ pub fn change_with_log_n(
     };
 
     // Write the modified secret key back to file
-    let seckey_comment = if options.remove_password {
+    let seckey_comment = if options.encryption == EncryptionMode::Unprotected {
         "minisign secret key"
     } else {
         "minisign encrypted secret key"
@@ -188,7 +192,7 @@ pub fn change_with_log_n(
 
     Ok(ChangeResult {
         secret_key_file: options.secret_key_file.to_path_buf(),
-        encrypted: !options.remove_password,
+        encrypted: options.encryption == EncryptionMode::Protected,
         credential_id,
     })
 }

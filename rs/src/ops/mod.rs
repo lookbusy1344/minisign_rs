@@ -20,3 +20,21 @@ pub use inspect::{
 pub use recreate::{RecreateOptions, RecreateResult, recreate, recreate_with_key};
 pub use sign::{SignOptions, SignResult, sign, sign_with_key};
 pub use verify::{PublicKeySource, VerifyOptions, VerifyResult, verify};
+
+/// Controls whether an existing key file may be overwritten.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverwritePolicy {
+    /// Preserve existing files — fail if the target path already exists.
+    Preserve,
+    /// Overwrite existing files unconditionally.
+    Overwrite,
+}
+
+/// Controls whether a secret key is stored with password-based encryption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EncryptionMode {
+    /// Encrypt the secret key with a password (normal operation).
+    Protected,
+    /// Store the secret key in plaintext (no password).
+    Unprotected,
+}

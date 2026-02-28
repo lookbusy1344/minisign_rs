@@ -3,6 +3,7 @@
 //! This module implements keypair generation for minisign.
 
 use super::file_utils::{write_public_key_file, write_secret_key_file};
+use super::{EncryptionMode, OverwritePolicy};
 use crate::{
     Result,
     constants::SCRYPT_LOG_N,
@@ -15,7 +16,6 @@ use std::path::{Path, PathBuf};
 
 /// Options for key generation
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct GenerateOptions<'a> {
     /// Path to write the secret key file
     secret_key_file: &'a Path,
@@ -23,10 +23,10 @@ pub struct GenerateOptions<'a> {
     public_key_file: &'a Path,
     /// Comment for the key files
     comment: Option<&'a str>,
-    /// Force overwrite existing files
-    force: bool,
-    /// Create unencrypted key (no password)
-    no_password: bool,
+    /// Whether to overwrite existing files
+    overwrite: OverwritePolicy,
+    /// Whether to encrypt the secret key with a password
+    encryption: EncryptionMode,
     /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
     allow_kdf_fallback: bool,
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
@@ -41,8 +41,8 @@ impl<'a> GenerateOptions<'a> {
             secret_key_file,
             public_key_file,
             comment: None,
-            force: false,
-            no_password: false,
+            overwrite: OverwritePolicy::Preserve,
+            encryption: EncryptionMode::Protected,
             allow_kdf_fallback: false,
             force_weak_kdf: false,
         }
@@ -61,13 +61,21 @@ impl<'a> GenerateOptions<'a> {
 
     #[must_use]
     pub const fn force(mut self, force: bool) -> Self {
-        self.force = force;
+        self.overwrite = if force {
+            OverwritePolicy::Overwrite
+        } else {
+            OverwritePolicy::Preserve
+        };
         self
     }
 
     #[must_use]
     pub const fn no_password(mut self, no_password: bool) -> Self {
-        self.no_password = no_password;
+        self.encryption = if no_password {
+            EncryptionMode::Unprotected
+        } else {
+            EncryptionMode::Protected
+        };
         self
     }
 
@@ -207,7 +215,7 @@ pub fn generate_with_log_n(
     log_n: u8,
 ) -> Result<GenerateResult> {
     // Ensure password is provided if encryption is requested
-    if !options.no_password && password.is_none() {
+    if options.encryption == EncryptionMode::Protected && password.is_none() {
         return Err(Error::PasswordRequired);
     }
 
@@ -215,7 +223,7 @@ pub fn generate_with_log_n(
     let (secret_key, public_key, keynum) = generate_keypair()?;
 
     // Create the secret key structure
-    let seckey = if options.no_password {
+    let seckey = if options.encryption == EncryptionMode::Unprotected {
         SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
         use rand_core::{OsRng, RngCore};
@@ -257,22 +265,22 @@ pub fn generate_with_log_n(
     ensure_parent_directory(options.public_key_file)?;
 
     // Write the secret key file with appropriate comment
-    let seckey_comment = if options.no_password {
+    let seckey_comment = if options.encryption == EncryptionMode::Unprotected {
         "minisign secret key"
     } else {
         "minisign encrypted secret key"
     };
+    let force = options.overwrite == OverwritePolicy::Overwrite;
     let seckey_contents = seckey.to_file_contents(seckey_comment);
-    write_secret_key_file(options.secret_key_file, &seckey_contents, options.force)?;
+    write_secret_key_file(options.secret_key_file, &seckey_contents, force)?;
 
     // Write the public key file. On failure, clean up only if we created the secret
     // key fresh (non-force mode). In force mode the pre-existing secret key was
     // already overwritten and cannot be recovered — deleting it here would cause
     // irrecoverable key loss.
     let pubkey_contents = pubkey.to_file_contents(comment);
-    if let Err(e) = write_public_key_file(options.public_key_file, &pubkey_contents, options.force)
-    {
-        if !options.force {
+    if let Err(e) = write_public_key_file(options.public_key_file, &pubkey_contents, force) {
+        if !force {
             let _ = std::fs::remove_file(options.secret_key_file);
         }
         return Err(e);
