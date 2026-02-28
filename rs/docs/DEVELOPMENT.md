@@ -142,15 +142,17 @@ cargo install cargo-audit
 
 ### Other Key Dependencies
 
-- `keyring` - OS credential store integration (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-- `clap` - CLI argument parsing
-- `git-version` - Embed git version info at compile time
-- `rayon` - Parallel file operations
+> **Source of truth**: always check `Cargo.toml` and `Cargo.lock` for the current
+> dependency list and pinned versions. This section is a human-readable summary only.
+
+- `keyring` - OS credential store integration (macOS Keychain, Windows Credential Manager, Linux Secret Service) — optional, enabled by default via `credential_store` feature
+- `pico-args` - Lightweight CLI argument parsing (no proc-macros)
+- `rayon` - Parallel file operations — optional, enabled by default via `parallel` feature
 - `thiserror` - Error type definitions
 - `base64` - Base64 encoding/decoding
 - `rand_core` - Cryptographic random number generation (OS entropy)
 - `rpassword` - Secure password input
-- `dirs` - Cross-platform directory discovery
+- `dirs` - Cross-platform directory discovery (home directory, config paths)
 
 ### Development Dependencies
 
