@@ -634,14 +634,22 @@ fn test_opslimit_memlimit_to_params_zero_n() {
 
 #[test]
 fn test_opslimit_memlimit_to_params_overflow() {
-    // Test that extremely large values trigger log_n out of range
-    // Using values that would cause log_n > 255
+    // Test that extremely large values are rejected by the policy cap.
+    // u64::MAX memlimit would produce log_n=43, well above MAX_SCRYPT_LOG_N=25.
     let memlimit = u64::MAX;
     let opslimit = u64::MAX;
     let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
-    // Should return Ok with derived r, as the calculation succeeds even with large N
-    // The ilog2 of very large N will be valid (< 64)
-    assert!(result.is_ok());
+    assert!(
+        result.is_err(),
+        "Extreme values should be rejected by policy cap"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("policy")
+            || err_msg.contains("exceeds")
+            || err_msg.contains("out of valid range"),
+        "Expected policy or range error, got: {err_msg}"
+    );
 }
 
 #[test]
@@ -739,8 +747,11 @@ fn test_opslimit_memlimit_to_params_expected_opslimit_overflow() {
     if let Err(e) = result {
         let err_msg = e.to_string();
         assert!(
-            err_msg.contains("overflow") || err_msg.contains("out of valid range"),
-            "Expected overflow or range error, got: {err_msg}"
+            err_msg.contains("overflow")
+                || err_msg.contains("out of valid range")
+                || err_msg.contains("policy")
+                || err_msg.contains("exceeds"),
+            "Expected overflow, range, or policy error, got: {err_msg}"
         );
     }
 }

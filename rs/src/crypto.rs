@@ -37,6 +37,15 @@ pub const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
 pub const SCRYPT_OPSLIMIT_MIN: u64 = 32_768; // 2^15
 pub const SCRYPT_MEMLIMIT_MIN: u64 = 16_777_216; // 16 MB
 
+/// Maximum `log_n` accepted when decrypting a key from an untrusted file.
+///
+/// This caps the attacker-controlled KDF work factor at N = 2^25 = 33 554 432.
+/// At the standard r=8 block size, that corresponds to ~32 GiB of scrypt memory —
+/// 32× the production default (N = 2^20, ~1 GiB). Any key file requesting
+/// higher parameters is almost certainly crafted for denial of service and is
+/// rejected with a clear error before the expensive computation begins.
+pub const MAX_SCRYPT_LOG_N: u8 = 25;
+
 /// Buffer size for streaming hash operations (64 KB)
 ///
 /// 64 KB aligns with typical OS readahead and page-cache granularity,
@@ -455,6 +464,12 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
         .checked_ilog2()
         .and_then(|v| u8::try_from(v).ok())
         .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
+
+    if log_n > MAX_SCRYPT_LOG_N {
+        return Err(Error::ScryptParamError(format!(
+            "KDF log_n {log_n} exceeds policy cap {MAX_SCRYPT_LOG_N} — key file may be crafted for denial of service"
+        )));
+    }
 
     // Verify consistency with opslimit
     let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
