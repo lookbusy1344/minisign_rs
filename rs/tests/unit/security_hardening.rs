@@ -2,10 +2,19 @@
 //
 // Tests for findings H1, H2, H3, H4, H6 from the 2026-02-06 security audit:
 // comment validation, KDF parameter bounds-checking, and signature file I/O.
+//
+// CR-2026-02-28-1: Bounded file reads for key/signature/password inputs.
+// CR-2026-02-28-2: KDF policy cap on decryption parameters.
+// CR-2026-02-28-3: Exclusive temp-file creation in secret-key overwrite path.
 
 use minisign::{
     Error,
     crypto::{SecretKey, opslimit_memlimit_to_params},
+    ops::file_utils::{
+        MAX_KEY_FILE_BYTES, MAX_PASSWORD_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, load_secret_key,
+    },
+    ops::inspect::inspect_signature,
+    ops::verify::{PublicKeySource, load_public_key, load_signature},
     signature::{COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTEDCOMMENTMAXBYTES},
 };
 use std::fs;
@@ -318,4 +327,150 @@ fn create_dummy_secret_key() -> SecretKey {
     use minisign::crypto::generate_keypair;
     let (sk, _, _) = generate_keypair().unwrap();
     sk
+}
+
+// ============================================================================
+// CR-2026-02-28-1: Bounded file reads for key/signature/password inputs
+// ============================================================================
+
+#[test]
+fn cr1_load_secret_key_rejects_oversized_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("huge.key");
+    // Write a file just over the limit
+    fs::write(
+        &path,
+        vec![b'x'; usize::try_from(MAX_KEY_FILE_BYTES + 1).unwrap()],
+    )
+    .unwrap();
+
+    let result = load_secret_key(&path);
+    assert!(result.is_err(), "Should reject oversized key file");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("too large") || err_msg.contains("exceeds"),
+        "Error should mention file size: {err_msg}"
+    );
+}
+
+#[test]
+fn cr1_load_public_key_rejects_oversized_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("huge.pub");
+    fs::write(
+        &path,
+        vec![b'x'; usize::try_from(MAX_KEY_FILE_BYTES + 1).unwrap()],
+    )
+    .unwrap();
+
+    let result = load_public_key(&PublicKeySource::File(&path));
+    assert!(result.is_err(), "Should reject oversized public key file");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("too large") || err_msg.contains("exceeds"),
+        "Error should mention file size: {err_msg}"
+    );
+}
+
+#[test]
+fn cr1_load_signature_rejects_oversized_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("huge.sig");
+    fs::write(
+        &path,
+        vec![b'x'; usize::try_from(MAX_SIGNATURE_FILE_BYTES + 1).unwrap()],
+    )
+    .unwrap();
+
+    let result = load_signature(&path);
+    assert!(result.is_err(), "Should reject oversized signature file");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("too large") || err_msg.contains("exceeds"),
+        "Error should mention file size: {err_msg}"
+    );
+}
+
+#[test]
+fn cr1_inspect_signature_rejects_oversized_file() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("huge.sig");
+    fs::write(
+        &path,
+        vec![b'x'; usize::try_from(MAX_SIGNATURE_FILE_BYTES + 1).unwrap()],
+    )
+    .unwrap();
+
+    let result = inspect_signature(&path);
+    assert!(result.is_err(), "Should reject oversized signature file");
+}
+
+#[test]
+fn cr1_load_secret_key_accepts_normal_sized_file() {
+    // A file well under the limit should not be rejected for size reasons
+    // (it will fail to parse, but not due to size)
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("normal.key");
+    fs::write(&path, b"untrusted comment: test\nYWJj\n").unwrap();
+
+    let result = load_secret_key(&path);
+    // Should fail with a parse error, not a size error
+    if let Err(e) = result {
+        let err_msg = e.to_string();
+        assert!(
+            !err_msg.contains("too large") && !err_msg.contains("exceeds"),
+            "Should not be rejected for size: {err_msg}"
+        );
+    }
+}
+
+// CR-2026-02-28-1: MAX_PASSWORD_FILE_BYTES is used to guard the --password-file path.
+// That path is in main.rs (not a library function), so we verify the constant is exported.
+#[test]
+fn cr1_password_file_limit_constant_is_sane() {
+    const { assert!(MAX_PASSWORD_FILE_BYTES >= 64) }
+    const { assert!(MAX_PASSWORD_FILE_BYTES <= 65536) }
+}
+
+// ============================================================================
+// CR-2026-02-28-2: KDF policy cap on decryption parameters
+// ============================================================================
+
+#[test]
+fn cr2_rejects_extreme_kdf_log_n() {
+    use minisign::crypto::LIBSODIUM_MEMLIMIT_MULTIPLIER;
+    use minisign::crypto::SCRYPT_R;
+
+    // Craft memlimit that would produce log_n = 40 (N = 2^40, ~128 TB RAM)
+    // memlimit = N * MEMLIMIT_MULTIPLIER * r = 2^40 * 128 * 8
+    let n: u64 = 1u64 << 40;
+    let memlimit = n
+        .saturating_mul(LIBSODIUM_MEMLIMIT_MULTIPLIER)
+        .saturating_mul(u64::from(SCRYPT_R));
+    let opslimit = 4 * n * u64::from(SCRYPT_R);
+
+    let result = opslimit_memlimit_to_params(opslimit, memlimit);
+    assert!(result.is_err(), "Should reject extreme log_n values");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("policy") || err_msg.contains("exceeds") || err_msg.contains("too high"),
+        "Error should explain policy cap: {err_msg}"
+    );
+}
+
+#[test]
+fn cr2_accepts_standard_kdf_params() {
+    use minisign::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
+
+    // Standard production params should not be rejected
+    let result = opslimit_memlimit_to_params(PRODUCTION_OPSLIMIT, PRODUCTION_MEMLIMIT);
+    assert!(
+        result.is_ok(),
+        "Standard KDF params should be accepted: {:?}",
+        result.err()
+    );
+    let (log_n, r, p) = result.unwrap();
+    assert_eq!(log_n, 20);
+    assert_eq!(r, 8);
+    assert_eq!(p, 1);
 }

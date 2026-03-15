@@ -2,7 +2,9 @@
 //!
 //! This module implements the core verification logic for minisign signatures.
 
-use super::file_utils::check_file_size_limit;
+use super::file_utils::{
+    MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, check_file_size_limit, read_file_bounded,
+};
 use crate::{
     Result,
     crypto::{blake2b_512_stream, verify as crypto_verify},
@@ -236,7 +238,7 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
 pub fn load_public_key(source: &PublicKeySource<'_>) -> Result<PubkeyStruct> {
     match source {
         PublicKeySource::File(path) => {
-            let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
+            let contents = read_file_bounded(path, MAX_KEY_FILE_BYTES)?;
             PubkeyStruct::from_file_contents(&contents)
         }
         PublicKeySource::Base64(base64_str) => {
@@ -258,8 +260,7 @@ pub fn load_public_key(source: &PublicKeySource<'_>) -> Result<PubkeyStruct> {
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
 pub fn load_signature(path: impl AsRef<Path>) -> Result<SignatureBox> {
-    let contents =
-        std::fs::read_to_string(path.as_ref()).map_err(|e| Error::file_read(path.as_ref(), e))?;
+    let contents = read_file_bounded(path.as_ref(), MAX_SIGNATURE_FILE_BYTES)?;
     SignatureBox::from_file_contents(&contents)
 }
 

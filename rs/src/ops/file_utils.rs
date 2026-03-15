@@ -7,11 +7,26 @@ use crate::{
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
-#[cfg(unix)]
-use std::sync::atomic::{AtomicU64, Ordering};
 
-#[cfg(unix)]
-static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Maximum file size accepted for key files (secret key and public key).
+///
+/// Key files are small, fixed-layout base64 blobs. The largest legitimate key
+/// file (`SeckeyStruct`) encodes to roughly 250 bytes of base64 plus a comment
+/// line. 4 KiB gives generous headroom while capping memory allocation.
+pub const MAX_KEY_FILE_BYTES: u64 = 4096;
+
+/// Maximum file size accepted for signature files.
+///
+/// A signature file has four lines: untrusted comment (≤ `COMMENTMAXBYTES` = 1024 B),
+/// base64 sig struct (~100 B), trusted comment (≤ `TRUSTEDCOMMENTMAXBYTES` = 8192 B),
+/// and base64 global sig (~88 B). 16 KiB covers all legitimate signatures.
+pub const MAX_SIGNATURE_FILE_BYTES: u64 = 16384;
+
+/// Maximum file size accepted for password files (`--password-file`).
+///
+/// Passwords are short strings. 1 KiB is more than enough and prevents
+/// callers from accidentally feeding an unbounded file to the KDF path.
+pub const MAX_PASSWORD_FILE_BYTES: u64 = 1024;
 
 /// Unix file permissions for secret key files (read/write for owner only)
 #[cfg(unix)]
@@ -44,6 +59,28 @@ fn check_secret_key_permissions(path: &Path) {
     }
 }
 
+/// Read a file into a `String`, rejecting files that exceed `max_bytes`.
+///
+/// Checks `metadata().len()` before allocating. This guards against memory
+/// memory-DoS from maliciously large files. The check is a pre-allocation guard, not
+/// a strict enforcement boundary — content is always validated by the parser.
+///
+/// # Errors
+///
+/// Returns `Error::Other` if the file exceeds `max_bytes`, or `Error::FileRead`
+/// on any I/O failure.
+pub fn read_file_bounded(path: &Path, max_bytes: u64) -> Result<String> {
+    let size = std::fs::metadata(path)
+        .map_err(|e| Error::file_read(path, e))?
+        .len();
+    if size > max_bytes {
+        return Err(Error::Other(format!(
+            "File too large: {size} bytes exceeds maximum {max_bytes} bytes"
+        )));
+    }
+    std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))
+}
+
 /// Load a secret key from a file
 ///
 /// On Unix systems, emits a warning to stderr if the file is readable by
@@ -52,13 +89,14 @@ fn check_secret_key_permissions(path: &Path) {
 /// # Errors
 ///
 /// Returns an error if:
+/// - The file exceeds `MAX_KEY_FILE_BYTES`
 /// - The file cannot be read
 /// - The file contents cannot be parsed as a secret key
 pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
     let path = path.as_ref();
     #[cfg(unix)]
     check_secret_key_permissions(path);
-    let contents = std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))?;
+    let contents = read_file_bounded(path, MAX_KEY_FILE_BYTES)?;
     SeckeyStruct::from_file_contents(&contents)
 }
 
@@ -118,11 +156,15 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
 ///   file. `File::set_permissions` operates on the open fd and is immune.
 ///
 /// Algorithm:
-/// 1. Open `.{name}.tmp` in the same directory with mode 0600 and `O_NOFOLLOW`
+/// 1. Open `.{name}.{nonce}.tmp` exclusively (`O_CREAT|O_EXCL`) with mode 0600 and `O_NOFOLLOW`
 /// 2. `File::set_permissions` — sets permissions on the fd, not the path
 /// 3. Write all content
 /// 4. `fsync` — flush to disk before rename
 /// 5. `rename` — POSIX guarantees this is atomic; the destination is never half-written
+///
+/// The temp file name uses a CSPRNG 8-byte nonce (16 hex chars) so it is
+/// unpredictable and collision-resistant. `create_new(true)` (`O_EXCL`) ensures
+/// a pre-existing path with the same name is a hard error, not a silent truncation.
 ///
 /// The temp file is removed on any failure.
 ///
@@ -131,6 +173,7 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
 /// Returns [`Error::FileWrite`] on any I/O failure.
 #[cfg(unix)]
 fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result<()> {
+    use rand_core::{OsRng, RngCore};
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     validate_windows_path(path)?;
@@ -140,11 +183,12 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(std::path::Path::new("."));
 
-    // Include a monotonic counter to give each concurrent invocation a unique
-    // temp file, preventing races where two threads share the same .tmp path.
-    let seq = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    // Use a CSPRNG nonce for an unpredictable, collision-resistant temp name.
+    let mut nonce_bytes = [0u8; 8];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = u64::from_le_bytes(nonce_bytes);
     let tmp_name = format!(
-        ".{}.{seq}.tmp",
+        ".{}.{nonce:016x}.tmp",
         path.file_name()
             .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned)
             .to_string_lossy()
@@ -154,8 +198,7 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result
     let result = (|| -> Result<()> {
         let mut file = OpenOptions::new()
             .write(true)
-            .create(true)
-            .truncate(true)
+            .create_new(true) // O_EXCL: fails if path exists — no silent truncation
             .mode(mode)
             .custom_flags(libc::O_NOFOLLOW)
             .open(&tmp_path)

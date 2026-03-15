@@ -6,8 +6,8 @@
 use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
+use crate::ops::file_utils::{MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded};
 use crate::signature::SignatureAlgorithm;
-use std::fs;
 use std::path::Path;
 
 /// Security level classification for encrypted keys
@@ -197,7 +197,7 @@ impl KdfInfo {
 /// - The file format is invalid
 /// - The key structure cannot be parsed
 pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
-    let contents = fs::read_to_string(options.key_file())
+    let contents = read_file_bounded(options.key_file(), MAX_KEY_FILE_BYTES)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first
@@ -298,7 +298,7 @@ pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
 /// - The file is not a valid key
 /// - For encrypted keys: password is incorrect or decryption fails
 pub fn inspect_private(key_file: &Path, password: &[u8]) -> Result<InspectResult> {
-    let contents = fs::read_to_string(key_file)
+    let contents = read_file_bounded(key_file, MAX_KEY_FILE_BYTES)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
     // Try to parse as secret key first
@@ -434,7 +434,7 @@ impl SignatureInspectResult {
 pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult> {
     use crate::signature::SignatureBox;
 
-    let contents = fs::read_to_string(signature_file)
+    let contents = read_file_bounded(signature_file, MAX_SIGNATURE_FILE_BYTES)
         .map_err(|e| Error::Io(format!("Failed to read signature file: {e}")))?;
 
     let sig_box = SignatureBox::from_file_contents(&contents)?;

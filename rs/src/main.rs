@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-use minisign::ops::file_utils::load_secret_key;
+use minisign::ops::file_utils::{MAX_PASSWORD_FILE_BYTES, load_secret_key};
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
@@ -883,10 +883,18 @@ fn prompt_password(
             )));
         }
         // Wrap password in Zeroizing immediately to prevent leakage
-        let mut password = Zeroizing::new(
+        let mut password = Zeroizing::new({
+            let size = std::fs::metadata(path)
+                .map_err(|e| Error::Io(format!("Failed to stat password file: {e}")))?
+                .len();
+            if size > MAX_PASSWORD_FILE_BYTES {
+                return Err(Error::Io(format!(
+                    "Password file too large: {size} bytes exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
+                )));
+            }
             std::fs::read_to_string(path)
-                .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?,
-        );
+                .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?
+        });
         // Trim trailing newline in place
         let trimmed_len = password.trim_end().len();
         password.truncate(trimmed_len);
