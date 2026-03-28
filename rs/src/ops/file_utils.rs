@@ -106,7 +106,7 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
 /// The `unix_mode` parameter is `Some(mode)` only for secret key files (0600).
 ///
 /// For force-overwriting secret key files, use [`atomic_overwrite_secret_key`] instead.
-fn write_file(path: &Path, contents: &str, force: bool, _unix_mode: Option<u32>) -> Result<()> {
+fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) -> Result<()> {
     validate_windows_path(path)?;
 
     let mut options = OpenOptions::new();
@@ -117,10 +117,13 @@ fn write_file(path: &Path, contents: &str, force: bool, _unix_mode: Option<u32>)
         options.create_new(true);
     }
 
+    #[cfg(not(unix))]
+    let _ = unix_mode;
+
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        if let Some(mode) = _unix_mode {
+        if let Some(mode) = unix_mode {
             options.mode(mode);
         }
         if force {
