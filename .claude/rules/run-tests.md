@@ -2,11 +2,13 @@
 
 All `cargo test` commands must be wrapped with `gtimeout`. Run from `rs/` (the Rust crate root).
 
+`cargo nextest run` is installed and preferred over `cargo test`.
+
 ## Commands
 
 **All tests** (~30s):
 ```bash
-gtimeout 120 cargo test --no-default-features
+gtimeout 120 cargo nextest run --no-default-features
 ```
 
 Tests requiring the C minisign binary (`cross_binary_test`, `compatibility`) will skip with a
@@ -21,7 +23,7 @@ Always run in this exact order before committing:
 gtimeout 60 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 gtimeout 30 cargo clippy --lib --bins --all-features -- -F unsafe_code
 cargo fmt
-gtimeout 120 cargo test --no-default-features
+gtimeout 120 cargo nextest run --no-default-features
 ```
 
 `cargo fmt` must be the last formatting step before commit.
