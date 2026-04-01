@@ -29,7 +29,7 @@ fi
 case "$RUN_MODE" in
     "default")
         echo "Running tests (without credential store)..."
-        gtimeout 120 cargo test --no-default-features
+        gtimeout 120 cargo nextest run --no-default-features
         echo ""
         echo "✓ Tests completed successfully!"
         ;;
@@ -40,21 +40,21 @@ case "$RUN_MODE" in
         echo "      You may be prompted multiple times by macOS Keychain."
         echo "      Click 'Always Allow' to reduce prompts."
         echo ""
-        gtimeout 180 cargo test --features credential_store_tests -- --test-threads=1
+        gtimeout 180 cargo nextest run --features credential_store_tests --test-threads 1
         echo ""
         echo "✓ Credential store tests completed successfully!"
         ;;
 
     "all")
         echo "Running tests (without credential store)..."
-        gtimeout 120 cargo test --no-default-features
+        gtimeout 120 cargo nextest run --no-default-features
         echo ""
         echo "Running credential store tests..."
         echo "Note: These tests require OS keyring authorization."
         echo "      You may be prompted multiple times by macOS Keychain."
         echo "      Click 'Always Allow' to reduce prompts."
         echo ""
-        gtimeout 180 cargo test --features credential_store_tests -- --test-threads=1
+        gtimeout 180 cargo nextest run --features credential_store_tests --test-threads 1
         echo ""
         echo "✓ All tests completed successfully!"
         ;;
