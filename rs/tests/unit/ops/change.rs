@@ -204,7 +204,7 @@ fn test_change_password_with_force_weak_kdf() {
     // Create a key with production-strength params (the test is about what happens
     // AFTER the change, not the initial key strength).
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
     let seckey = SeckeyStruct::new_encrypted(
         keynum,
         &secret_key,

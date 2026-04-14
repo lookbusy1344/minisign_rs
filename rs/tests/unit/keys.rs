@@ -429,7 +429,7 @@ fn test_scrypt_fallback_with_moderate_parameters() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut salt);
+    rand::rng().fill(&mut salt);
 
     let encrypted = SeckeyStruct::new_encrypted(
         keynum,
@@ -491,7 +491,7 @@ fn test_encryption_stores_successful_parameters() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut salt);
+    rand::rng().fill(&mut salt);
 
     let encrypted = SeckeyStruct::new_encrypted(
         keynum,
@@ -529,7 +529,7 @@ fn test_new_encrypted_rejects_fallback_when_not_allowed() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut salt);
+    rand::rng().fill(&mut salt);
 
     // With allow_fallback=false, should succeed on systems with sufficient memory
     // This test primarily validates that the API signature exists and works
@@ -565,7 +565,7 @@ fn test_new_encrypted_allows_fallback_when_enabled() {
 
     let password = b"test password";
     let mut salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut salt);
+    rand::rng().fill(&mut salt);
 
     // With allow_fallback=true, should succeed (either directly or via fallback)
     let result = SeckeyStruct::new_encrypted(
@@ -781,7 +781,7 @@ fn test_is_weak_kdf_production_strength() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     let kdf_opslimit = 33_554_432; // Production strength
     let kdf_memlimit = 1_073_741_824;
@@ -809,7 +809,7 @@ fn test_is_weak_kdf_fallback_parameters() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     let kdf_opslimit = 4_194_304; // After 3 fallbacks (8x weaker)
     let kdf_memlimit = 134_217_728; // 128 MB
@@ -837,7 +837,7 @@ fn test_is_weak_kdf_low_parameters() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     // N = 2^14, r = 8, p = 1
     let kdf_opslimit = 524_288; // Well below production (33,554,432)
@@ -879,7 +879,7 @@ fn test_decrypt_weak_kdf_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     // Create a key with weak parameters
     let kdf_opslimit = 4_194_304; // After 3 fallbacks (8x weaker)
@@ -915,7 +915,7 @@ fn test_credential_id_for_encrypted_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"test_password";
     let mut kdf_salt = [0u8; KDF_SALT_BYTES];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     // Use weak parameters for faster test execution (N=2^14)
     let kdf_opslimit = 524_288;

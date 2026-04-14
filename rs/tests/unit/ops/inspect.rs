@@ -25,7 +25,7 @@ fn test_inspect_production_strength_encrypted_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     // Production parameters: N=2^20
     let kdf_opslimit = 33_554_432;
@@ -70,7 +70,7 @@ fn test_inspect_medium_strength_fallback_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     let kdf_opslimit = 16_777_216; // 1 fallback
     let kdf_memlimit = 536_870_912; // 512 MB
@@ -110,7 +110,7 @@ fn test_inspect_low_strength_fallback_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     let kdf_opslimit = 4_194_304; // 3 fallbacks (8x weaker)
     let kdf_memlimit = 134_217_728; // 128 MB
@@ -209,7 +209,7 @@ fn test_security_level_classification() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test";
     let mut salt = [0u8; 32];
-    rand::thread_rng().fill(&mut salt);
+    rand::rng().fill(&mut salt);
 
     let high_key = SeckeyStruct::new_encrypted(
         keynum,
@@ -228,7 +228,7 @@ fn test_security_level_classification() {
     assert_eq!(result.security_level(), Some(SecurityLevel::High));
 
     // Medium: After 1 fallback (N=2^19, 512 MB)
-    rand::thread_rng().fill(&mut salt);
+    rand::rng().fill(&mut salt);
     let medium_key = SeckeyStruct::new_encrypted(
         keynum,
         &secret_key,
@@ -246,7 +246,7 @@ fn test_security_level_classification() {
     assert_eq!(result.security_level(), Some(SecurityLevel::Medium));
 
     // Low: After 3 fallbacks (N=2^17, 128 MB)
-    rand::thread_rng().fill(&mut salt);
+    rand::rng().fill(&mut salt);
     let low_key = SeckeyStruct::new_encrypted(
         keynum,
         &secret_key,
@@ -283,7 +283,7 @@ fn test_weakness_multiplier_calculation() {
 
     for (memlimit, expected_multiplier) in test_cases {
         let mut salt = [0u8; 32];
-        rand::thread_rng().fill(&mut salt);
+        rand::rng().fill(&mut salt);
 
         // Calculate corresponding opslimit
         let n = memlimit / 1024; // memlimit = 128 * N * r, so N = memlimit / (128 * 8)
@@ -407,7 +407,7 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     // Use weak parameters for fast test
     let kdf_opslimit = 4_194_304; // N=2^17
@@ -447,7 +447,7 @@ fn test_inspect_private_fails_with_wrong_password() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"correct_password";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     let seckey = SeckeyStruct::new_encrypted(
         keynum,
@@ -601,7 +601,7 @@ fn test_inspect_with_credential_store_check_disabled() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     let seckey = SeckeyStruct::new_encrypted(
         keynum,
@@ -636,7 +636,7 @@ fn test_inspect_result_includes_credential_id() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let password = b"test_password";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     let kdf_opslimit = 33_554_432;
     let kdf_memlimit = 1_073_741_824;

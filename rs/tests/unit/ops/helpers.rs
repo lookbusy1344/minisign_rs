@@ -26,7 +26,7 @@ pub fn make_fast_encrypted_seckey(
     password: &[u8],
 ) -> SeckeyStruct {
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
     let n = 1u64 << TEST_LOG_N;
     let r = 8u64;
     SeckeyStruct::new_encrypted(

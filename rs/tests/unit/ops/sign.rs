@@ -98,7 +98,7 @@ fn test_sign_encrypted_key_fast() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpass";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     // Use N=2^14 for fast testing (~50ms)
     let n = 1u64 << 14;
@@ -558,7 +558,7 @@ fn test_sign_with_weak_kdf_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
     let password = b"testpass";
     let mut kdf_salt = [0u8; 32];
-    rand::thread_rng().fill(&mut kdf_salt);
+    rand::rng().fill(&mut kdf_salt);
 
     // Weak parameters: N=2^17, well below production N=2^20
     let kdf_opslimit = 4_194_304; // After 3 fallbacks (8x weaker)
