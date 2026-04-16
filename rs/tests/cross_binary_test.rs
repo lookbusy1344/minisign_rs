@@ -21,18 +21,14 @@ fn c_minisign() -> StdCommand {
 
 /// Verify that the C minisign binary is available
 fn check_c_minisign_available() -> bool {
-    c_minisign()
-        .arg("-v")
-        .output()
-        .map(|output| {
-            if !output.status.success() {
-                return false;
-            }
-            // Check this is C minisign, not our Rust version
-            let version_output = String::from_utf8_lossy(&output.stdout);
-            !version_output.contains("Rust")
-        })
-        .unwrap_or(false)
+    c_minisign().arg("-v").output().is_ok_and(|output| {
+        if !output.status.success() {
+            return false;
+        }
+        // Check this is C minisign, not our Rust version
+        let version_output = String::from_utf8_lossy(&output.stdout);
+        !version_output.contains("Rust")
+    })
 }
 
 /// Skip the test with a clear warning if the C minisign binary is not available.

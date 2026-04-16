@@ -40,9 +40,7 @@ const SECRET_KEY_FILE_PERMISSIONS: u32 = 0o600;
 #[must_use]
 pub fn has_lax_permissions(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(path)
-        .map(|m| m.permissions().mode() & 0o077 != 0)
-        .unwrap_or(false)
+    std::fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o077 != 0)
 }
 
 /// Emit a warning to stderr if `path` has group- or world-accessible permissions.

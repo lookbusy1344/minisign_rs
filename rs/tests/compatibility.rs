@@ -18,8 +18,7 @@ fn c_minisign_available() -> bool {
     Command::new("minisign")
         .arg("-v")
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .is_ok_and(|o| o.status.success())
 }
 
 /// Test parsing a C-generated public key file
