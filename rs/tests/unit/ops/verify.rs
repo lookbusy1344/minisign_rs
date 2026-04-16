@@ -108,7 +108,7 @@ fn test_verify_message_signature_prehashed() {
     let message_file = Path::new("tests/fixtures/messages/hello.txt");
 
     // Should succeed with correct message
-    verify_message_signature(&pubkey, &sig_box, message_file, false)
+    verify_message_signature(&pubkey, &sig_box, message_file, false, false)
         .expect("should verify correct message");
 
     // Should fail with wrong message (create a temp file with wrong content)
@@ -116,7 +116,7 @@ fn test_verify_message_signature_prehashed() {
     let wrong_message_file = temp_dir.path().join("wrong.txt");
     fs::write(&wrong_message_file, b"Wrong message").unwrap();
 
-    let result = verify_message_signature(&pubkey, &sig_box, &wrong_message_file, false);
+    let result = verify_message_signature(&pubkey, &sig_box, &wrong_message_file, false, false);
     assert!(result.is_err(), "should fail with wrong message");
 }
 
@@ -687,5 +687,63 @@ fn test_verify_accepts_prehashed_with_force_prehashed() {
     assert!(
         result.is_ok(),
         "Should accept prehashed signature with force_prehashed"
+    );
+}
+
+#[test]
+fn test_output_uses_content_captured_at_verify_time() {
+    // S1 regression guard: the -o buffer must come from the verify call itself,
+    // not a second read from the path. Overwriting the file after verify() returns
+    // must not change what is emitted.
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let original = b"original content";
+    let tampered = b"tampered - must not appear in output";
+
+    fs::write(&message_path, original).unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().unwrap();
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    sign(
+        &SignOptions::builder(sk_path.as_path(), message_path.as_path())
+            .signature_file(sig_path.as_path())
+            .prehashed(false) // non-prehashed: content is buffered in memory during verify
+            .quiet(true)
+            .build(),
+        None,
+    )
+    .unwrap();
+
+    let verify_opts = VerifyOptions::builder(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+    )
+    .output(true)
+    .build();
+
+    let mut result = verify(&verify_opts).expect("verification must succeed");
+
+    // Simulate attacker replacing the file after verification
+    fs::write(&message_path, tampered).unwrap();
+
+    let mut out = Vec::new();
+    result
+        .take_message_output()
+        .expect("output must be captured when output=true")
+        .write_to(&mut out)
+        .unwrap();
+
+    assert_eq!(
+        out, original,
+        "output must be the verified content, not post-verification disk content"
     );
 }

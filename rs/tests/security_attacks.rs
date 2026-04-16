@@ -175,7 +175,7 @@ fn t1_reject_keynum_mismatch() {
     // Correct keynum with valid primary signature: must succeed.
     // verify_message_signature only checks keynum, prehash flag, and the Ed25519
     // primary signature — the global signature is not verified here.
-    verify_message_signature(&pubkey, &valid_box, &message_path, false)
+    verify_message_signature(&pubkey, &valid_box, &message_path, false, false)
         .expect("correct keynum + valid primary sig must succeed");
 
     // Tampered SigStruct: wrong keynum — must be rejected with KeyMismatch
@@ -189,7 +189,8 @@ fn t1_reject_keynum_mismatch() {
     )
     .unwrap();
 
-    let err = verify_message_signature(&pubkey, &tampered_box, &message_path, false).unwrap_err();
+    let err =
+        verify_message_signature(&pubkey, &tampered_box, &message_path, false, false).unwrap_err();
     assert!(
         matches!(err, Error::KeyMismatch { .. }),
         "wrong keynum must produce KeyMismatch, got: {err}"
@@ -371,7 +372,7 @@ fn t1_reject_valid_global_with_forged_primary() {
 
     // Primary signature was computed for message2, not message1.
     // verify_message_signature must reject it regardless of the global sig's validity.
-    let result = verify_message_signature(&pubkey_struct, &sig_box, &msg1_path, false);
+    let result = verify_message_signature(&pubkey_struct, &sig_box, &msg1_path, false, false);
     assert!(
         result.is_err(),
         "primary sig for message2 must be rejected when verifying against message1, \

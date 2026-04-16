@@ -286,7 +286,7 @@ fn test_change_password_then_sign_verify_roundtrip() {
     };
 
     let pubkey_struct = PubkeyStruct::new(keynum, public_key);
-    let result = verify_message_signature(&pubkey_struct, &sig_box, &message_path, false);
+    let result = verify_message_signature(&pubkey_struct, &sig_box, &message_path, false, false);
     assert!(
         result.is_ok(),
         "signature produced after password change must verify against the original public key"

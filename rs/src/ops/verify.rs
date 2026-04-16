@@ -14,6 +14,8 @@ use crate::{
 };
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use std::fs::File;
+use std::io::{self, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 /// Options for signature verification
@@ -112,11 +114,38 @@ pub enum PublicKeySource<'a> {
     Base64(&'a str),
 }
 
+/// The verified message content, held from the original file descriptor to prevent TOCTOU.
+///
+/// Non-prehashed: the file was fully buffered during verification.
+/// Prehashed: the file descriptor is rewound to the start after streaming the hash.
+#[derive(Debug)]
+pub enum MessageSource {
+    Buffer(Vec<u8>),
+    File(File),
+}
+
+impl MessageSource {
+    /// Write the verified content to `w`, consuming self.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the write or (for `File`) the read fails.
+    pub fn write_to(self, w: &mut impl io::Write) -> io::Result<()> {
+        match self {
+            Self::Buffer(buf) => w.write_all(&buf),
+            Self::File(mut f) => {
+                io::copy(&mut f, w)?;
+                Ok(())
+            }
+        }
+    }
+}
+
 /// Result of signature verification
 ///
 /// Note: If you receive this struct, the verification succeeded.
 /// Failures return `Err` instead.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VerifyResult {
     /// The trusted comment from the signature
     trusted_comment: String,
@@ -126,6 +155,8 @@ pub struct VerifyResult {
     key_id: String,
     /// Key ID in PGP Word List format (human-readable)
     key_id_words: String,
+    /// Captured message content from verification time (populated when `output` is set).
+    message_output: Option<MessageSource>,
 }
 
 impl VerifyResult {
@@ -147,6 +178,11 @@ impl VerifyResult {
     #[must_use]
     pub fn key_id_words(&self) -> &str {
         &self.key_id_words
+    }
+
+    /// Extract the captured message output, if any.
+    pub fn take_message_output(&mut self) -> Option<MessageSource> {
+        self.message_output.take()
     }
 }
 
@@ -201,12 +237,13 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     // Load the signature
     let sig_box = load_signature(options.signature_file())?;
 
-    // Verify the signature on the message
-    verify_message_signature(
+    // Verify the signature on the message, capturing content if -o is set
+    let message_output = verify_message_signature(
         &pubkey,
         &sig_box,
         options.message_file(),
         options.force_prehashed,
+        options.output,
     )?;
 
     // Verify the global signature (trusted comment binding)
@@ -221,6 +258,7 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
         untrusted_comment: sig_box.untrusted_comment().to_string(),
         key_id,
         key_id_words,
+        message_output,
     })
 }
 
@@ -283,10 +321,8 @@ pub fn verify_message_signature(
     sig_box: &SignatureBox,
     message_file: &Path,
     force_prehashed: bool,
-) -> Result<()> {
-    // H5: Use constant-time comparison for keynum to prevent timing side-channels
-    // during signature verification (matches constant-time comparison used for
-    // checksum validation in keys.rs)
+    capture_output: bool,
+) -> Result<Option<MessageSource>> {
     use subtle::ConstantTimeEq;
     if !bool::from(pubkey.keynum().ct_eq(sig_box.sig_struct().keynum())) {
         return Err(Error::KeyMismatch {
@@ -294,37 +330,35 @@ pub fn verify_message_signature(
         });
     }
 
-    // Check if legacy signature is rejected (matches C minisign behavior with -H flag)
     if force_prehashed && !sig_box.sig_struct().is_prehashed() {
         return Err(Error::LegacySignatureRejected);
     }
 
-    // For prehashed signatures, we stream hash the message.
-    // For non-prehashed, we need the full message in memory.
-    // Avoid heap allocation on the prehash path: blake2b_512_stream returns [u8; 64]
-    // (stack-allocated), so we hold both possible backing stores as separate bindings and
-    // coerce whichever one is initialised into a &[u8] slice.
-    let hash_buf;
-    let file_buf;
-    let data_to_verify: &[u8] = if sig_box.sig_struct().is_prehashed() {
-        let file =
-            std::fs::File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
-        hash_buf = blake2b_512_stream(file)?;
-        &hash_buf
+    if sig_box.sig_struct().is_prehashed() {
+        // Pass &mut file so we keep the fd open for output — avoids re-opening the path.
+        let mut file = File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        let hash = blake2b_512_stream(&mut file)?;
+        crypto_verify(pubkey.public_key(), &hash, sig_box.sig_struct().signature())?;
+        if capture_output {
+            file.seek(SeekFrom::Start(0))
+                .map_err(|e| Error::file_read(message_file, e))?;
+            return Ok(Some(MessageSource::File(file)));
+        }
+        Ok(None)
     } else {
-        // For non-prehashed mode, check file size limit first
         check_file_size_limit(message_file)?;
-
-        file_buf = std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
-        &file_buf
-    };
-
-    // Verify the Ed25519 signature
-    crypto_verify(
-        pubkey.public_key(),
-        data_to_verify,
-        sig_box.sig_struct().signature(),
-    )
+        let file_buf =
+            std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        crypto_verify(
+            pubkey.public_key(),
+            &file_buf,
+            sig_box.sig_struct().signature(),
+        )?;
+        if capture_output {
+            return Ok(Some(MessageSource::Buffer(file_buf)));
+        }
+        Ok(None)
+    }
 }
 
 /// Verify a single file with an already-loaded public key
@@ -340,8 +374,14 @@ fn verify_file_with_key(
 
     let sig_box = load_signature(&sig_file_path)?;
 
-    // Verify the signature on the message
-    verify_message_signature(pubkey, &sig_box, message_file, options.force_prehashed)?;
+    // Batch path never uses -o output
+    verify_message_signature(
+        pubkey,
+        &sig_box,
+        message_file,
+        options.force_prehashed,
+        false,
+    )?;
 
     // Verify the global signature (trusted comment binding)
     sig_box.verify_global_signature(pubkey.public_key())?;
@@ -355,6 +395,7 @@ fn verify_file_with_key(
         untrusted_comment: sig_box.untrusted_comment().to_string(),
         key_id,
         key_id_words,
+        message_output: None,
     })
 }
 

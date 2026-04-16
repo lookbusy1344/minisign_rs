@@ -19,7 +19,7 @@ pub use inspect::{
 };
 pub use recreate::{RecreateOptions, RecreateResult, recreate, recreate_with_key};
 pub use sign::{SignOptions, SignResult, sign, sign_with_key};
-pub use verify::{PublicKeySource, VerifyOptions, VerifyResult, verify};
+pub use verify::{MessageSource, PublicKeySource, VerifyOptions, VerifyResult, verify};
 
 /// Controls whether an existing key file may be overwritten.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

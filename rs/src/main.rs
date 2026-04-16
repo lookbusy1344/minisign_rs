@@ -427,16 +427,16 @@ fn handle_verify(cli: &Cli) -> Result<()> {
             .force_prehashed(cli.prehashed)
             .build();
 
-        let result = verify(&options)?;
+        let mut result = verify(&options)?;
 
         // Handle output modes
         if cli.output {
-            // -o: Output file content to stdout after verification
-            let content =
-                std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
-            io::stdout()
-                .write_all(&content)
-                .map_err(|e| Error::Io(format!("failed to write to stdout: {e}")))?;
+            // -o: emit the content captured during verification — not a second read from disk.
+            if let Some(source) = result.take_message_output() {
+                source
+                    .write_to(&mut io::stdout())
+                    .map_err(|e| Error::Io(format!("failed to write to stdout: {e}")))?;
+            }
         } else if cli.pretty_quiet {
             // -Q: Only show trusted comment
             println!("{}", result.trusted_comment());
