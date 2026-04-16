@@ -3,7 +3,7 @@
 //! This module implements the core verification logic for minisign signatures.
 
 use super::file_utils::{
-    MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, check_file_size_limit, read_file_bounded,
+    MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded, read_message_file,
 };
 use crate::{
     Result,
@@ -346,9 +346,7 @@ pub fn verify_message_signature(
         }
         Ok(None)
     } else {
-        check_file_size_limit(message_file)?;
-        let file_buf =
-            std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        let file_buf = read_message_file(message_file)?;
         crypto_verify(
             pubkey.public_key(),
             &file_buf,

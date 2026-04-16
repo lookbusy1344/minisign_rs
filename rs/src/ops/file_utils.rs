@@ -4,8 +4,8 @@ use crate::{
     Error, Result, constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct,
     validation::validate_windows_path,
 };
-use std::fs::OpenOptions;
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::Path;
 
 /// Maximum file size accepted for key files (secret key and public key).
@@ -295,4 +295,43 @@ pub fn check_file_size_limit(path: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Open a message file, check its size, and read it into memory — all on a single fd.
+///
+/// The size check and read share the same open file descriptor, closing the TOCTOU window
+/// that exists when `check_file_size_limit` (metadata on the path) is called before
+/// `std::fs::read` (a separate open). A `take(MAX_MESSAGE_SIZE_BYTES + 1)` cap is the
+/// actual safety net: even if the file grows during the read it cannot allocate beyond
+/// the limit. The second bound check distinguishes "exactly at limit" from "over limit".
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file cannot be opened
+/// - File metadata cannot be read
+/// - The file size (at open time or post-read) exceeds `MAX_MESSAGE_SIZE_BYTES`
+/// - The read fails
+pub fn read_message_file(path: &Path) -> Result<Vec<u8>> {
+    let file = File::open(path).map_err(|e| Error::file_read(path, e))?;
+    let size = file
+        .metadata()
+        .map_err(|e| Error::file_read(path, e))?
+        .len();
+    if size > MAX_MESSAGE_SIZE_BYTES {
+        return Err(Error::Other(format!(
+            "File too large for non-prehashed mode: {size} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-H) for files larger than 1 GB."
+        )));
+    }
+    let mut buf = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
+    file.take(MAX_MESSAGE_SIZE_BYTES + 1)
+        .read_to_end(&mut buf)
+        .map_err(|e| Error::file_read(path, e))?;
+    if buf.len() as u64 > MAX_MESSAGE_SIZE_BYTES {
+        return Err(Error::Other(format!(
+            "File too large for non-prehashed mode: {} bytes (max: {MAX_MESSAGE_SIZE_BYTES} bytes). Use --prehashed (-H) for files larger than 1 GB.",
+            buf.len()
+        )));
+    }
+    Ok(buf)
 }

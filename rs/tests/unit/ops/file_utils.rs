@@ -1,5 +1,26 @@
 //! Unit tests for file utility operations
 
+mod read_message {
+    use minisign::ops::file_utils::read_message_file;
+    use tempfile::TempDir;
+
+    #[test]
+    fn reads_small_file_correctly() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("msg.txt");
+        std::fs::write(&path, b"hello world").unwrap();
+        let buf = read_message_file(&path).expect("should read small file");
+        assert_eq!(buf, b"hello world");
+    }
+
+    #[test]
+    fn rejects_nonexistent_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("missing.txt");
+        assert!(read_message_file(&path).is_err());
+    }
+}
+
 mod size_limit {
     use minisign::ops::file_utils::check_file_size_limit;
     use tempfile::{NamedTempFile, TempDir};

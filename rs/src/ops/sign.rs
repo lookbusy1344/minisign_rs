@@ -2,7 +2,7 @@
 //!
 //! This module implements the core signing logic for minisign.
 
-use super::file_utils::{check_file_size_limit, load_secret_key};
+use super::file_utils::{load_secret_key, read_message_file};
 use crate::{
     Result,
     crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
@@ -547,12 +547,7 @@ pub fn create_signature(
         hash_buf = blake2b_512_stream(file)?;
         &hash_buf
     } else {
-        // For non-prehashed mode, check file size limit first
-        check_file_size_limit(message_file)?;
-
-        // For non-prehashed mode, we need the full message in memory
-        // (Ed25519 requires the full message for signing)
-        file_buf = std::fs::read(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        file_buf = read_message_file(message_file)?;
         &file_buf
     };
 
