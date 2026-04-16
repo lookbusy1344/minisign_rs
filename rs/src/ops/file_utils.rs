@@ -104,7 +104,7 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
 /// The `unix_mode` parameter is `Some(mode)` only for secret key files (0600).
 ///
 /// For force-overwriting secret key files, use [`atomic_overwrite_secret_key`] instead.
-fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) -> Result<()> {
+fn write_file(path: &Path, contents: &[u8], force: bool, unix_mode: Option<u32>) -> Result<()> {
     validate_windows_path(path)?;
 
     let mut options = OpenOptions::new();
@@ -141,7 +141,7 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
         }
     })?;
 
-    file.write_all(contents.as_bytes())
+    file.write_all(contents)
         .map_err(|e| Error::file_write(path, e))?;
 
     Ok(())
@@ -173,7 +173,7 @@ fn write_file(path: &Path, contents: &str, force: bool, unix_mode: Option<u32>) 
 ///
 /// Returns [`Error::FileWrite`] on any I/O failure.
 #[cfg(unix)]
-fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result<()> {
+fn atomic_overwrite_secret_key(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
     use rand_core::{OsRng, RngCore};
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
@@ -209,7 +209,7 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result
         file.set_permissions(std::fs::Permissions::from_mode(mode))
             .map_err(|e| Error::file_write(path, e))?;
 
-        file.write_all(contents.as_bytes())
+        file.write_all(contents)
             .map_err(|e| Error::file_write(&tmp_path, e))?;
 
         // Flush data to disk before the rename so a crash after rename doesn't
@@ -237,8 +237,13 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &str, mode: u32) -> Result
 ///
 /// Returns [`Error::FileExists`] if the file exists and `force` is false.
 /// Returns [`Error::FileWrite`] on I/O failure.
-pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
+pub fn write_secret_key_file(
+    path: impl AsRef<Path>,
+    contents: impl AsRef<[u8]>,
+    force: bool,
+) -> Result<()> {
     let path = path.as_ref();
+    let contents = contents.as_ref();
 
     #[cfg(unix)]
     if force {
@@ -259,7 +264,7 @@ pub fn write_secret_key_file(path: impl AsRef<Path>, contents: &str, force: bool
 /// Returns [`Error::FileExists`] if the file exists and `force` is false.
 /// Returns [`Error::FileWrite`] on I/O failure.
 pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
-    write_file(path.as_ref(), contents, force, None)
+    write_file(path.as_ref(), contents.as_bytes(), force, None)
 }
 
 /// Write a signature file.
@@ -271,7 +276,7 @@ pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool
 /// Returns [`Error::FileExists`] if the file exists and `force` is false.
 /// Returns [`Error::FileWrite`] on I/O failure.
 pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    write_file(path, contents, force, None)
+    write_file(path, contents.as_bytes(), force, None)
 }
 
 /// Check that a file doesn't exceed the maximum size for non-prehashed mode

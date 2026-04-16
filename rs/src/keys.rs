@@ -859,13 +859,13 @@ impl SeckeyStruct {
 
     /// Serialize to file format (comment + base64)
     #[must_use]
-    pub fn to_file_contents(&self, comment: &str) -> String {
-        // Zeroize both the raw bytes and base64 string: base64 is a reversible
-        // encoding so it equally constitutes secret key material in memory.
+    pub fn to_file_contents(&self, comment: &str) -> Zeroizing<String> {
+        // Zeroize the raw bytes, base64 string, and the final formatted string:
+        // each is a reversible encoding of secret key material in memory.
         let bytes = Zeroizing::new(self.to_bytes());
         let base64 = Zeroizing::new(encode_base64(*bytes));
         let base64_str: &str = &base64;
-        format!("untrusted comment: {comment}\n{base64_str}\n")
+        Zeroizing::new(format!("untrusted comment: {comment}\n{base64_str}\n"))
     }
 }
 
