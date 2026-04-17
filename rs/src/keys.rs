@@ -413,11 +413,10 @@ impl SeckeyStruct {
             );
         }
 
-        // Create combined blob: keynum + secret_key + checksum (zeroized on drop)
-        let mut blob = Zeroizing::new(Vec::with_capacity(ENCRYPTED_BLOB_SIZE));
-        blob.extend_from_slice(keynum.as_bytes());
-        blob.extend_from_slice(secret_key.as_bytes());
-        blob.extend_from_slice(&computed_checksum);
+        let mut blob = Zeroizing::new([0u8; ENCRYPTED_BLOB_SIZE]);
+        blob[0..KEYNUM_BYTES].copy_from_slice(keynum.as_bytes());
+        blob[KEYNUM_BYTES..KEYNUM_BYTES + SECRET_KEY_BYTES].copy_from_slice(secret_key.as_bytes());
+        blob[KEYNUM_BYTES + SECRET_KEY_BYTES..].copy_from_slice(&computed_checksum);
 
         // Encrypt entire blob with XOR
         let mut encrypted_blob = [0u8; ENCRYPTED_BLOB_SIZE];
@@ -482,11 +481,11 @@ impl SeckeyStruct {
         let derived_key =
             derive_key_with_params(password, &self.kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
 
-        // Reconstruct encrypted blob: keynum + secret_key + checksum (zeroized on drop)
-        let mut encrypted_blob = Zeroizing::new(Vec::with_capacity(ENCRYPTED_BLOB_SIZE));
-        encrypted_blob.extend_from_slice(&self.encrypted_keynum);
-        encrypted_blob.extend_from_slice(&self.secret_key_encrypted);
-        encrypted_blob.extend_from_slice(&self.checksum); // checksum field contains encrypted checksum
+        let mut encrypted_blob = Zeroizing::new([0u8; ENCRYPTED_BLOB_SIZE]);
+        encrypted_blob[0..KEYNUM_BYTES].copy_from_slice(&self.encrypted_keynum);
+        encrypted_blob[KEYNUM_BYTES..KEYNUM_BYTES + SECRET_KEY_BYTES]
+            .copy_from_slice(&self.secret_key_encrypted);
+        encrypted_blob[KEYNUM_BYTES + SECRET_KEY_BYTES..].copy_from_slice(&self.checksum);
 
         // Decrypt entire blob (zeroized on drop)
         let mut decrypted_blob = Zeroizing::new([0u8; ENCRYPTED_BLOB_SIZE]);
@@ -608,13 +607,13 @@ impl SeckeyStruct {
         keynum: KeyNum,
         secret_key: &[u8; SECRET_KEY_BYTES],
     ) -> [u8; CHECKSUM_BYTES] {
-        // Matches C minisign: hash(sig_alg + keynum + sk)
-        let mut data = Zeroizing::new(Vec::with_capacity(2 + KEYNUM_BYTES + SECRET_KEY_BYTES));
-        data.extend_from_slice(SIG_ALG); // "Ed"
-        data.extend_from_slice(keynum.as_bytes());
-        data.extend_from_slice(secret_key);
+        const CHECKSUM_INPUT_SIZE: usize = 2 + KEYNUM_BYTES + SECRET_KEY_BYTES;
+        let mut data = Zeroizing::new([0u8; CHECKSUM_INPUT_SIZE]);
+        data[0..2].copy_from_slice(SIG_ALG);
+        data[2..2 + KEYNUM_BYTES].copy_from_slice(keynum.as_bytes());
+        data[2 + KEYNUM_BYTES..].copy_from_slice(secret_key);
 
-        blake2b_256(&data)
+        blake2b_256(&data[..])
     }
 
     /// Convert opslimit/memlimit to scrypt parameters (`log_n`, r, p)
