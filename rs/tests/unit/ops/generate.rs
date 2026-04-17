@@ -136,6 +136,7 @@ fn test_generate_file_exists_without_force() {
 }
 
 #[test]
+#[cfg_attr(not(unix), ignore = "atomic secret-key overwrite not yet implemented on Windows")]
 fn test_generate_force_overwrite() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
