@@ -271,6 +271,18 @@ pub fn generate_with_log_n(
         "minisign encrypted secret key"
     };
     let force = options.overwrite == OverwritePolicy::Overwrite;
+
+    // Windows has no atomic rename + O_NOFOLLOW equivalent implemented yet.
+    // Truncate-then-write risks key corruption on crash; refuse until properly implemented.
+    #[cfg(not(unix))]
+    if force && options.secret_key_file.exists() {
+        return Err(Error::Other(
+            "Overwriting an existing secret key (--force) is not yet supported on Windows. \
+             Delete the key file manually and retry without --force."
+                .into(),
+        ));
+    }
+
     let seckey_contents = seckey.to_file_contents(seckey_comment);
     write_secret_key_file(options.secret_key_file, &seckey_contents, force)?;
 
