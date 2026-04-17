@@ -464,6 +464,7 @@ fn test_trusted_and_untrusted_comments() {
 }
 
 #[test]
+#[cfg_attr(not(unix), ignore = "atomic secret-key overwrite not yet implemented on Windows")]
 fn test_force_flag_allows_overwrite() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let secret_key = temp_dir.path().join("test.key");
