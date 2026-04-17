@@ -3449,6 +3449,41 @@ fn test_password_file_directory_rejected() {
 }
 
 #[test]
+fn test_password_file_oversized_rejected() {
+    // A password file exceeding MAX_PASSWORD_FILE_BYTES must be rejected before any read.
+    let temp_dir = TempDir::new().unwrap();
+    let sk = temp_dir.path().join("test.key");
+    let pk = temp_dir.path().join("test.pub");
+    let pw_file = temp_dir.path().join("big_password.txt");
+
+    // Generate an unencrypted key to sign with later
+    minisign_cmd()
+        .args(["-G", "-W", "-f"])
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .assert()
+        .success();
+
+    // 1025 bytes — one over MAX_PASSWORD_FILE_BYTES (1024)
+    fs::write(&pw_file, vec![b'a'; 1025]).unwrap();
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-s")
+        .arg(&sk)
+        .arg("-p")
+        .arg(&pk)
+        .arg("-f")
+        .arg("--password-file")
+        .arg(&pw_file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("too large").or(predicate::str::contains("exceeds")));
+}
+
+#[test]
 fn test_sign_batch_failure_summary_visible_in_quiet_mode() {
     // The failure summary (count + file list) must appear even with -q.
     // Per-file errors are always shown; the summary must be too.

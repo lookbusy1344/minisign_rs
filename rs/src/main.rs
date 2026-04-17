@@ -12,8 +12,9 @@ use minisign::{
         recreate_with_key, sign_with_key, verify,
     },
 };
+use std::fs::File;
 use std::io::IsTerminal;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::process;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
@@ -873,8 +874,12 @@ fn prompt_password(
         eprintln!(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
-        // Reject non-regular files (FIFOs, device nodes, directories) to prevent blocking
-        let metadata = std::fs::metadata(path)
+        // Open once; derive metadata from the fd to avoid TOCTOU races.
+        // Open once; derive metadata from the fd to avoid TOCTOU races.
+        let file = File::open(path)
+            .map_err(|e| Error::Io(format!("Failed to open password file: {e}")))?;
+        let metadata = file
+            .metadata()
             .map_err(|e| Error::Io(format!("Failed to stat password file: {e}")))?;
         if !metadata.is_file() {
             return Err(Error::Io(format!(
@@ -882,19 +887,22 @@ fn prompt_password(
                 path.display()
             )));
         }
-        // Wrap password in Zeroizing immediately to prevent leakage
-        let mut password = Zeroizing::new({
-            let size = std::fs::metadata(path)
-                .map_err(|e| Error::Io(format!("Failed to stat password file: {e}")))?
-                .len();
-            if size > MAX_PASSWORD_FILE_BYTES {
-                return Err(Error::Io(format!(
-                    "Password file too large: {size} bytes exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
-                )));
-            }
-            std::fs::read_to_string(path)
-                .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?
-        });
+        let size = metadata.len();
+        if size > MAX_PASSWORD_FILE_BYTES {
+            return Err(Error::Io(format!(
+                "Password file too large: {size} bytes exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
+            )));
+        }
+        let capacity = usize::try_from(size).unwrap_or(0);
+        let mut password = Zeroizing::new(String::with_capacity(capacity));
+        file.take(MAX_PASSWORD_FILE_BYTES + 1)
+            .read_to_string(&mut password)
+            .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
+        if password.len() as u64 > MAX_PASSWORD_FILE_BYTES {
+            return Err(Error::Io(format!(
+                "Password file too large: exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
+            )));
+        }
         // Trim trailing newline in place
         let trimmed_len = password.trim_end().len();
         password.truncate(trimmed_len);
