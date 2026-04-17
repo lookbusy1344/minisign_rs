@@ -271,6 +271,17 @@ impl SignatureBox {
         &self.untrusted_comment
     }
 
+    /// Consume the box, returning `(untrusted_comment, sig_struct, trusted_comment, global_signature)`.
+    #[must_use]
+    pub fn into_parts(self) -> (String, SigStruct, String, Signature) {
+        (
+            self.untrusted_comment,
+            self.sig_struct,
+            self.trusted_comment,
+            self.global_signature,
+        )
+    }
+
     #[must_use]
     pub const fn sig_struct(&self) -> &SigStruct {
         &self.sig_struct

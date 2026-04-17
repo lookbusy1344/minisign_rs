@@ -210,10 +210,11 @@ fn sign_file_with_key(
 
     let key_id = keynum.to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(&keynum);
+    let (_, _, trusted_comment, _) = sig_box.into_parts();
 
     Ok(SignResult {
         signature_file: sig_file_path,
-        trusted_comment: sig_box.trusted_comment().to_string(),
+        trusted_comment,
         key_id,
         key_id_words,
     })

@@ -252,10 +252,11 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     // Generate key ID display formats
     let key_id = pubkey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
+    let (untrusted_comment, _, trusted_comment, _) = sig_box.into_parts();
 
     Ok(VerifyResult {
-        trusted_comment: sig_box.trusted_comment().to_string(),
-        untrusted_comment: sig_box.untrusted_comment().to_string(),
+        trusted_comment,
+        untrusted_comment,
         key_id,
         key_id_words,
         message_output,
@@ -387,10 +388,11 @@ fn verify_file_with_key(
     // Generate key ID display formats
     let key_id = pubkey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
+    let (untrusted_comment, _, trusted_comment, _) = sig_box.into_parts();
 
     Ok(VerifyResult {
-        trusted_comment: sig_box.trusted_comment().to_string(),
-        untrusted_comment: sig_box.untrusted_comment().to_string(),
+        trusted_comment,
+        untrusted_comment,
         key_id,
         key_id_words,
         message_output: None,
