@@ -250,6 +250,17 @@ pub fn write_secret_key_file(
         return atomic_overwrite_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS);
     }
 
+    // Windows has no atomic rename + O_NOFOLLOW equivalent implemented yet.
+    // Truncate-then-write risks key corruption on crash; refuse until properly implemented.
+    #[cfg(not(unix))]
+    if force {
+        return Err(Error::Other(
+            "Overwriting an existing secret key (--force) is not yet supported on Windows. \
+             Delete the key file manually and retry without --force."
+                .into(),
+        ));
+    }
+
     #[cfg(unix)]
     let unix_mode = Some(SECRET_KEY_FILE_PERMISSIONS);
     #[cfg(not(unix))]
