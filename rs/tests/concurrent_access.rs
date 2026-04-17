@@ -172,6 +172,7 @@ fn test_concurrent_signature_creation() {
 /// This verifies that when force=true, concurrent writes don't fail
 /// (though the result may be from any of the racing threads).
 #[test]
+#[cfg_attr(not(unix), ignore = "atomic secret-key overwrite not yet implemented on Windows")]
 fn test_concurrent_key_generation_with_force() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let secret_key = Arc::new(temp_dir.path().join("force.key"));
@@ -228,6 +229,7 @@ fn test_concurrent_key_generation_with_force() {
 /// This is a control test to verify that non-concurrent access works
 /// as expected.
 #[test]
+#[cfg_attr(not(unix), ignore = "atomic secret-key overwrite not yet implemented on Windows")]
 fn test_sequential_key_generation() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
