@@ -1,4 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.14"
+# dependencies = [
+# ]
+# ///
+
+
+# Old shebang for Python: !/usr/bin/env python3
 """
 Utility script to discover and clean up minisign credential entries from macOS Keychain.
 
