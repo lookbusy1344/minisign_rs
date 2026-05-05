@@ -16,6 +16,8 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    thread::sleep,
+    time::Duration,
 };
 
 /// Options for key generation
@@ -500,6 +502,8 @@ fn write_keypair_files_with_overwrite(
         ));
     }
 
+    let _lock = acquire_force_overwrite_lock(secret_path)?;
+
     let secret_tmp = write_temp_file(secret_path, secret_contents.as_bytes(), Some(0o600))?;
 
     let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
@@ -572,6 +576,40 @@ fn write_keypair_files_with_overwrite(
             }
             Err(e)
         }
+    }
+}
+
+fn acquire_force_overwrite_lock(secret_path: &Path) -> Result<ForceOverwriteLockGuard> {
+    let lock_path = secret_path.with_file_name(format!(
+        ".{}.force.lock",
+        secret_path
+            .file_name()
+            .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned)
+            .to_string_lossy()
+    ));
+
+    loop {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(_) => return Ok(ForceOverwriteLockGuard { lock_path }),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                sleep(Duration::from_millis(10));
+            }
+            Err(e) => return Err(Error::file_write(&lock_path, e)),
+        }
+    }
+}
+
+struct ForceOverwriteLockGuard {
+    lock_path: PathBuf,
+}
+
+impl Drop for ForceOverwriteLockGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.lock_path);
     }
 }
 
