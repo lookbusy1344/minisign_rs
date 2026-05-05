@@ -75,6 +75,58 @@ fn test_parse_c_generated_unencrypted_secret_key() {
 }
 
 #[test]
+fn test_parse_c_generated_public_key_with_trailing_blank_lines_is_compatible() {
+    let contents = fs::read_to_string("tests/fixtures/keys/test.pub")
+        .expect("Failed to read test.pub fixture");
+    let compat_contents = format!("{contents}\n\n");
+
+    let pubkey =
+        PubkeyStruct::from_file_contents(&compat_contents).expect("Failed to parse public key");
+
+    assert_eq!(pubkey.keynum().as_bytes().len(), KEYNUM_BYTES);
+    assert_eq!(pubkey.public_key().as_bytes().len(), PUBLIC_KEY_BYTES);
+}
+
+#[test]
+fn test_parse_c_generated_public_key_with_trailing_data_is_compatible() {
+    let contents = fs::read_to_string("tests/fixtures/keys/test.pub")
+        .expect("Failed to read test.pub fixture");
+    let compat_contents = format!("{contents}extra trailing line\n");
+
+    let pubkey =
+        PubkeyStruct::from_file_contents(&compat_contents).expect("Failed to parse public key");
+
+    assert_eq!(pubkey.keynum().as_bytes().len(), KEYNUM_BYTES);
+    assert_eq!(pubkey.public_key().as_bytes().len(), PUBLIC_KEY_BYTES);
+}
+
+#[test]
+fn test_parse_c_generated_secret_key_with_trailing_blank_lines_is_compatible() {
+    let contents = fs::read_to_string("tests/fixtures/keys/test.key")
+        .expect("Failed to read test.key fixture");
+    let compat_contents = format!("{contents}\n\n");
+
+    let seckey =
+        SeckeyStruct::from_file_contents(&compat_contents).expect("Failed to parse secret key");
+
+    assert!(seckey.is_encrypted(), "Expected key to be encrypted");
+    assert_eq!(seckey.keynum().as_bytes().len(), KEYNUM_BYTES);
+}
+
+#[test]
+fn test_parse_c_generated_secret_key_with_trailing_data_is_compatible() {
+    let contents = fs::read_to_string("tests/fixtures/keys/test.key")
+        .expect("Failed to read test.key fixture");
+    let compat_contents = format!("{contents}extra trailing line\n");
+
+    let seckey =
+        SeckeyStruct::from_file_contents(&compat_contents).expect("Failed to parse secret key");
+
+    assert!(seckey.is_encrypted(), "Expected key to be encrypted");
+    assert_eq!(seckey.keynum().as_bytes().len(), KEYNUM_BYTES);
+}
+
+#[test]
 fn test_public_key_serialization_roundtrip() {
     // Load and parse C-generated public key
     let contents = fs::read_to_string("tests/fixtures/keys/test.pub")
@@ -378,7 +430,7 @@ fn test_scrypt_fallback_minimum_constants() {
 /// counterparts.
 #[test]
 fn test_scrypt_minimum_constants_are_valid_params() {
-    use minisign::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN, opslimit_memlimit_to_params};
+    use minisign::crypto::{opslimit_memlimit_to_params, SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
 
     // Exact-value pins (matching test_scrypt_fallback_minimum_constants, for regression detection)
     assert_eq!(SCRYPT_OPSLIMIT_MIN, 32_768);
@@ -709,14 +761,14 @@ fn test_opslimit_memlimit_to_params_invalid_multipliers() {
     // We'll use correct memlimit but wrong opslimit
     let memlimit = 10_240; // Gives N=10 with r=8
     let opslimit = 500; // Wrong! Should be 320
-    // These don't satisfy: opslimit = 4*N*r AND memlimit = 128*N*r
-    // Function should derive r from opslimit instead of returning error
+                        // These don't satisfy: opslimit = 4*N*r AND memlimit = 128*N*r
+                        // Function should derive r from opslimit instead of returning error
     let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
     // The function handles mismatched parameters by deriving r from opslimit
     assert!(result.is_ok());
     if let Ok((log_n, r, _p)) = result {
         assert_eq!(log_n, 3); // log2(10) truncates to 3
-        // r should be derived: 500 / (4 * 10) = 12.5, truncates to 12
+                              // r should be derived: 500 / (4 * 10) = 12.5, truncates to 12
         assert!(r != 8); // Should be different from standard r
     }
 }
@@ -942,11 +994,9 @@ fn test_credential_id_for_encrypted_key() {
     assert!(credential_id.chars().all(|c| c.is_ascii_hexdigit()));
 
     // Should be uppercase hex
-    assert!(
-        credential_id
-            .chars()
-            .all(|c| !c.is_ascii_lowercase() || !c.is_ascii_alphabetic())
-    );
+    assert!(credential_id
+        .chars()
+        .all(|c| !c.is_ascii_lowercase() || !c.is_ascii_alphabetic()));
 
     // Should NOT be all zeros (encrypted keynum is not zero)
     assert_ne!(credential_id, "0000000000000000");
