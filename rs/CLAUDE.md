@@ -14,6 +14,8 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - **ZERO unsafe code** — `#![forbid(unsafe_code)]` in lib and main. Prefer std safe equivalents over syscalls. Test-only exception: `unsafe { env::set_var(...) }` with `#[serial]` and `// SAFETY:` comment.
 - **Minimize dependencies** — check std and existing deps before adding a crate
 - **ZERO clippy warnings** (pedantic mode)
+- Run clippy with `--all-targets` so platform-specific test and bin code is checked too:
+  - `gtimeout 300 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic`
 - **TDD** — write tests before code
 - All secrets use `Zeroize` + `ZeroizeOnDrop`
 - No `.unwrap()`/`.expect()` in production paths; use `?`

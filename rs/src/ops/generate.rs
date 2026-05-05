@@ -13,7 +13,7 @@ use crate::{
 };
 use rand_core::RngCore;
 use std::{
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::Write,
     path::{Path, PathBuf},
     thread::sleep,
@@ -380,6 +380,8 @@ fn sibling_temp_path(path: &Path, suffix: &str) -> PathBuf {
 
 #[cfg(unix)]
 fn sync_parent_directory(path: &Path) -> Result<()> {
+    use std::fs::File;
+
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         let dir = File::open(parent).map_err(|e| Error::file_write(parent, e))?;
         dir.sync_all().map_err(|e| Error::file_write(parent, e))?;
@@ -388,6 +390,7 @@ fn sync_parent_directory(path: &Path) -> Result<()> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
 fn sync_parent_directory(_path: &Path) -> Result<()> {
     Ok(())
 }
