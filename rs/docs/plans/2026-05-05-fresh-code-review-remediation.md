@@ -69,6 +69,11 @@ Acceptance tests:
   preserved matched keypair semantics, not just file existence.
 - Full test suite and cross-binary tests remain green.
 
+Status: completed.
+Implemented in `src/ops/generate.rs` with transactional temp-file staging,
+rollback/restore handling, and a force-overwrite lock for concurrent writers.
+Regression coverage lives in `tests/unit/ops/generate.rs` and `tests/concurrent_access.rs`.
+
 ### CR-2026-05-05-2: Small-file bounded reads use metadata before unbounded read
 
 Severity: Medium-Low
@@ -104,6 +109,10 @@ Acceptance tests:
 
 - Existing oversized key/signature/password tests remain green.
 - New test demonstrates post-open/read-time size enforcement.
+
+Status: completed.
+Implemented in `src/ops/file_utils.rs` with a single-fd bounded reader and
+coverage in `tests/unit/ops/file_utils.rs`.
 
 ### CR-2026-05-05-3: Public and secret key file parsers ignore trailing lines
 
@@ -147,6 +156,10 @@ Acceptance tests:
   tested.
 - C/Rust behavior is either matched or the deliberate divergence is documented.
 
+Status: completed.
+Compatibility coverage lives in `tests/unit/keys.rs`, documenting the accepted
+trailing-line behavior.
+
 ### CR-2026-05-05-4: KDF parameter conversion is permissive for malformed inputs
 
 Severity: Low
@@ -185,6 +198,10 @@ Acceptance tests:
 - Standard production, weak-test, and known C fixture parameters still parse.
 - Malformed parameter pairs fail before `derive_key_with_params()`.
 
+Status: completed.
+Implemented in `src/crypto.rs` with exact-encoding validation and table coverage in
+`tests/unit/security_hardening.rs` and `tests/unit/keys.rs`.
+
 ## Implementation Order
 
 1. Transactional keypair generation tests and implementation.
@@ -197,3 +214,8 @@ Acceptance tests:
    - `gtimeout 300 cargo clippy --lib --bins --tests --all-features -- -D warnings -W clippy::pedantic`
    - Cross-binary tests when C minisign is available.
 
+## Completion
+
+All remediation items in this plan have been implemented and verified with the
+relevant test coverage, including the concurrent force-overwrite case and the full
+`cargo nextest run --no-default-features` pass.
