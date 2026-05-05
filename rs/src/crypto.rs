@@ -426,23 +426,24 @@ pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> Result<(u64, u64
 
 /// Convert libsodium-style opslimit/memlimit to scrypt parameters (`log_n`, r, p)
 ///
-/// The C minisign implementation uses libsodium's scrypt interface, which
-/// expresses work factors as `opslimit` and `memlimit`. These map to scrypt's
-/// native parameters via:
-/// - opslimit = `LIBSODIUM_OPSLIMIT_MULTIPLIER` * N * r
-/// - memlimit = `LIBSODIUM_MEMLIMIT_MULTIPLIER` * N * r
+/// minisign stores scrypt work factors as raw `opslimit` and `memlimit` values.
+/// Rust needs to recover the canonical `(log_n, r, p)` tuple from those values,
+/// but only exact minisign-compatible encodings are accepted here.
 ///
-/// # Algorithm
+/// Expected relationships:
+/// - `opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER * N * r`
+/// - `memlimit = LIBSODIUM_MEMLIMIT_MULTIPLIER * N * r`
 ///
-/// 1. Derives N from memlimit assuming standard r=8, p=1
-/// 2. Computes `log_n` via checked integer log2
-/// 3. Cross-validates against opslimit; falls back to deriving r from opslimit
-///    if they disagree (handles non-standard parameters)
+/// The accepted form is the standard minisign shape:
+/// - `r = SCRYPT_R`
+/// - `p = SCRYPT_P`
+/// - `N` must be a power of two
 ///
 /// # Errors
 ///
-/// Returns `Error::ScryptParamError` if N is zero, `log_n` overflows u8, or
-/// arithmetic overflow occurs.
+/// Returns `Error::ScryptParamError` if the stored limits are not an exact
+/// minisign-compatible pair, if `N` is zero or not a power of two, if `log_n`
+/// exceeds the policy cap, or if arithmetic overflows.
 pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
     let r = SCRYPT_R;
     let p = SCRYPT_P;
@@ -452,18 +453,26 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
         .checked_mul(u64::from(r))
         .ok_or_else(|| Error::ScryptParamError("overflow calculating divisor".into()))?;
 
-    let n = memlimit
-        .checked_div(divisor)
-        .ok_or_else(|| Error::ScryptParamError("division by zero".into()))?;
+    if !memlimit.is_multiple_of(divisor) {
+        return Err(Error::ScryptParamError(format!(
+            "memlimit {memlimit} is not an exact minisign KDF encoding"
+        )));
+    }
+
+    let n = memlimit / divisor;
 
     if n == 0 {
         return Err(Error::ScryptParamError("N cannot be zero".into()));
     }
 
-    let log_n = n
-        .checked_ilog2()
-        .and_then(|v| u8::try_from(v).ok())
-        .ok_or_else(|| Error::ScryptParamError("log_n out of valid range".into()))?;
+    if !n.is_power_of_two() {
+        return Err(Error::ScryptParamError(format!(
+            "memlimit-derived N {n} is not a power of two"
+        )));
+    }
+
+    let log_n = u8::try_from(n.trailing_zeros())
+        .map_err(|_| Error::ScryptParamError("log_n out of valid range".into()))?;
 
     if log_n > MAX_SCRYPT_LOG_N {
         return Err(Error::ScryptParamError(format!(
@@ -471,31 +480,31 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
         )));
     }
 
-    // Verify consistency with opslimit
-    let expected_opslimit = LIBSODIUM_OPSLIMIT_MULTIPLIER
+    let opslimit_divisor = LIBSODIUM_OPSLIMIT_MULTIPLIER
         .checked_mul(n)
-        .and_then(|v| v.checked_mul(u64::from(r)))
-        .ok_or_else(|| Error::ScryptParamError("overflow calculating expected opslimit".into()))?;
+        .ok_or_else(|| Error::ScryptParamError("overflow calculating derived r".into()))?;
 
-    if expected_opslimit != opslimit {
-        // Non-standard parameters: derive r from opslimit
-        // This handles keys created with non-standard KDF parameters by computing
-        // r from the stored opslimit. Fails explicitly if parameters are invalid.
-        let derived_r = opslimit
-            .checked_div(
-                LIBSODIUM_OPSLIMIT_MULTIPLIER
-                    .checked_mul(n)
-                    .ok_or_else(|| {
-                        Error::ScryptParamError("overflow calculating derived r".into())
-                    })?,
-            )
-            .and_then(|v| u32::try_from(v).ok())
-            .ok_or_else(|| {
-                Error::ScryptParamError(
-                    "failed to derive r from opslimit: overflow or invalid value".into(),
-                )
-            })?;
-        return Ok((log_n, derived_r, p));
+    if !opslimit.is_multiple_of(opslimit_divisor) {
+        return Err(Error::ScryptParamError(format!(
+            "opslimit {opslimit} is not an exact minisign KDF encoding"
+        )));
+    }
+
+    let derived_r = opslimit / opslimit_divisor;
+    if derived_r == 0 {
+        return Err(Error::ScryptParamError("derived r cannot be zero".into()));
+    }
+
+    let derived_r = u32::try_from(derived_r)
+        .map_err(|_| Error::ScryptParamError("derived r exceeds supported scrypt limits".into()))?;
+
+    ScryptParams::new(log_n, derived_r, p, 64)
+        .map_err(|e| Error::ScryptParamError(format!("invalid scrypt parameters: {e}")))?;
+
+    if derived_r != r {
+        return Err(Error::ScryptParamError(format!(
+            "unsupported non-standard scrypt parameter pair: r={derived_r}"
+        )));
     }
 
     Ok((log_n, r, p))

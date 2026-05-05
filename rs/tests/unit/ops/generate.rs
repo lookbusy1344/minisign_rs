@@ -462,8 +462,8 @@ fn test_force_pubkey_fail_preserves_secret_key() {
         .build();
     generate(&initial_options, None).expect("initial keypair generation should succeed");
 
-    let original_sk = fs::read_to_string(&sk_path).unwrap();
-    let original_pk = fs::read_to_string(&pk_path).unwrap();
+    let stored_secret_key_text = fs::read_to_string(&sk_path).unwrap();
+    let stored_public_key_text = fs::read_to_string(&pk_path).unwrap();
 
     #[cfg(debug_assertions)]
     let _guard = inject_commit_failure_before_public_rename();
@@ -478,19 +478,19 @@ fn test_force_pubkey_fail_preserves_secret_key() {
 
     assert!(result.is_err(), "forced regeneration should fail");
 
-    let current_sk = fs::read_to_string(&sk_path).unwrap();
-    let current_pk = fs::read_to_string(&pk_path).unwrap();
+    let restored_secret_key_text = fs::read_to_string(&sk_path).unwrap();
+    let restored_public_key_text = fs::read_to_string(&pk_path).unwrap();
 
-    assert_eq!(current_sk, original_sk);
-    assert_eq!(current_pk, original_pk);
+    assert_eq!(restored_secret_key_text, stored_secret_key_text);
+    assert_eq!(restored_public_key_text, stored_public_key_text);
 
-    let original_seckey = SeckeyStruct::from_file_contents(&original_sk).unwrap();
-    let current_seckey = SeckeyStruct::from_file_contents(&current_sk).unwrap();
-    let original_pubkey = PubkeyStruct::from_file_contents(&original_pk).unwrap();
-    let current_pubkey = PubkeyStruct::from_file_contents(&current_pk).unwrap();
+    let stored_seckey = SeckeyStruct::from_file_contents(&stored_secret_key_text).unwrap();
+    let restored_seckey = SeckeyStruct::from_file_contents(&restored_secret_key_text).unwrap();
+    let stored_pubkey = PubkeyStruct::from_file_contents(&stored_public_key_text).unwrap();
+    let restored_pubkey = PubkeyStruct::from_file_contents(&restored_public_key_text).unwrap();
 
-    assert_eq!(current_seckey.keynum(), original_seckey.keynum());
-    assert_eq!(current_pubkey.keynum(), original_pubkey.keynum());
+    assert_eq!(restored_seckey.keynum(), stored_seckey.keynum());
+    assert_eq!(restored_pubkey.keynum(), stored_pubkey.keynum());
 }
 
 /// With force=false, if pubkey write fails after a fresh secret key was

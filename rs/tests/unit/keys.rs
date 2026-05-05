@@ -681,7 +681,6 @@ fn test_opslimit_memlimit_to_params_zero_n() {
     let memlimit = 1;
     let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("N cannot be zero"));
 }
 
 #[test]
@@ -699,8 +698,8 @@ fn test_opslimit_memlimit_to_params_overflow() {
     assert!(
         err_msg.contains("policy")
             || err_msg.contains("exceeds")
-            || err_msg.contains("out of valid range"),
-        "Expected policy or range error, got: {err_msg}"
+            || err_msg.contains("exact minisign KDF encoding"),
+        "Expected policy or encoding error, got: {err_msg}"
     );
 }
 
@@ -729,12 +728,7 @@ fn test_opslimit_memlimit_to_params_non_power_of_two() {
     let opslimit = 32_000;
     let memlimit = 1_024_000;
     let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
-    assert!(result.is_ok());
-    let (log_n, r, p) = result.unwrap();
-    // log2(1000) ~= 9.96, should truncate to 9
-    assert_eq!(log_n, 9);
-    assert_eq!(r, 8);
-    assert_eq!(p, 1);
+    assert!(result.is_err());
 }
 
 #[test]
@@ -762,15 +756,8 @@ fn test_opslimit_memlimit_to_params_invalid_multipliers() {
     let memlimit = 10_240; // Gives N=10 with r=8
     let opslimit = 500; // Wrong! Should be 320
     // These don't satisfy: opslimit = 4*N*r AND memlimit = 128*N*r
-    // Function should derive r from opslimit instead of returning error
     let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
-    // The function handles mismatched parameters by deriving r from opslimit
-    assert!(result.is_ok());
-    if let Ok((log_n, r, _p)) = result {
-        assert_eq!(log_n, 3); // log2(10) truncates to 3
-        // r should be derived: 500 / (4 * 10) = 12.5, truncates to 12
-        assert!(r != 8); // Should be different from standard r
-    }
+    assert!(result.is_err());
 }
 
 #[test]
@@ -800,10 +787,9 @@ fn test_opslimit_memlimit_to_params_expected_opslimit_overflow() {
         let err_msg = e.to_string();
         assert!(
             err_msg.contains("overflow")
-                || err_msg.contains("out of valid range")
                 || err_msg.contains("policy")
-                || err_msg.contains("exceeds"),
-            "Expected overflow, range, or policy error, got: {err_msg}"
+                || err_msg.contains("exact minisign KDF encoding"),
+            "Expected overflow, policy, or encoding error, got: {err_msg}"
         );
     }
 }

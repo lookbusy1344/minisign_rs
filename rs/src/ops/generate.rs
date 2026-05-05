@@ -289,13 +289,21 @@ pub fn generate_with_log_n(
 
     let seckey_contents = seckey.to_file_contents(seckey_comment);
     let pubkey_contents = pubkey.to_file_contents(comment);
-    write_keypair_files(
-        options.secret_key_file,
-        options.public_key_file,
-        &seckey_contents,
-        &pubkey_contents,
-        force,
-    )?;
+    if force {
+        write_keypair_files_with_overwrite(
+            options.secret_key_file,
+            options.public_key_file,
+            &seckey_contents,
+            &pubkey_contents,
+        )?;
+    } else {
+        write_keypair_files_create_new(
+            options.secret_key_file,
+            options.public_key_file,
+            &seckey_contents,
+            &pubkey_contents,
+        )?;
+    }
 
     // Encode the public key for command-line usage
     let public_key_base64 = encode_base64(pubkey.to_bytes());
@@ -412,6 +420,7 @@ impl Drop for GenerateCommitFailureGuard {
 }
 
 #[cfg(debug_assertions)]
+#[must_use]
 pub fn inject_commit_failure_before_public_rename() -> GenerateCommitFailureGuard {
     TEST_COMMIT_FAILURE.with(|slot| slot.set(Some(TestCommitFailure::BeforePublicRename)));
     GenerateCommitFailureGuard
@@ -422,35 +431,20 @@ fn test_commit_failure() -> Option<TestCommitFailure> {
     TEST_COMMIT_FAILURE.with(std::cell::Cell::get)
 }
 
-fn write_keypair_files(
+fn write_keypair_files_create_new(
     secret_path: &Path,
     public_path: &Path,
     secret_contents: &str,
     public_contents: &str,
-    force: bool,
 ) -> Result<()> {
-    #[cfg(not(unix))]
-    if force && secret_path.exists() {
-        return Err(Error::Other(
-            "Overwriting an existing secret key (--force) is not yet supported on Windows. \
-             Delete the key file manually and retry without --force."
-                .into(),
-        ));
+    if secret_path.exists() {
+        return Err(Error::FileExists(secret_path.into()));
+    }
+    if public_path.exists() {
+        return Err(Error::FileExists(public_path.into()));
     }
 
-    if !force {
-        if secret_path.exists() {
-            return Err(Error::FileExists(secret_path.into()));
-        }
-        if public_path.exists() {
-            return Err(Error::FileExists(public_path.into()));
-        }
-    }
-
-    let secret_tmp = match write_temp_file(secret_path, secret_contents.as_bytes(), Some(0o600)) {
-        Ok(path) => path,
-        Err(e) => return Err(e),
-    };
+    let secret_tmp = write_temp_file(secret_path, secret_contents.as_bytes(), Some(0o600))?;
 
     let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
         Ok(path) => path,
@@ -460,7 +454,63 @@ fn write_keypair_files(
         }
     };
 
-    let secret_backup = if force && secret_path.exists() {
+    if let Err(e) = std::fs::hard_link(&secret_tmp, secret_path) {
+        let _ = std::fs::remove_file(&secret_tmp);
+        let _ = std::fs::remove_file(&public_tmp);
+        return Err(Error::file_write(secret_path, e));
+    }
+    if let Err(e) = sync_parent_directory(secret_path) {
+        let _ = std::fs::remove_file(secret_path);
+        let _ = std::fs::remove_file(&secret_tmp);
+        let _ = std::fs::remove_file(&public_tmp);
+        return Err(e);
+    }
+
+    if let Err(e) = std::fs::hard_link(&public_tmp, public_path) {
+        let _ = std::fs::remove_file(secret_path);
+        let _ = std::fs::remove_file(&secret_tmp);
+        let _ = std::fs::remove_file(&public_tmp);
+        return Err(Error::file_write(public_path, e));
+    }
+    if let Err(e) = sync_parent_directory(public_path) {
+        let _ = std::fs::remove_file(public_path);
+        let _ = std::fs::remove_file(secret_path);
+        let _ = std::fs::remove_file(&secret_tmp);
+        let _ = std::fs::remove_file(&public_tmp);
+        return Err(e);
+    }
+
+    let _ = std::fs::remove_file(&secret_tmp);
+    let _ = std::fs::remove_file(&public_tmp);
+    Ok(())
+}
+
+fn write_keypair_files_with_overwrite(
+    secret_path: &Path,
+    public_path: &Path,
+    secret_contents: &str,
+    public_contents: &str,
+) -> Result<()> {
+    #[cfg(not(unix))]
+    if secret_path.exists() {
+        return Err(Error::Other(
+            "Overwriting an existing secret key (--force) is not yet supported on Windows. \
+             Delete the key file manually and retry without --force."
+                .into(),
+        ));
+    }
+
+    let secret_tmp = write_temp_file(secret_path, secret_contents.as_bytes(), Some(0o600))?;
+
+    let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
+        Ok(path) => path,
+        Err(e) => {
+            let _ = std::fs::remove_file(&secret_tmp);
+            return Err(e);
+        }
+    };
+
+    let secret_backup = if secret_path.exists() {
         let backup = sibling_temp_path(secret_path, "bak");
         if let Err(e) = std::fs::rename(secret_path, &backup) {
             let _ = std::fs::remove_file(&secret_tmp);
@@ -478,7 +528,7 @@ fn write_keypair_files(
         None
     };
 
-    let public_backup = if force && public_path.exists() {
+    let public_backup = if public_path.exists() {
         let backup = sibling_temp_path(public_path, "bak");
         if let Err(e) = std::fs::rename(public_path, &backup) {
             let _ = std::fs::remove_file(&secret_tmp);
@@ -534,20 +584,20 @@ fn commit_keypair_files(
     public_backup: Option<&Path>,
 ) -> Result<()> {
     #[cfg(debug_assertions)]
-    if let Some(value) = test_commit_failure() {
-        if value == TestCommitFailure::BeforePublicRename {
-            return Err(Error::Other("injected public key commit failure".into()));
-        }
+    if let Some(value) = test_commit_failure()
+        && value == TestCommitFailure::BeforePublicRename
+    {
+        return Err(Error::Other("injected public key commit failure".into()));
     }
 
     std::fs::rename(public_tmp, public_path).map_err(|e| Error::file_write(public_path, e))?;
     sync_parent_directory(public_path)?;
 
     #[cfg(debug_assertions)]
-    if let Some(value) = test_commit_failure() {
-        if value == TestCommitFailure::BeforeSecretRename {
-            return Err(Error::Other("injected secret key commit failure".into()));
-        }
+    if let Some(value) = test_commit_failure()
+        && value == TestCommitFailure::BeforeSecretRename
+    {
+        return Err(Error::Other("injected secret key commit failure".into()));
     }
 
     if let Err(e) = std::fs::rename(secret_tmp, secret_path) {

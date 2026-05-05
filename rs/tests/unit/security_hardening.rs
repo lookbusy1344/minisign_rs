@@ -162,50 +162,34 @@ fn h2_with_global_signature_rejects_invalid_chars() {
 }
 
 // ============================================================================
-// H3: opslimit_memlimit_to_params() must not silently fallback
+// H3: opslimit_memlimit_to_params() must reject malformed KDF encodings
 // ============================================================================
 
 #[test]
-fn h3_kdf_params_error_on_derivation_overflow() {
-    // Craft opslimit that causes overflow during r derivation
-    // Using log_n=20 (n=1048576), the multiplier is 32768
-    // opslimit = 32768 * n * r, but if opslimit is malformed to cause overflow
+fn h3_kdf_params_reject_malformed_pairs() {
+    let cases = [
+        (
+            "memlimit not divisible by the standard divisor",
+            33_554_432u64,
+            1_073_741_825u64,
+        ),
+        (
+            "memlimit does not encode a power-of-two N",
+            32_000u64,
+            1_024_000u64,
+        ),
+        ("opslimit would derive a zero r", 0u64, 1_073_741_824u64),
+        (
+            "opslimit overflows the supported range",
+            u64::MAX,
+            1_073_741_824u64,
+        ),
+    ];
 
-    let memlimit = 1_073_741_824u64; // Standard for log_n=20
-
-    // Craft opslimit that would require u64 overflow to derive r
-    let malicious_opslimit = u64::MAX; // Will cause overflow in derivation
-
-    let result = opslimit_memlimit_to_params(malicious_opslimit, memlimit);
-
-    // Should return an error, NOT silently fall back to default r
-    assert!(
-        result.is_err(),
-        "opslimit_memlimit_to_params should error on derivation overflow, not fallback"
-    );
-}
-
-#[test]
-fn h3_kdf_params_error_on_u32_truncation() {
-    // Verify H3 fix: non-standard opslimit must yield a deterministically derived r,
-    // not a silent fallback default.
-    //
-    // For memlimit=16_777_216 (log_n=14, n=16_384):
-    //   expected_opslimit = 4 * 16_384 * 8 = 524_288
-    //   Since 999_999_999_999 ≠ 524_288, the non-standard branch fires:
-    //   derived_r = 999_999_999_999 / (4 * 16_384) = 15_258_789  (fits in u32)
-    let memlimit = 16_777_216u64;
-    let non_standard_opslimit = 999_999_999_999u64;
-
-    let result = opslimit_memlimit_to_params(non_standard_opslimit, memlimit);
-    let (log_n, derived_r, p) = result.expect("should succeed: derived_r fits in u32");
-
-    assert_eq!(log_n, 14, "log_n must be derived from memlimit");
-    assert_eq!(
-        derived_r, 15_258_789,
-        "r must be exactly derived from opslimit"
-    );
-    assert_eq!(p, 1, "p must be standard SCRYPT_P");
+    for (case, opslimit, memlimit) in cases {
+        let result = opslimit_memlimit_to_params(opslimit, memlimit);
+        assert!(result.is_err(), "{case}");
+    }
 }
 
 // ============================================================================
