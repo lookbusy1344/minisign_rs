@@ -4,7 +4,10 @@ use minisign::ops::file_utils::{write_public_key_file, write_secret_key_file};
 use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    ops::generate::{GenerateOptions, ensure_parent_directory, generate, generate_with_log_n},
+    ops::generate::{
+        ensure_parent_directory, generate, generate_with_log_n,
+        inject_commit_failure_before_public_rename, GenerateOptions,
+    },
 };
 use std::fs;
 use tempfile::TempDir;
@@ -136,7 +139,10 @@ fn test_generate_file_exists_without_force() {
 }
 
 #[test]
-#[cfg_attr(not(unix), ignore = "atomic secret-key overwrite not yet implemented on Windows")]
+#[cfg_attr(
+    not(unix),
+    ignore = "atomic secret-key overwrite not yet implemented on Windows"
+)]
 fn test_generate_force_overwrite() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -441,39 +447,50 @@ fn test_write_public_key_file_force_overwrites() {
 
 // --- CR-5 regression tests: partial-failure force semantics ---
 
-/// With force=true, if pubkey write fails after the secret key has been
-/// written, the secret key must NOT be deleted. Destroying it would cause
-/// total key loss since the original was already overwritten.
+/// With force=true, if the commit point fails, the original keypair must remain
+/// usable and matched. This checks the transaction preserves the pre-existing
+/// secret/public pair rather than leaving a split state.
 #[test]
+#[cfg(debug_assertions)]
 fn test_force_pubkey_fail_preserves_secret_key() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
 
-    // Use a directory as the pubkey destination — guaranteed to cause a write
-    // failure on all platforms without requiring special permissions.
-    let pk_dir = temp_dir.path().join("pk_is_a_dir");
-    fs::create_dir(&pk_dir).unwrap();
-
-    // Write a pre-existing secret key that will be overwritten in force mode
-    fs::write(&sk_path, "existing secret key").unwrap();
-
-    let options = GenerateOptions::builder(sk_path.as_path(), pk_dir.as_path())
-        .force(true)
+    let initial_options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
         .no_password(true)
         .build();
+    generate(&initial_options, None).expect("initial keypair generation should succeed");
 
-    let result = generate(&options, None);
-    assert!(
-        result.is_err(),
-        "generate must fail when pubkey destination is a directory"
+    let original_sk = fs::read_to_string(&sk_path).unwrap();
+    let original_pk = fs::read_to_string(&pk_path).unwrap();
+
+    #[cfg(debug_assertions)]
+    let _guard = inject_commit_failure_before_public_rename();
+
+    let result = generate(
+        &GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+            .force(true)
+            .no_password(true)
+            .build(),
+        None,
     );
 
-    // The secret key file must still exist — deleting it here would cause
-    // irrecoverable key loss (the original was already overwritten).
-    assert!(
-        sk_path.exists(),
-        "secret key must not be deleted on pubkey write failure in force mode"
-    );
+    assert!(result.is_err(), "forced regeneration should fail");
+
+    let current_sk = fs::read_to_string(&sk_path).unwrap();
+    let current_pk = fs::read_to_string(&pk_path).unwrap();
+
+    assert_eq!(current_sk, original_sk);
+    assert_eq!(current_pk, original_pk);
+
+    let original_seckey = SeckeyStruct::from_file_contents(&original_sk).unwrap();
+    let current_seckey = SeckeyStruct::from_file_contents(&current_sk).unwrap();
+    let original_pubkey = PubkeyStruct::from_file_contents(&original_pk).unwrap();
+    let current_pubkey = PubkeyStruct::from_file_contents(&current_pk).unwrap();
+
+    assert_eq!(current_seckey.keynum(), original_seckey.keynum());
+    assert_eq!(current_pubkey.keynum(), original_pubkey.keynum());
 }
 
 /// With force=false, if pubkey write fails after a fresh secret key was

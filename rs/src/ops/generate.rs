@@ -2,17 +2,21 @@
 //!
 //! This module implements keypair generation for minisign.
 
-use super::file_utils::{write_public_key_file, write_secret_key_file};
 use super::{EncryptionMode, OverwritePolicy};
 use crate::{
-    Result,
     constants::SCRYPT_LOG_N,
     crypto::{calculate_kdf_params, generate_keypair},
     errors::Error,
     formats::encode_base64,
     keys::{PubkeyStruct, SeckeyStruct},
+    Result,
 };
-use std::path::{Path, PathBuf};
+use rand_core::RngCore;
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 /// Options for key generation
 #[derive(Debug, Clone)]
@@ -284,19 +288,14 @@ pub fn generate_with_log_n(
     }
 
     let seckey_contents = seckey.to_file_contents(seckey_comment);
-    write_secret_key_file(options.secret_key_file, &seckey_contents, force)?;
-
-    // Write the public key file. On failure, clean up only if we created the secret
-    // key fresh (non-force mode). In force mode the pre-existing secret key was
-    // already overwritten and cannot be recovered — deleting it here would cause
-    // irrecoverable key loss.
     let pubkey_contents = pubkey.to_file_contents(comment);
-    if let Err(e) = write_public_key_file(options.public_key_file, &pubkey_contents, force) {
-        if !force {
-            let _ = std::fs::remove_file(options.secret_key_file);
-        }
-        return Err(e);
-    }
+    write_keypair_files(
+        options.secret_key_file,
+        options.public_key_file,
+        &seckey_contents,
+        &pubkey_contents,
+        force,
+    )?;
 
     // Encode the public key for command-line usage
     let public_key_base64 = encode_base64(pubkey.to_bytes());
@@ -324,5 +323,251 @@ pub fn ensure_parent_directory(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent().filter(|p| !p.exists()) {
         std::fs::create_dir_all(parent).map_err(|e| Error::file_write(parent, e))?;
     }
+    Ok(())
+}
+
+fn write_temp_file(path: &Path, contents: &[u8], unix_mode: Option<u32>) -> Result<PathBuf> {
+    #[cfg(not(unix))]
+    let _ = unix_mode;
+
+    let tmp_path = sibling_temp_path(path, "tmp");
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        if let Some(mode) = unix_mode {
+            options.mode(mode);
+        }
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+
+    let mut file = options
+        .open(&tmp_path)
+        .map_err(|e| Error::file_write(&tmp_path, e))?;
+    file.write_all(contents)
+        .map_err(|e| Error::file_write(&tmp_path, e))?;
+    file.sync_all()
+        .map_err(|e| Error::file_write(&tmp_path, e))?;
+    Ok(tmp_path)
+}
+
+fn sibling_temp_path(path: &Path, suffix: &str) -> PathBuf {
+    let dir = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut nonce_bytes = [0u8; 8];
+    rand_core::OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = u64::from_le_bytes(nonce_bytes);
+    let name = path
+        .file_name()
+        .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned);
+    let name = name.to_string_lossy();
+    dir.join(format!(".{name}.{nonce:016x}.{suffix}"))
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        let dir = File::open(parent).map_err(|e| Error::file_write(parent, e))?;
+        dir.sync_all().map_err(|e| Error::file_write(parent, e))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(debug_assertions))]
+fn test_commit_failure() -> Option<TestCommitFailure> {
+    None
+}
+
+#[cfg(debug_assertions)]
+thread_local! {
+    static TEST_COMMIT_FAILURE: std::cell::Cell<Option<TestCommitFailure>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TestCommitFailure {
+    BeforePublicRename,
+    BeforeSecretRename,
+}
+
+#[cfg(debug_assertions)]
+pub struct GenerateCommitFailureGuard;
+
+#[cfg(debug_assertions)]
+impl Drop for GenerateCommitFailureGuard {
+    fn drop(&mut self) {
+        TEST_COMMIT_FAILURE.with(|slot| slot.set(None));
+    }
+}
+
+#[cfg(debug_assertions)]
+pub fn inject_commit_failure_before_public_rename() -> GenerateCommitFailureGuard {
+    TEST_COMMIT_FAILURE.with(|slot| slot.set(Some(TestCommitFailure::BeforePublicRename)));
+    GenerateCommitFailureGuard
+}
+
+#[cfg(debug_assertions)]
+fn test_commit_failure() -> Option<TestCommitFailure> {
+    TEST_COMMIT_FAILURE.with(std::cell::Cell::get)
+}
+
+fn write_keypair_files(
+    secret_path: &Path,
+    public_path: &Path,
+    secret_contents: &str,
+    public_contents: &str,
+    force: bool,
+) -> Result<()> {
+    #[cfg(not(unix))]
+    if force && secret_path.exists() {
+        return Err(Error::Other(
+            "Overwriting an existing secret key (--force) is not yet supported on Windows. \
+             Delete the key file manually and retry without --force."
+                .into(),
+        ));
+    }
+
+    if !force {
+        if secret_path.exists() {
+            return Err(Error::FileExists(secret_path.into()));
+        }
+        if public_path.exists() {
+            return Err(Error::FileExists(public_path.into()));
+        }
+    }
+
+    let secret_tmp = match write_temp_file(secret_path, secret_contents.as_bytes(), Some(0o600)) {
+        Ok(path) => path,
+        Err(e) => return Err(e),
+    };
+
+    let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
+        Ok(path) => path,
+        Err(e) => {
+            let _ = std::fs::remove_file(&secret_tmp);
+            return Err(e);
+        }
+    };
+
+    let secret_backup = if force && secret_path.exists() {
+        let backup = sibling_temp_path(secret_path, "bak");
+        if let Err(e) = std::fs::rename(secret_path, &backup) {
+            let _ = std::fs::remove_file(&secret_tmp);
+            let _ = std::fs::remove_file(&public_tmp);
+            return Err(Error::file_write(secret_path, e));
+        }
+        if let Err(e) = sync_parent_directory(secret_path) {
+            let _ = std::fs::remove_file(&secret_tmp);
+            let _ = std::fs::remove_file(&public_tmp);
+            let _ = std::fs::rename(&backup, secret_path);
+            return Err(e);
+        }
+        Some(backup)
+    } else {
+        None
+    };
+
+    let public_backup = if force && public_path.exists() {
+        let backup = sibling_temp_path(public_path, "bak");
+        if let Err(e) = std::fs::rename(public_path, &backup) {
+            let _ = std::fs::remove_file(&secret_tmp);
+            let _ = std::fs::remove_file(&public_tmp);
+            if let Some(backup) = secret_backup.as_ref() {
+                let _ = std::fs::rename(backup, secret_path);
+            }
+            return Err(Error::file_write(public_path, e));
+        }
+        if let Err(e) = sync_parent_directory(public_path) {
+            let _ = std::fs::remove_file(&secret_tmp);
+            let _ = std::fs::remove_file(&public_tmp);
+            let _ = std::fs::rename(&backup, public_path);
+            if let Some(backup) = secret_backup.as_ref() {
+                let _ = std::fs::rename(backup, secret_path);
+            }
+            return Err(e);
+        }
+        Some(backup)
+    } else {
+        None
+    };
+
+    match commit_keypair_files(
+        secret_path,
+        public_path,
+        &secret_tmp,
+        &public_tmp,
+        secret_backup.as_deref(),
+        public_backup.as_deref(),
+    ) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&secret_tmp);
+            let _ = std::fs::remove_file(&public_tmp);
+            if let Some(backup) = secret_backup.as_ref() {
+                let _ = std::fs::rename(backup, secret_path);
+            }
+            if let Some(backup) = public_backup.as_ref() {
+                let _ = std::fs::rename(backup, public_path);
+            }
+            Err(e)
+        }
+    }
+}
+
+fn commit_keypair_files(
+    secret_path: &Path,
+    public_path: &Path,
+    secret_tmp: &Path,
+    public_tmp: &Path,
+    secret_backup: Option<&Path>,
+    public_backup: Option<&Path>,
+) -> Result<()> {
+    #[cfg(debug_assertions)]
+    if let Some(value) = test_commit_failure() {
+        if value == TestCommitFailure::BeforePublicRename {
+            return Err(Error::Other("injected public key commit failure".into()));
+        }
+    }
+
+    std::fs::rename(public_tmp, public_path).map_err(|e| Error::file_write(public_path, e))?;
+    sync_parent_directory(public_path)?;
+
+    #[cfg(debug_assertions)]
+    if let Some(value) = test_commit_failure() {
+        if value == TestCommitFailure::BeforeSecretRename {
+            return Err(Error::Other("injected secret key commit failure".into()));
+        }
+    }
+
+    if let Err(e) = std::fs::rename(secret_tmp, secret_path) {
+        let _ = std::fs::remove_file(public_path);
+        if let Some(backup) = public_backup {
+            let _ = std::fs::rename(backup, public_path);
+        }
+        if let Some(backup) = secret_backup {
+            let _ = std::fs::rename(backup, secret_path);
+        }
+        return Err(Error::file_write(secret_path, e));
+    }
+    sync_parent_directory(secret_path)?;
+
+    if let Some(backup) = secret_backup {
+        let _ = std::fs::remove_file(backup);
+    }
+    if let Some(backup) = public_backup {
+        let _ = std::fs::remove_file(backup);
+    }
+
     Ok(())
 }
