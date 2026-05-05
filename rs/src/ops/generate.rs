@@ -17,8 +17,12 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     thread::sleep,
-    time::Duration,
+    time::{Duration, Instant},
 };
+
+const FORCE_OVERWRITE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+const FORCE_OVERWRITE_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Options for key generation
 #[derive(Debug, Clone)]
@@ -405,6 +409,10 @@ thread_local! {
     static TEST_COMMIT_FAILURE: std::cell::Cell<Option<TestCommitFailure>> = const {
         std::cell::Cell::new(None)
     };
+
+    static TEST_FORCE_OVERWRITE_LOCK_TIMEOUT: std::cell::Cell<Option<Duration>> = const {
+        std::cell::Cell::new(None)
+    };
 }
 
 #[cfg_attr(not(debug_assertions), allow(dead_code))]
@@ -425,9 +433,35 @@ impl Drop for GenerateCommitFailureGuard {
 }
 
 #[cfg(debug_assertions)]
+pub struct ForceOverwriteLockTimeoutGuard;
+
+#[cfg(debug_assertions)]
+impl Drop for ForceOverwriteLockTimeoutGuard {
+    fn drop(&mut self) {
+        TEST_FORCE_OVERWRITE_LOCK_TIMEOUT.with(|slot| slot.set(None));
+    }
+}
+
+#[cfg(debug_assertions)]
+#[must_use]
+pub fn set_force_overwrite_lock_timeout_for_tests(
+    timeout: Duration,
+) -> ForceOverwriteLockTimeoutGuard {
+    TEST_FORCE_OVERWRITE_LOCK_TIMEOUT.with(|slot| slot.set(Some(timeout)));
+    ForceOverwriteLockTimeoutGuard
+}
+
+#[cfg(debug_assertions)]
 #[must_use]
 pub fn inject_commit_failure_before_public_rename() -> GenerateCommitFailureGuard {
     TEST_COMMIT_FAILURE.with(|slot| slot.set(Some(TestCommitFailure::BeforePublicRename)));
+    GenerateCommitFailureGuard
+}
+
+#[cfg(debug_assertions)]
+#[must_use]
+pub fn inject_commit_failure_before_secret_rename() -> GenerateCommitFailureGuard {
+    TEST_COMMIT_FAILURE.with(|slot| slot.set(Some(TestCommitFailure::BeforeSecretRename)));
     GenerateCommitFailureGuard
 }
 
@@ -436,12 +470,27 @@ fn test_commit_failure() -> Option<TestCommitFailure> {
     TEST_COMMIT_FAILURE.with(std::cell::Cell::get)
 }
 
+#[cfg(debug_assertions)]
+fn force_overwrite_lock_timeout() -> Duration {
+    TEST_FORCE_OVERWRITE_LOCK_TIMEOUT
+        .with(std::cell::Cell::get)
+        .unwrap_or(FORCE_OVERWRITE_LOCK_TIMEOUT)
+}
+
+#[cfg(not(debug_assertions))]
+const fn force_overwrite_lock_timeout() -> Duration {
+    FORCE_OVERWRITE_LOCK_TIMEOUT
+}
+
 fn write_keypair_files_create_new(
     secret_path: &Path,
     public_path: &Path,
     secret_contents: &str,
     public_contents: &str,
 ) -> Result<()> {
+    // These checks are user-facing diagnostics only. The load-bearing
+    // no-overwrite guarantee comes from `hard_link` failing if the destination
+    // appears between this check and the commit point.
     if secret_path.exists() {
         return Err(Error::FileExists(secret_path.into()));
     }
@@ -559,25 +608,27 @@ fn write_keypair_files_with_overwrite(
         None
     };
 
-    match commit_keypair_files(
-        secret_path,
-        public_path,
-        &secret_tmp,
-        &public_tmp,
-        secret_backup.as_deref(),
-        public_backup.as_deref(),
-    ) {
-        Ok(()) => Ok(()),
+    match commit_keypair_files(secret_path, public_path, &secret_tmp, &public_tmp) {
+        Ok(()) => {
+            if let Some(backup) = secret_backup {
+                let _ = std::fs::remove_file(backup);
+            }
+            if let Some(backup) = public_backup {
+                let _ = std::fs::remove_file(backup);
+            }
+            Ok(())
+        }
         Err(e) => {
             let _ = std::fs::remove_file(&secret_tmp);
             let _ = std::fs::remove_file(&public_tmp);
-            if let Some(backup) = secret_backup.as_ref() {
-                let _ = std::fs::rename(backup, secret_path);
-            }
-            if let Some(backup) = public_backup.as_ref() {
-                let _ = std::fs::rename(backup, public_path);
-            }
-            Err(e)
+            rollback_keypair_commit(
+                secret_path,
+                public_path,
+                secret_backup.as_deref(),
+                public_backup.as_deref(),
+                e.stage,
+            );
+            Err(e.source)
         }
     }
 }
@@ -591,6 +642,7 @@ fn acquire_force_overwrite_lock(secret_path: &Path) -> Result<ForceOverwriteLock
             .to_string_lossy()
     ));
 
+    let started_at = Instant::now();
     loop {
         match OpenOptions::new()
             .write(true)
@@ -599,7 +651,13 @@ fn acquire_force_overwrite_lock(secret_path: &Path) -> Result<ForceOverwriteLock
         {
             Ok(_) => return Ok(ForceOverwriteLockGuard { lock_path }),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                sleep(Duration::from_millis(10));
+                if started_at.elapsed() >= force_overwrite_lock_timeout() {
+                    return Err(Error::Other(format!(
+                        "Timed out waiting for force-overwrite lock: {}",
+                        lock_path.display()
+                    )));
+                }
+                sleep(FORCE_OVERWRITE_LOCK_POLL_INTERVAL);
             }
             Err(e) => return Err(Error::file_write(&lock_path, e)),
         }
@@ -616,49 +674,92 @@ impl Drop for ForceOverwriteLockGuard {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KeypairCommitStage {
+    Started,
+    PublicRenamed,
+    SecretRenamed,
+}
+
+#[derive(Debug)]
+struct CommitKeypairFilesError {
+    source: Error,
+    stage: KeypairCommitStage,
+}
+
+impl CommitKeypairFilesError {
+    const fn new(source: Error, stage: KeypairCommitStage) -> Self {
+        Self { source, stage }
+    }
+}
+
+fn rollback_keypair_commit(
+    secret_path: &Path,
+    public_path: &Path,
+    secret_backup: Option<&Path>,
+    public_backup: Option<&Path>,
+    stage: KeypairCommitStage,
+) {
+    if stage == KeypairCommitStage::SecretRenamed {
+        let _ = std::fs::remove_file(secret_path);
+    }
+    if matches!(
+        stage,
+        KeypairCommitStage::PublicRenamed | KeypairCommitStage::SecretRenamed
+    ) {
+        let _ = std::fs::remove_file(public_path);
+    }
+    if let Some(backup) = secret_backup {
+        let _ = std::fs::rename(backup, secret_path);
+    }
+    if let Some(backup) = public_backup {
+        let _ = std::fs::rename(backup, public_path);
+    }
+}
+
 fn commit_keypair_files(
     secret_path: &Path,
     public_path: &Path,
     secret_tmp: &Path,
     public_tmp: &Path,
-    secret_backup: Option<&Path>,
-    public_backup: Option<&Path>,
-) -> Result<()> {
+) -> std::result::Result<(), CommitKeypairFilesError> {
     #[cfg(debug_assertions)]
     if let Some(value) = test_commit_failure()
         && value == TestCommitFailure::BeforePublicRename
     {
-        return Err(Error::Other("injected public key commit failure".into()));
+        return Err(CommitKeypairFilesError::new(
+            Error::Other("injected public key commit failure".into()),
+            KeypairCommitStage::Started,
+        ));
     }
 
-    std::fs::rename(public_tmp, public_path).map_err(|e| Error::file_write(public_path, e))?;
-    sync_parent_directory(public_path)?;
+    std::fs::rename(public_tmp, public_path).map_err(|e| {
+        CommitKeypairFilesError::new(
+            Error::file_write(public_path, e),
+            KeypairCommitStage::Started,
+        )
+    })?;
+    sync_parent_directory(public_path)
+        .map_err(|e| CommitKeypairFilesError::new(e, KeypairCommitStage::PublicRenamed))?;
 
     #[cfg(debug_assertions)]
     if let Some(value) = test_commit_failure()
         && value == TestCommitFailure::BeforeSecretRename
     {
-        return Err(Error::Other("injected secret key commit failure".into()));
+        return Err(CommitKeypairFilesError::new(
+            Error::Other("injected secret key commit failure".into()),
+            KeypairCommitStage::PublicRenamed,
+        ));
     }
 
-    if let Err(e) = std::fs::rename(secret_tmp, secret_path) {
-        let _ = std::fs::remove_file(public_path);
-        if let Some(backup) = public_backup {
-            let _ = std::fs::rename(backup, public_path);
-        }
-        if let Some(backup) = secret_backup {
-            let _ = std::fs::rename(backup, secret_path);
-        }
-        return Err(Error::file_write(secret_path, e));
-    }
-    sync_parent_directory(secret_path)?;
-
-    if let Some(backup) = secret_backup {
-        let _ = std::fs::remove_file(backup);
-    }
-    if let Some(backup) = public_backup {
-        let _ = std::fs::remove_file(backup);
-    }
+    std::fs::rename(secret_tmp, secret_path).map_err(|e| {
+        CommitKeypairFilesError::new(
+            Error::file_write(secret_path, e),
+            KeypairCommitStage::PublicRenamed,
+        )
+    })?;
+    sync_parent_directory(secret_path)
+        .map_err(|e| CommitKeypairFilesError::new(e, KeypairCommitStage::SecretRenamed))?;
 
     Ok(())
 }

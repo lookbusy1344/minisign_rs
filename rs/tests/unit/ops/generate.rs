@@ -6,10 +6,12 @@ use minisign::{
     keys::{PubkeyStruct, SeckeyStruct},
     ops::generate::{
         GenerateOptions, ensure_parent_directory, generate, generate_with_log_n,
-        inject_commit_failure_before_public_rename,
+        inject_commit_failure_before_public_rename, inject_commit_failure_before_secret_rename,
+        set_force_overwrite_lock_timeout_for_tests,
     },
 };
 use std::fs;
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 #[test]
@@ -491,6 +493,92 @@ fn test_force_pubkey_fail_preserves_secret_key() {
 
     assert_eq!(restored_seckey.keynum(), stored_seckey.keynum());
     assert_eq!(restored_pubkey.keynum(), stored_pubkey.keynum());
+}
+
+/// With force=true, if the public key has been committed but the secret key
+/// commit fails, the original keypair must be restored as a matched pair.
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_secret_key_fail_restores_keypair() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let initial_options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .no_password(true)
+        .build();
+    generate(&initial_options, None).expect("initial keypair generation should succeed");
+
+    let stored_secret_key_text = fs::read_to_string(&sk_path).unwrap();
+    let stored_public_key_text = fs::read_to_string(&pk_path).unwrap();
+
+    let _guard = inject_commit_failure_before_secret_rename();
+
+    let result = generate(
+        &GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+            .force(true)
+            .no_password(true)
+            .build(),
+        None,
+    );
+
+    assert!(result.is_err(), "forced regeneration should fail");
+    assert_eq!(
+        fs::read_to_string(&sk_path).unwrap(),
+        stored_secret_key_text
+    );
+    assert_eq!(
+        fs::read_to_string(&pk_path).unwrap(),
+        stored_public_key_text
+    );
+
+    let stored_seckey = SeckeyStruct::from_file_contents(&stored_secret_key_text).unwrap();
+    let stored_pubkey = PubkeyStruct::from_file_contents(&stored_public_key_text).unwrap();
+    let restored_seckey =
+        SeckeyStruct::from_file_contents(&fs::read_to_string(&sk_path).unwrap()).unwrap();
+    let restored_pubkey =
+        PubkeyStruct::from_file_contents(&fs::read_to_string(&pk_path).unwrap()).unwrap();
+
+    assert_eq!(restored_seckey.keynum(), stored_seckey.keynum());
+    assert_eq!(restored_pubkey.keynum(), stored_pubkey.keynum());
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_overwrite_stale_lock_times_out() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let lock_path = temp_dir.path().join(".test.key.force.lock");
+
+    let initial_options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .no_password(true)
+        .build();
+    generate(&initial_options, None).expect("initial keypair generation should succeed");
+    fs::write(&lock_path, "stale lock").unwrap();
+    let _timeout_guard = set_force_overwrite_lock_timeout_for_tests(Duration::from_millis(100));
+
+    let started_at = Instant::now();
+    let result = generate(
+        &GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+            .force(true)
+            .no_password(true)
+            .build(),
+        None,
+    );
+
+    assert!(
+        result.is_err(),
+        "stale lock should fail instead of blocking"
+    );
+    assert!(
+        started_at.elapsed().as_secs() < 1,
+        "debug lock timeout should keep the regression test fast"
+    );
+    assert!(
+        lock_path.exists(),
+        "stale lock should not be removed by a non-owner"
+    );
 }
 
 /// With force=false, if pubkey write fails after a fresh secret key was

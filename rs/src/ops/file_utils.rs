@@ -102,7 +102,8 @@ pub fn read_bounded_string_from_reader<R: Read>(
         .take(max_bytes.saturating_add(1))
         .read_to_end(&mut buf)
         .map_err(|e| Error::file_read(path, e))?;
-    if buf.len() as u64 > max_bytes {
+    let max_bytes_usize = usize::try_from(max_bytes).unwrap_or(usize::MAX);
+    if buf.len() > max_bytes_usize {
         return Err(Error::Other(format!(
             "File too large: {} bytes exceeds maximum {max_bytes} bytes",
             buf.len()
