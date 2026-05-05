@@ -400,6 +400,7 @@ fn sync_parent_directory(_path: &Path) -> Result<()> {
 }
 
 #[cfg(not(debug_assertions))]
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
 fn test_commit_failure() -> Option<TestCommitFailure> {
     None
 }
