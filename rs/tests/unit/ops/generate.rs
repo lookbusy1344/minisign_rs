@@ -5,8 +5,8 @@ use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
     ops::generate::{
-        ensure_parent_directory, generate, generate_with_log_n,
-        inject_commit_failure_before_public_rename, GenerateOptions,
+        GenerateOptions, ensure_parent_directory, generate, generate_with_log_n,
+        inject_commit_failure_before_public_rename,
     },
 };
 use std::fs;

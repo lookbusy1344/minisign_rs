@@ -430,7 +430,7 @@ fn test_scrypt_fallback_minimum_constants() {
 /// counterparts.
 #[test]
 fn test_scrypt_minimum_constants_are_valid_params() {
-    use minisign::crypto::{opslimit_memlimit_to_params, SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
+    use minisign::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN, opslimit_memlimit_to_params};
 
     // Exact-value pins (matching test_scrypt_fallback_minimum_constants, for regression detection)
     assert_eq!(SCRYPT_OPSLIMIT_MIN, 32_768);
@@ -761,14 +761,14 @@ fn test_opslimit_memlimit_to_params_invalid_multipliers() {
     // We'll use correct memlimit but wrong opslimit
     let memlimit = 10_240; // Gives N=10 with r=8
     let opslimit = 500; // Wrong! Should be 320
-                        // These don't satisfy: opslimit = 4*N*r AND memlimit = 128*N*r
-                        // Function should derive r from opslimit instead of returning error
+    // These don't satisfy: opslimit = 4*N*r AND memlimit = 128*N*r
+    // Function should derive r from opslimit instead of returning error
     let result = SeckeyStruct::opslimit_memlimit_to_params(opslimit, memlimit);
     // The function handles mismatched parameters by deriving r from opslimit
     assert!(result.is_ok());
     if let Ok((log_n, r, _p)) = result {
         assert_eq!(log_n, 3); // log2(10) truncates to 3
-                              // r should be derived: 500 / (4 * 10) = 12.5, truncates to 12
+        // r should be derived: 500 / (4 * 10) = 12.5, truncates to 12
         assert!(r != 8); // Should be different from standard r
     }
 }
@@ -994,9 +994,11 @@ fn test_credential_id_for_encrypted_key() {
     assert!(credential_id.chars().all(|c| c.is_ascii_hexdigit()));
 
     // Should be uppercase hex
-    assert!(credential_id
-        .chars()
-        .all(|c| !c.is_ascii_lowercase() || !c.is_ascii_alphabetic()));
+    assert!(
+        credential_id
+            .chars()
+            .all(|c| !c.is_ascii_lowercase() || !c.is_ascii_alphabetic())
+    );
 
     // Should NOT be all zeros (encrypted keynum is not zero)
     assert_ne!(credential_id, "0000000000000000");

@@ -22,7 +22,7 @@ mod read_message {
 }
 
 mod bounded_key_read {
-    use minisign::ops::file_utils::{read_bounded_string_from_reader, MAX_KEY_FILE_BYTES};
+    use minisign::ops::file_utils::{MAX_KEY_FILE_BYTES, read_bounded_string_from_reader};
     use std::io::{self, Read};
 
     struct FixedReader {

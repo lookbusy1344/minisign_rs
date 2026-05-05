@@ -4,12 +4,12 @@
 
 use super::{EncryptionMode, OverwritePolicy};
 use crate::{
+    Result,
     constants::SCRYPT_LOG_N,
     crypto::{calculate_kdf_params, generate_keypair},
     errors::Error,
     formats::encode_base64,
     keys::{PubkeyStruct, SeckeyStruct},
-    Result,
 };
 use rand_core::RngCore;
 use std::{
