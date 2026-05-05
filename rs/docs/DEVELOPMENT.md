@@ -42,11 +42,11 @@ cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 # 2. Format code (REQUIRED: Always run AFTER clippy, BEFORE commit)
 cargo fmt
 
-# 3. Run fast test suite (~9 seconds)
-cargo test --no-default-features
+# 3. Run the main test suite (~30 seconds)
+./run_all_tests.sh
 
-# 4. Run slow security tests (~16 seconds)
-cargo test --no-default-features -- --ignored
+# 4. Run ignored tests explicitly
+cargo nextest run --no-default-features --run-ignored=only
 ```
 
 **Note:** `cargo fmt` MUST be the last formatting step before commit to ensure consistent style.
@@ -67,17 +67,17 @@ cargo test --no-default-features -- --ignored
 vim tests/new_feature_test.rs
 
 # 2. Run test to verify it fails
-cargo test --no-default-features test_new_feature
+cargo nextest run --no-default-features test_new_feature
 
 # 3. Implement feature
 vim src/ops/new_feature.rs
 
 # 4. Run tests until they pass
-cargo test --no-default-features
+./run_all_tests.sh
 
 # 5. Run full suite
-cargo test --no-default-features
-cargo test --no-default-features -- --ignored
+./run_all_tests.sh
+cargo nextest run --no-default-features --run-ignored=only
 
 # 6. Commit
 git add tests/new_feature_test.rs src/ops/new_feature.rs
@@ -231,22 +231,23 @@ Before requesting review:
 
 ```bash
 # Fast tests only (development)
-cargo test --no-default-features
+./run_all_tests.sh
 
 # Slow security tests
-cargo test --no-default-features -- --ignored
+cargo nextest run --no-default-features --run-ignored=only
 
 # All tests without credential store
-cargo test --no-default-features && cargo test --no-default-features -- --ignored
+./run_all_tests.sh
+cargo nextest run --no-default-features --run-ignored=only
 
 # Use test runner script
 ./run_all_tests.sh
 
 # Specific test
-cargo test --no-default-features test_sign_verify_roundtrip
+cargo nextest run --no-default-features test_sign_verify_roundtrip
 
 # With output
-cargo test --no-default-features -- --nocapture
+cargo nextest run --no-default-features -- --nocapture
 ```
 
 ### Checking Code Quality
@@ -334,7 +335,7 @@ cargo build
 **Issue**: Keychain popups during tests
 **Fix**: Use `--no-default-features`:
 ```bash
-cargo test --no-default-features
+cargo nextest run --no-default-features
 ```
 
 **Issue**: C minisign tests fail
@@ -347,7 +348,7 @@ sudo apt-get install minisign  # Linux
 **Issue**: Tests timeout
 **Fix**: Slow tests can take 15-30s. Increase timeout or run separately:
 ```bash
-cargo test --no-default-features -- --ignored --test-threads=1
+cargo nextest run --no-default-features --run-ignored=only
 ```
 
 ## Contributing Guidelines

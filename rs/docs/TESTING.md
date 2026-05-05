@@ -42,10 +42,10 @@ The standard test suite covers all operations. Tests that require the C minisign
 **Run with:**
 ```bash
 # Recommended: No keychain popups
-cargo test --no-default-features
+./run_all_tests.sh
 
 # With keychain access (may show popups on macOS/Windows)
-cargo test
+./run_all_tests.sh --all
 ```
 
 ### Credential Store Tests
@@ -66,7 +66,7 @@ Credential store tests verify OS keyring integration (macOS Keychain, Windows Cr
 **Run with:**
 ```bash
 # Credential store tests only (requires clicking through prompts)
-cargo test --features credential_store_tests -- --test-threads=1
+cargo nextest run --features credential_store_tests --test-threads 1
 
 # Use test runner script
 ./run_all_tests.sh --credential-store
@@ -81,7 +81,7 @@ cargo test --features credential_store_tests -- --test-threads=1
 
 ```bash
 # All tests, no keychain popups (recommended for development)
-cargo test --no-default-features
+./run_all_tests.sh
 
 # Credential store tests (requires user interaction)
 ./run_all_tests.sh --credential-store
@@ -96,7 +96,7 @@ By default, the `credential_store` feature is enabled, which may trigger macOS K
 
 ```bash
 # Recommended: Run tests without credential store (no keychain popups)
-cargo test --no-default-features
+cargo nextest run --no-default-features
 
 # Use the test runner script (no keychain popups by default)
 ./run_all_tests.sh
@@ -108,7 +108,7 @@ To explicitly test OS credential store integration (requires user interaction):
 
 ```bash
 # Run credential store tests (requires clicking through keychain prompts)
-cargo test --features credential_store_tests -- --test-threads=1
+cargo nextest run --features credential_store_tests --test-threads 1
 
 # Or use the script
 ./run_all_tests.sh --credential-store
@@ -120,22 +120,22 @@ cargo test --features credential_store_tests -- --test-threads=1
 
 ```bash
 # Run with output visible
-cargo test --no-default-features -- --nocapture
+cargo nextest run --no-default-features -- --nocapture
 
 # Run specific test
-cargo test --no-default-features test_sign_verify_roundtrip
+cargo nextest run --no-default-features test_sign_verify_roundtrip
 
 # Run only unit tests (in src/)
-cargo test --lib
+cargo nextest run --lib
 
 # Run only CLI integration tests
-cargo test --test cli_test
+cargo nextest run --test cli_test
 
 # Run only compatibility tests
-cargo test --test compatibility
+cargo nextest run --test compatibility
 
 # Run only cross-binary tests
-cargo test --test cross_binary_test
+cargo nextest run --test cross_binary_test
 
 ```
 
@@ -169,7 +169,7 @@ The `credential_store` feature controls OS keyring integration (macOS Keychain, 
 - **Enabled by default** for production builds
 - **Disable during development** to avoid keychain popup dialogs:
   ```bash
-  cargo test --no-default-features     # Run tests without keychain access
+  cargo nextest run --no-default-features     # Run tests without keychain access
   cargo build --no-default-features    # Build without keyring dependency
   ```
 - When disabled, credential store functions become no-ops (return Ok/None/false)
@@ -215,7 +215,7 @@ minisign -v
 
 ```bash
 # Run all cross-binary tests
-cargo test --test cross_binary_test
+cargo nextest run --test cross_binary_test
 ```
 
 ### Test Coverage
@@ -358,7 +358,7 @@ cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 cargo fmt
 
 # 3. Run tests (~30 seconds)
-cargo test --no-default-features
+./run_all_tests.sh
 ```
 
 **Note:** `cargo fmt` MUST be the last formatting step before commit to ensure consistent style.

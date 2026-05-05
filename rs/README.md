@@ -82,17 +82,16 @@ cargo build --release
 
 # Run tests without keychain popups (recommended for development)
 ./run_all_tests.sh                                         # All tests (~30s)
-cargo test --no-default-features                           # All tests (~30s)
 
 # Run tests with credential store enabled (may show keychain popups)
-cargo test
+./run_all_tests.sh --all
 
 # Check code quality
 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
 cargo fmt
 
 # Run a specific test
-cargo test --no-default-features test_sign_verify_roundtrip
+cargo nextest run --no-default-features test_sign_verify_roundtrip
 ```
 
 ## Usage
@@ -122,7 +121,7 @@ See [docs/TESTING.md](docs/TESTING.md) for complete testing guide.
 
 **Quick commands:**
 ```bash
-cargo test --no-default-features
+./run_all_tests.sh
 ```
 
 ## Architecture

@@ -16,6 +16,7 @@ Pure Rust rewrite of minisign (cryptographic signing tool). Security-critical. M
 - **ZERO clippy warnings** (pedantic mode)
 - Run clippy with `--all-targets` so platform-specific test and bin code is checked too:
   - `gtimeout 300 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic`
+- Run the test suite with `./run_all_tests.sh`
 - **TDD** — write tests before code
 - All secrets use `Zeroize` + `ZeroizeOnDrop`
 - No `.unwrap()`/`.expect()` in production paths; use `?`
