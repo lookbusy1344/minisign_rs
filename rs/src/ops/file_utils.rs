@@ -1,8 +1,8 @@
 //! Common file operation utilities for key and signature file handling
 
 use crate::{
-    Error, Result, constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct,
-    validation::validate_windows_path,
+    constants::MAX_MESSAGE_SIZE_BYTES, keys::SeckeyStruct, validation::validate_windows_path,
+    Error, Result,
 };
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
@@ -68,7 +68,9 @@ fn check_secret_key_permissions(path: &Path) {
 /// Returns `Error::Other` if the file exceeds `max_bytes`, or `Error::FileRead`
 /// on any I/O failure.
 pub fn read_file_bounded(path: &Path, max_bytes: u64) -> Result<String> {
-    let size = std::fs::metadata(path)
+    let file = File::open(path).map_err(|e| Error::file_read(path, e))?;
+    let size = file
+        .metadata()
         .map_err(|e| Error::file_read(path, e))?
         .len();
     if size > max_bytes {
@@ -76,7 +78,40 @@ pub fn read_file_bounded(path: &Path, max_bytes: u64) -> Result<String> {
             "File too large: {size} bytes exceeds maximum {max_bytes} bytes"
         )));
     }
-    std::fs::read_to_string(path).map_err(|e| Error::file_read(path, e))
+    read_bounded_string_from_reader(file, path, max_bytes)
+}
+
+/// Read UTF-8 text from a reader, rejecting input larger than `max_bytes`.
+///
+/// The reader is capped with `take(max_bytes + 1)`, so the returned buffer cannot
+/// grow beyond the configured bound even if the source continues producing bytes.
+///
+/// # Errors
+///
+/// Returns `Error::Other` if the collected byte length exceeds `max_bytes`,
+/// `Error::InvalidUtf8` if the buffered bytes are not UTF-8, or `Error::FileRead`
+/// on any I/O failure while consuming the reader.
+pub fn read_bounded_string_from_reader<R: Read>(
+    reader: R,
+    path: impl AsRef<Path>,
+    max_bytes: u64,
+) -> Result<String> {
+    let path = path.as_ref();
+    let mut buf = Vec::new();
+    reader
+        .take(max_bytes.saturating_add(1))
+        .read_to_end(&mut buf)
+        .map_err(|e| Error::file_read(path, e))?;
+    if buf.len() as u64 > max_bytes {
+        return Err(Error::Other(format!(
+            "File too large: {} bytes exceeds maximum {max_bytes} bytes",
+            buf.len()
+        )));
+    }
+    String::from_utf8(buf).map_err(|e| Error::InvalidUtf8 {
+        context: path.display().to_string(),
+        source: e,
+    })
 }
 
 /// Load a secret key from a file

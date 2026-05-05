@@ -21,6 +21,59 @@ mod read_message {
     }
 }
 
+mod bounded_key_read {
+    use minisign::ops::file_utils::{read_bounded_string_from_reader, MAX_KEY_FILE_BYTES};
+    use std::io::{self, Read};
+
+    struct FixedReader {
+        bytes: Vec<u8>,
+        pos: usize,
+    }
+
+    impl FixedReader {
+        fn new(bytes: Vec<u8>) -> Self {
+            Self { bytes, pos: 0 }
+        }
+    }
+
+    impl Read for FixedReader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.pos >= self.bytes.len() {
+                return Ok(0);
+            }
+            let remaining = self.bytes.len() - self.pos;
+            let to_copy = remaining.min(buf.len());
+            buf[..to_copy].copy_from_slice(&self.bytes[self.pos..self.pos + to_copy]);
+            self.pos += to_copy;
+            Ok(to_copy)
+        }
+    }
+
+    #[test]
+    fn rejects_payload_after_cap_is_reached_during_read() {
+        let reader = FixedReader::new(vec![b'x'; usize::try_from(MAX_KEY_FILE_BYTES + 1).unwrap()]);
+        let result = read_bounded_string_from_reader(reader, "reader", MAX_KEY_FILE_BYTES);
+        assert!(result.is_err(), "reader over the cap should be rejected");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("too large") || err.contains("exceeds"),
+            "error should mention size enforcement: {err}"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_utf8_after_reading_with_cap() {
+        let reader = FixedReader::new(vec![0xff, 0xfe, 0xfd]);
+        let result = read_bounded_string_from_reader(reader, "reader", 16);
+        assert!(result.is_err(), "invalid UTF-8 should be rejected");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("UTF-8") || err.contains("utf"),
+            "error should mention UTF-8 decoding: {err}"
+        );
+    }
+}
+
 mod size_limit {
     use minisign::ops::file_utils::check_file_size_limit;
     use tempfile::{NamedTempFile, TempDir};
