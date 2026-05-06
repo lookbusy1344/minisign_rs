@@ -17,7 +17,29 @@ set -euo pipefail
 
 # Resolve the real script path before computing directories — dirname "$0" follows
 # the symlink path (.git/hooks/) when invoked as a hook, not the script's location.
-REAL_SCRIPT="$(readlink -f "$0")"
+resolve_script_path() {
+    local source_path="$1"
+
+    while [[ -L "${source_path}" ]]; do
+        local source_dir
+        source_dir="$(cd -P "$(dirname "${source_path}")" && pwd)"
+        source_path="$(readlink "${source_path}")"
+
+        if [[ "${source_path}" != /* ]]; then
+            source_path="${source_dir}/${source_path}"
+        fi
+    done
+
+    local resolved_dir
+    resolved_dir="$(cd -P "$(dirname "${source_path}")" && pwd)"
+    printf '%s/%s\n' "${resolved_dir}" "$(basename "${source_path}")"
+}
+
+readonly CLIPPY_PEDANTIC_TIMEOUT_SECONDS=60
+readonly CLIPPY_UNSAFE_TIMEOUT_SECONDS=30
+readonly FULL_TEST_SUITE_TIMEOUT_SECONDS=300
+
+REAL_SCRIPT="$(resolve_script_path "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${REAL_SCRIPT}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
@@ -29,24 +51,31 @@ run() {
     "$@"
 }
 
-# Only trigger if Rust source or Cargo config files are staged under rs/.
-# Paths are relative to the repo root (minisign/), so we anchor on '^rs/'.
-STAGED=$(git -C "${PROJECT_DIR}" diff --cached --name-only)
-if ! echo "${STAGED}" | grep -qE '^rs/.*\.(rs|toml)$'; then
-    echo "==> No rs/ Rust/TOML files staged, skipping."
+# Only trigger if Rust source files, Cargo.toml files, or rs/Cargo.lock are staged.
+# Paths are relative to the repo root (minisign/).
+should_run=false
+while IFS= read -r -d '' staged_path; do
+    if [[ "${staged_path}" =~ ^rs/.*\.rs$ ]] || [[ "${staged_path}" =~ ^rs/.*\.toml$ ]] || [[ "${staged_path}" == "rs/Cargo.lock" ]]; then
+        should_run=true
+        break
+    fi
+done < <(git -C "${PROJECT_DIR}" diff --cached --name-only -z)
+
+if [[ "${should_run}" != true ]]; then
+    echo "==> No rs/ Rust, TOML, or Cargo.lock files staged, skipping."
     exit 0
 fi
 
 echo "==> Running minisign-rs pre-commit checks..."
 
 # Clippy — pedantic for all targets, then unsafe_code for lib/bins.
-run gtimeout 60 cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
-run gtimeout 30 cargo clippy --lib --bins --all-features -- -F unsafe_code
+run gtimeout "${CLIPPY_PEDANTIC_TIMEOUT_SECONDS}" cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
+run gtimeout "${CLIPPY_UNSAFE_TIMEOUT_SECONDS}" cargo clippy --lib --bins --all-features -- -F unsafe_code
 
 # Check formatting without modifying files — fails if rustfmt would make changes.
 run cargo fmt --check
 
-# Full test suite (cross-binary and credential-store tests excluded by default).
-run gtimeout 120 cargo nextest run --no-default-features
+# Full default test suite, using the project wrapper for consistency.
+run gtimeout "${FULL_TEST_SUITE_TIMEOUT_SECONDS}" ./run_all_tests.sh
 
 echo "==> All checks passed."
