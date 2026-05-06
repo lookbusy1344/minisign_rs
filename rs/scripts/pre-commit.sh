@@ -11,7 +11,13 @@
 # Staged paths are relative to the repo root (minisign/), so the grep anchors
 # on '^rs/' to match only files within this project.
 #
-# Can also be run directly: ./scripts/pre-commit.sh
+# Can also be run from existing hook:
+# if [ ! -x "rs/scripts/pre-commit.sh" ]; then
+#     echo "Missing executable rs/scripts/pre-commit.sh" >&2
+#     exit 1
+# fi
+#
+# ./rs/scripts/pre-commit.sh
 
 set -euo pipefail
 
