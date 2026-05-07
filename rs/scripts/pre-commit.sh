@@ -17,7 +17,7 @@
 #     exit 1
 # fi
 #
-# ./rs/scripts/pre-commit.sh
+# exec ./rs/scripts/pre-commit.sh
 
 set -euo pipefail
 
