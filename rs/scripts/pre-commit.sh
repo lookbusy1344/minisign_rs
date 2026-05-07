@@ -57,20 +57,13 @@ run() {
     "$@"
 }
 
-# Only trigger if Rust source files, Cargo.toml files, or rs/Cargo.lock have
-# working-tree changes relative to HEAD (staged or unstaged). Using --cached
-# alone would miss unstaged modifications, letting dirty source files bypass
-# the hook when an unrelated file is committed alongside them.
-should_run=false
-while IFS= read -r -d '' staged_path; do
-    if [[ "${staged_path}" =~ ^rs/.*\.rs$ ]] || [[ "${staged_path}" =~ ^rs/.*\.toml$ ]] || [[ "${staged_path}" == "rs/Cargo.lock" ]]; then
-        should_run=true
-        break
-    fi
-done < <(git -C "${PROJECT_DIR}" diff HEAD --name-only -z)
-
-if [[ "${should_run}" != true ]]; then
-    echo "==> No rs/ Rust, TOML, or Cargo.lock files staged, skipping."
+# Only trigger if Rust source, TOML, or Cargo.lock files are modified under
+# rs/ — staged OR unstaged. `git diff HEAD` catches both, so a dirty working
+# tree can't slip past the hook just because the user staged unrelated changes.
+# Paths are relative to the repo root (minisign/), anchored on '^rs/'.
+if ! git -C "${PROJECT_DIR}" diff HEAD --name-only -z | grep -zqE \
+    '^rs/(Cargo\.lock|.*\.(rs|toml))$'; then
+    echo "==> No rs/ Rust, TOML, or Cargo.lock files modified, skipping."
     exit 0
 fi
 
