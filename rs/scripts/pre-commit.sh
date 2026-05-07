@@ -61,7 +61,7 @@ run() {
 # rs/ — staged OR unstaged. `git diff HEAD` catches both, so a dirty working
 # tree can't slip past the hook just because the user staged unrelated changes.
 # Paths are relative to the repo root (minisign/), anchored on '^rs/'.
-if ! git -C "${PROJECT_DIR}" diff HEAD --name-only -z | grep -zqE \
+if ! git -C "${PROJECT_DIR}" diff HEAD --name-only -z | tr '\0' '\n' | grep -qE \
     '^rs/(Cargo\.lock|.*\.(rs|toml))$'; then
     echo "==> No rs/ Rust, TOML, or Cargo.lock files modified, skipping."
     exit 0
