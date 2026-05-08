@@ -57,6 +57,40 @@ fn check_secret_key_permissions(path: &Path) {
     }
 }
 
+cfg_select! {
+    unix => {
+        fn configure_write_options(options: &mut OpenOptions, force: bool, unix_mode: Option<u32>) {
+            use std::os::unix::fs::OpenOptionsExt;
+
+            if let Some(mode) = unix_mode {
+                options.mode(mode);
+            }
+            if force {
+                // O_NOFOLLOW prevents following symlinks in the final path component.
+                // Without this, create(true).truncate(true) would silently clobber a
+                // symlink's target. The non-force path uses create_new(true) which
+                // implies O_EXCL, so symlinks are already rejected there.
+                options.custom_flags(libc::O_NOFOLLOW);
+            }
+        }
+
+        fn write_secret_key_file_impl(path: &Path, contents: &[u8], force: bool) -> Result<()> {
+            if force {
+                return atomic_overwrite_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS);
+            }
+
+            write_file(path, contents, force, Some(SECRET_KEY_FILE_PERMISSIONS))
+        }
+    }
+    _ => {
+        fn configure_write_options(_options: &mut OpenOptions, _force: bool, _unix_mode: Option<u32>) {}
+
+        fn write_secret_key_file_impl(path: &Path, contents: &[u8], force: bool) -> Result<()> {
+            write_file(path, contents, force, None)
+        }
+    }
+}
+
 /// Read a file into a `String`, rejecting files that exceed `max_bytes`.
 ///
 /// Checks `metadata().len()` before allocating. This guards against memory
@@ -151,23 +185,7 @@ fn write_file(path: &Path, contents: &[u8], force: bool, unix_mode: Option<u32>)
         options.create_new(true);
     }
 
-    #[cfg(not(unix))]
-    let _ = unix_mode;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        if let Some(mode) = unix_mode {
-            options.mode(mode);
-        }
-        if force {
-            // O_NOFOLLOW prevents following symlinks in the final path component.
-            // Without this, create(true).truncate(true) would silently clobber a
-            // symlink's target. The non-force path uses create_new(true) which
-            // implies O_EXCL, so symlinks are already rejected there.
-            options.custom_flags(libc::O_NOFOLLOW);
-        }
-    }
+    configure_write_options(&mut options, force, unix_mode);
 
     let mut file = options.open(path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
@@ -280,17 +298,7 @@ pub fn write_secret_key_file(
 ) -> Result<()> {
     let path = path.as_ref();
     let contents = contents.as_ref();
-
-    #[cfg(unix)]
-    if force {
-        return atomic_overwrite_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS);
-    }
-
-    #[cfg(unix)]
-    let unix_mode = Some(SECRET_KEY_FILE_PERMISSIONS);
-    #[cfg(not(unix))]
-    let unix_mode = None;
-    write_file(path, contents, force, unix_mode)
+    write_secret_key_file_impl(path, contents, force)
 }
 
 /// Write a public key file.

@@ -170,4 +170,23 @@ mod permissions {
         let file = temp.path().join("does_not_exist.key");
         assert!(!has_lax_permissions(&file));
     }
+
+    #[test]
+    fn force_write_secret_key_preserves_owner_only_permissions() {
+        use minisign::ops::file_utils::write_secret_key_file;
+
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("secret.key");
+
+        fs::write(&file, "original content").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_secret_key_file(&file, "overwritten content", true).unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), "overwritten content");
+        assert_eq!(
+            fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
 }
