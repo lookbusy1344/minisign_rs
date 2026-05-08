@@ -325,6 +325,56 @@ pub fn sign(options: &SignOptions<'_>, password: Option<&[u8]>) -> Result<SignRe
     sign_single_file(options.message_file(), options, password)
 }
 
+cfg_select! {
+    feature = "parallel" => {
+        fn collect_sign_results(
+            files: Vec<PathBuf>,
+            secret_key: &SecretKey,
+            keynum: crate::crypto::KeyNum,
+            options: &SignOptions<'_>,
+            sequential: bool,
+        ) -> Vec<FileSignResult> {
+            if sequential {
+                files
+                    .into_iter()
+                    .map(|file| {
+                        let result = sign_file_with_key(&file, secret_key, keynum, options);
+                        report_file_result(&file, &result, options);
+                        FileSignResult { file, result }
+                    })
+                    .collect()
+            } else {
+                files
+                    .into_par_iter()
+                    .map(|file| {
+                        let result = sign_file_with_key(&file, secret_key, keynum, options);
+                        report_file_result(&file, &result, options);
+                        FileSignResult { file, result }
+                    })
+                    .collect()
+            }
+        }
+    }
+    _ => {
+        fn collect_sign_results(
+            files: Vec<PathBuf>,
+            secret_key: &SecretKey,
+            keynum: crate::crypto::KeyNum,
+            options: &SignOptions<'_>,
+            _sequential: bool,
+        ) -> Vec<FileSignResult> {
+            files
+                .into_iter()
+                .map(|file| {
+                    let result = sign_file_with_key(&file, secret_key, keynum, options);
+                    report_file_result(&file, &result, options);
+                    FileSignResult { file, result }
+                })
+                .collect()
+        }
+    }
+}
+
 /// Sign multiple files (parallel or sequential)
 ///
 /// # Arguments
@@ -388,40 +438,8 @@ pub fn sign_multiple_files(
         println!("Signing with key: {key_id} ({key_id_words})");
     }
 
-    // Multi-file path: sign all files with the already-loaded key
-    let results: Vec<FileSignResult> = if sequential {
-        files
-            .into_iter()
-            .map(|file| {
-                let result = sign_file_with_key(&file, &secret_key, keynum, options);
-                report_file_result(&file, &result, options);
-                FileSignResult { file, result }
-            })
-            .collect()
-    } else {
-        #[cfg(feature = "parallel")]
-        {
-            files
-                .into_par_iter()
-                .map(|file| {
-                    let result = sign_file_with_key(&file, &secret_key, keynum, options);
-                    report_file_result(&file, &result, options);
-                    FileSignResult { file, result }
-                })
-                .collect()
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            files
-                .into_iter()
-                .map(|file| {
-                    let result = sign_file_with_key(&file, &secret_key, keynum, options);
-                    report_file_result(&file, &result, options);
-                    FileSignResult { file, result }
-                })
-                .collect()
-        }
-    };
+    // Multi-file path: sign all files with the already-loaded key.
+    let results = collect_sign_results(files, &secret_key, keynum, options, sequential);
 
     print_summary(&results, options)
 }

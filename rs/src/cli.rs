@@ -243,11 +243,11 @@ impl Cli {
             #[cfg(feature = "parallel")]
             sequential: args.contains("--sequential"),
 
-            // Debug-only flag: present in debug builds, always false in release
-            #[cfg(debug_assertions)]
-            force_weak_kdf: args.contains("--force-weak-kdf"),
-            #[cfg(not(debug_assertions))]
-            force_weak_kdf: false,
+            // Debug-only flag: present in debug builds, always false in release.
+            force_weak_kdf: cfg_select! {
+                debug_assertions => args.contains("--force-weak-kdf"),
+                _ => false,
+            },
 
             extra_files: Vec::new(),
         };

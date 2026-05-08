@@ -263,6 +263,54 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
     })
 }
 
+cfg_select! {
+    feature = "parallel" => {
+        fn collect_verify_results(
+            files: Vec<PathBuf>,
+            pubkey: &PubkeyStruct,
+            options: &VerifyOptions<'_>,
+            sequential: bool,
+        ) -> Vec<FileVerifyResult> {
+            if sequential {
+                files
+                    .into_iter()
+                    .map(|file| {
+                        let result = verify_file_with_key(&file, pubkey, options);
+                        report_file_result(&file, &result, options);
+                        FileVerifyResult { file, result }
+                    })
+                    .collect()
+            } else {
+                files
+                    .into_par_iter()
+                    .map(|file| {
+                        let result = verify_file_with_key(&file, pubkey, options);
+                        report_file_result(&file, &result, options);
+                        FileVerifyResult { file, result }
+                    })
+                    .collect()
+            }
+        }
+    }
+    _ => {
+        fn collect_verify_results(
+            files: Vec<PathBuf>,
+            pubkey: &PubkeyStruct,
+            options: &VerifyOptions<'_>,
+            _sequential: bool,
+        ) -> Vec<FileVerifyResult> {
+            files
+                .into_iter()
+                .map(|file| {
+                    let result = verify_file_with_key(&file, pubkey, options);
+                    report_file_result(&file, &result, options);
+                    FileVerifyResult { file, result }
+                })
+                .collect()
+        }
+    }
+}
+
 /// Load a public key from the specified source
 ///
 /// # Errors
@@ -448,40 +496,8 @@ pub fn verify_multiple_files(
         println!("Verifying with key: {key_id} ({key_id_words})");
     }
 
-    // Multi-file path: verify all files with the already-loaded key
-    let results: Vec<FileVerifyResult> = if sequential {
-        files
-            .into_iter()
-            .map(|file| {
-                let result = verify_file_with_key(&file, &pubkey, options);
-                report_file_result(&file, &result, options);
-                FileVerifyResult { file, result }
-            })
-            .collect()
-    } else {
-        #[cfg(feature = "parallel")]
-        {
-            files
-                .into_par_iter()
-                .map(|file| {
-                    let result = verify_file_with_key(&file, &pubkey, options);
-                    report_file_result(&file, &result, options);
-                    FileVerifyResult { file, result }
-                })
-                .collect()
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            files
-                .into_iter()
-                .map(|file| {
-                    let result = verify_file_with_key(&file, &pubkey, options);
-                    report_file_result(&file, &result, options);
-                    FileVerifyResult { file, result }
-                })
-                .collect()
-        }
-    };
+    // Multi-file path: verify all files with the already-loaded key.
+    let results = collect_verify_results(files, &pubkey, options, sequential);
 
     print_summary(&results, options)
 }
