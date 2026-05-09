@@ -568,14 +568,16 @@ pub fn derive_key_with_params(
         .map_err(|e| Error::KdfMemoryError(format!("scrypt failed: {e}")))?;
 
     // Verified against scrypt-0.11.0: the low-level scrypt() uses output.len() directly,
-    // ignoring Params.len. A future version that validates them would error here rather
-    // than silently producing truncated key material.
-    debug_assert_eq!(
-        output.len(),
-        output_len,
-        "scrypt output length mismatch: expected {output_len}, got {}",
-        output.len()
-    );
+    // ignoring Params.len. If a future upgrade honours Params.len instead, bytes[64..] will
+    // remain zero — XOR-ing zeros exposes plaintext from the encrypted key blob on disk.
+    // This runtime guard catches that before any corrupted key is written.
+    if output_len > 64 && output[64..].iter().all(|&b| b == 0) {
+        return Err(Error::KdfError(
+            "scrypt produced truncated output: bytes beyond index 64 are all zero; \
+             the scrypt crate may now honour Params.len — pin or migrate to two-round derivation"
+                .into(),
+        ));
+    }
 
     Ok(output)
 }
