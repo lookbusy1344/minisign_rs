@@ -4,6 +4,7 @@
 
 use super::file_utils::{
     MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded, read_message_file,
+    sanitised_path_display,
 };
 use crate::{
     Result,
@@ -494,7 +495,7 @@ pub fn verify_multiple_files(
         if !options.quiet {
             println!(
                 "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
-                files[0].display(),
+                sanitised_path_display(&files[0]),
                 result.trusted_comment(),
                 result.key_id(),
                 result.key_id_words()
@@ -526,14 +527,14 @@ fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &Veri
             if !options.quiet {
                 println!(
                     "Verified: {}\n  Trusted comment: {}",
-                    file.display(),
+                    sanitised_path_display(file),
                     verify_result.trusted_comment
                 );
             }
         }
         Err(e) => {
             // Always show errors, even in quiet mode (matches sign behavior and Unix conventions)
-            eprintln!("Failed: {} ({})", file.display(), e);
+            eprintln!("Failed: {} ({})", sanitised_path_display(file), e);
         }
     }
 }
@@ -562,7 +563,7 @@ pub fn format_batch_summary(results: &[FileVerifyResult]) -> Option<String> {
     );
     for file in failures {
         use std::fmt::Write as _;
-        let _ = writeln!(out, "  - {}", file.display());
+        let _ = writeln!(out, "  - {}", sanitised_path_display(file));
     }
     Some(out)
 }

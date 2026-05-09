@@ -2,7 +2,7 @@
 //!
 //! This module implements the core signing logic for minisign.
 
-use super::file_utils::{load_secret_key, read_message_file};
+use super::file_utils::{load_secret_key, read_message_file, sanitised_path_display};
 use crate::{
     Result,
     crypto::{
@@ -423,11 +423,8 @@ pub fn sign_multiple_files(
     // Fast path for single file
     if files.len() == 1 {
         sign_single_file(&files[0], options, password)?;
-        println!(
-            "Signed: {} → {}.minisig",
-            files[0].display(),
-            files[0].display()
-        );
+        let s = sanitised_path_display(&files[0]);
+        println!("Signed: {s} → {s}.minisig");
         return Ok(());
     }
 
@@ -452,12 +449,13 @@ fn report_file_result(file: &Path, result: &Result<SignResult>, options: &SignOp
     match result {
         Ok(_) => {
             if !options.quiet {
-                println!("Signed: {} → {}.minisig", file.display(), file.display());
+                let s = sanitised_path_display(file);
+                println!("Signed: {s} → {s}.minisig");
             }
         }
         Err(e) => {
             // Always show errors, even in quiet mode
-            eprintln!("Failed: {} ({})", file.display(), e);
+            eprintln!("Failed: {} ({})", sanitised_path_display(file), e);
         }
     }
 }
@@ -486,7 +484,7 @@ pub fn format_batch_summary(results: &[FileSignResult]) -> Option<String> {
     );
     for file in failures {
         use std::fmt::Write as _;
-        let _ = writeln!(out, "  - {}", file.display());
+        let _ = writeln!(out, "  - {}", sanitised_path_display(file));
     }
     Some(out)
 }

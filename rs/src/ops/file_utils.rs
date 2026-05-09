@@ -485,3 +485,24 @@ pub fn read_message_file(path: &Path) -> Result<Vec<u8>> {
     }
     Ok(buf)
 }
+
+/// Return a sanitised string representation of `path` safe to print in a terminal.
+///
+/// Escapes ASCII control characters (U+0000–U+001F), DEL (U+007F), and C1
+/// control codes (U+0080–U+009F) as `\xNN` to prevent ANSI-injection attacks
+/// via crafted filenames.
+#[must_use]
+pub fn sanitised_path_display(path: &Path) -> String {
+    let raw = path.to_string_lossy();
+    let mut out = String::with_capacity(raw.len());
+    for c in raw.chars() {
+        let code = c as u32;
+        if code < 0x20 || code == 0x7F || (0x80..=0x9F).contains(&code) {
+            use std::fmt::Write as _;
+            let _ = write!(out, "\\x{code:02X}");
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}

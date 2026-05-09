@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-use minisign::ops::file_utils::{MAX_PASSWORD_FILE_BYTES, load_secret_key};
+use minisign::ops::file_utils::{MAX_PASSWORD_FILE_BYTES, load_secret_key, sanitised_path_display};
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
@@ -139,11 +139,11 @@ fn handle_generate(cli: &Cli) -> Result<i32> {
         );
         println!(
             "The secret key was saved as {} - Keep it secret!",
-            result.secret_key_file().display()
+            sanitised_path_display(result.secret_key_file())
         );
         println!(
             "The public key was saved as {} - That one can be public.",
-            result.public_key_file().display()
+            sanitised_path_display(result.public_key_file())
         );
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
@@ -372,7 +372,10 @@ fn handle_sign_single(
             result.key_id(),
             result.key_id_words()
         );
-        println!("Signature written to {}", result.signature_file().display());
+        println!(
+            "Signature written to {}",
+            sanitised_path_display(result.signature_file())
+        );
     }
 
     Ok(())
@@ -570,7 +573,7 @@ fn handle_recreate(cli: &Cli) -> Result<i32> {
     if !cli.quiet {
         println!(
             "Public key recreated as {}",
-            result.public_key_file().display()
+            sanitised_path_display(result.public_key_file())
         );
     }
 
@@ -649,7 +652,7 @@ fn handle_change(cli: &Cli) -> Result<i32> {
     if !cli.quiet {
         println!(
             "Password changed for {}",
-            result.secret_key_file().display()
+            sanitised_path_display(result.secret_key_file())
         );
     }
 
@@ -789,7 +792,7 @@ fn handle_inspect(cli: &Cli) -> Result<i32> {
     if let Some(ref sig_file) = cli.signature_file {
         let result = inspect_signature(sig_file)?;
 
-        println!("Inspecting: {}\n", sig_file.display());
+        println!("Inspecting: {}\n", sanitised_path_display(sig_file));
         display_signature_inspect_result(&result);
         return Ok(0);
     }
@@ -822,14 +825,14 @@ fn handle_inspect(cli: &Cli) -> Result<i32> {
             let options = build_inspect_options(sk_file.as_path(), cli.no_decrypt);
             (
                 inspect(&options)?,
-                format!("Inspecting: {}", sk_file.display()),
+                format!("Inspecting: {}", sanitised_path_display(sk_file)),
                 Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
             let options = build_inspect_options(pk_file.as_path(), cli.no_decrypt);
             (
                 inspect(&options)?,
-                format!("Inspecting: {}", pk_file.display()),
+                format!("Inspecting: {}", sanitised_path_display(pk_file)),
                 Some(pk_file.as_path()),
             )
         } else if let Some(ref pk_base64) = cli.public_key_base64 {
@@ -844,7 +847,10 @@ fn handle_inspect(cli: &Cli) -> Result<i32> {
             let options = build_inspect_options(&default_secret_key, cli.no_decrypt);
             (
                 inspect(&options)?,
-                format!("Inspecting: {} (default)", default_secret_key.display()),
+                format!(
+                    "Inspecting: {} (default)",
+                    sanitised_path_display(&default_secret_key)
+                ),
                 Some(default_secret_key.as_path()),
             )
         };
@@ -931,7 +937,7 @@ fn prompt_password(
         if !metadata.is_file() {
             return Err(Error::Io(format!(
                 "Password file '{}' is not a regular file",
-                path.display()
+                sanitised_path_display(path)
             )));
         }
         let size = metadata.len();
