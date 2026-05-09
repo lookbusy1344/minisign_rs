@@ -108,6 +108,30 @@ fn test_generate_unencrypted_key() {
     assert!(pk_contents.contains(result.keynum_hex()));
 }
 
+// M9: empty --comment "" must be rejected, not produce a bare "untrusted comment: " line.
+#[test]
+fn test_generate_empty_comment_is_rejected() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .comment("")
+        .no_password(true)
+        .build();
+
+    let result = generate(&options, None);
+    assert!(result.is_err(), "expected error for empty comment, got Ok");
+    assert!(
+        matches!(result.unwrap_err(), Error::InvalidComment(_)),
+        "expected InvalidComment variant"
+    );
+
+    // Neither key file should exist — generation must not write partial state.
+    assert!(!sk_path.exists(), "secret key file must not be created");
+    assert!(!pk_path.exists(), "public key file must not be created");
+}
+
 #[test]
 fn test_generate_without_password_fails() {
     let temp_dir = TempDir::new().unwrap();

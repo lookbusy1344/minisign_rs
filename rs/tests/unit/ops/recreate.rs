@@ -285,3 +285,26 @@ fn test_recreate_atomic_file_creation() {
     let contents = fs::read_to_string(&pk_path).unwrap();
     assert_eq!(contents, "existing public key");
 }
+
+// M9: empty --comment "" must be rejected for recreate as well.
+#[test]
+fn test_recreate_empty_comment_is_rejected() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    fs::write(&sk_path, seckey.to_file_contents("test secret key")).unwrap();
+
+    let pk_path = temp_dir.path().join("test.pub");
+    let options = RecreateOptions::new(sk_path.as_path(), pk_path.as_path(), Some(""), false);
+
+    let result = recreate(&options, None);
+    assert!(result.is_err(), "expected error for empty comment, got Ok");
+    assert!(
+        matches!(result.unwrap_err(), Error::InvalidComment(_)),
+        "expected InvalidComment variant"
+    );
+    assert!(!pk_path.exists(), "public key file must not be created");
+}

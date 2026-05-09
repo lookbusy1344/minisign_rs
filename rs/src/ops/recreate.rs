@@ -143,7 +143,15 @@ pub fn recreate_with_key(
     // Generate comment
     let keynum_hex = keynum.to_key_id();
     let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = options.comment().unwrap_or(&default_comment);
+    let comment = match options.comment() {
+        Some("") => {
+            return Err(Error::InvalidComment(
+                "comment must not be empty; omit --comment to use the default".to_string(),
+            ));
+        }
+        Some(c) => c,
+        None => &default_comment,
+    };
 
     // Write the public key file with atomic creation
     let pubkey_contents = pubkey.to_file_contents(comment);

@@ -276,7 +276,15 @@ pub fn generate_with_log_n(
     let keynum_hex = keynum.to_key_id();
     let keynum_words = crate::wordlist::keynum_to_words(&keynum);
     let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = options.comment.unwrap_or(&default_comment);
+    let comment = match options.comment {
+        Some("") => {
+            return Err(Error::InvalidComment(
+                "comment must not be empty; omit --comment to use the default".to_string(),
+            ));
+        }
+        Some(c) => c,
+        None => &default_comment,
+    };
 
     // Ensure parent directories exist
     ensure_parent_directory(options.secret_key_file)?;
