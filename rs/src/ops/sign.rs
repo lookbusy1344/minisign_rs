@@ -401,23 +401,20 @@ cfg_select! {
 /// Returns `PartialFailure` if some files failed, or `TotalFailure` if all files failed.
 /// Individual file errors are reported to stderr during execution.
 pub fn sign_multiple_files(
-    files: Vec<PathBuf>,
+    files: &[PathBuf],
     options: &SignOptions<'_>,
     password: Option<&[u8]>,
     sequential: bool,
 ) -> Result<()> {
-    // Deduplicate files to prevent race conditions when signing the same file multiple times
-    // Use a HashSet to track unique paths
+    // Deduplicate files to prevent race conditions when signing the same file multiple times.
+    // Canonicalize to catch ./foo vs foo aliases; fail immediately if a file does not exist.
     let mut seen = std::collections::HashSet::new();
     let mut deduped_files = Vec::new();
 
     for file in files {
-        // Try to canonicalize for better deduplication (e.g., ./file vs file)
-        // Fall back to original path if canonicalization fails (file doesn't exist yet)
-        let canonical = file.canonicalize().unwrap_or_else(|_| file.clone());
-
+        let canonical = file.canonicalize().map_err(|e| Error::file_read(file, e))?;
         if seen.insert(canonical) {
-            deduped_files.push(file);
+            deduped_files.push(file.clone());
         }
     }
 

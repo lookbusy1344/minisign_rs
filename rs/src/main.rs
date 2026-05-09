@@ -277,7 +277,7 @@ fn handle_sign(cli: &Cli) -> Result<i32> {
     } else {
         handle_sign_multiple(
             cli,
-            message_files.into_owned(),
+            message_files.as_ref(),
             secret_key_file,
             prehashed,
             &credential_id,
@@ -349,7 +349,7 @@ fn handle_sign_single(
 /// Handle signing multiple files
 fn handle_sign_multiple(
     cli: &Cli,
-    message_files: Vec<std::path::PathBuf>,
+    message_files: &[std::path::PathBuf],
     secret_key_file: &std::path::Path,
     prehashed: bool,
     credential_id: &str,

@@ -1823,7 +1823,9 @@ fn cli_sign_multiple_files_legacy_parallel_falls_back_to_sequential() {
 }
 
 #[test]
-fn cli_sign_multiple_files_partial_failure_exit_code() {
+fn cli_sign_multiple_files_nonexistent_fails_fast() {
+    // A nonexistent file in a batch fails at canonicalization (before any signing
+    // starts), so no signatures are produced for any file in the batch.
     let temp_dir = TempDir::new().unwrap();
 
     let file1 = temp_dir.path().join("exists.txt");
@@ -1847,8 +1849,33 @@ fn cli_sign_multiple_files_partial_failure_exit_code() {
         .code(1)
         .stderr(predicate::str::contains("failed to read"));
 
-    // Valid file should still be signed despite the other failing
-    assert!(file1.with_extension("txt.minisig").exists());
+    // No signatures written — we failed before signing started
+    assert!(!file1.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn cli_sign_multiple_files_dedup_same_path() {
+    // Passing the same file path twice should sign it exactly once (no race on .minisig)
+    let temp_dir = TempDir::new().unwrap();
+    let file = temp_dir.path().join("dup.txt");
+    fs::write(&file, b"content").unwrap();
+
+    let path = file.to_str().unwrap();
+
+    minisign_cmd()
+        .args([
+            "-S",
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-W",
+            "-m",
+            path,
+            path,
+        ])
+        .assert()
+        .success();
+
+    assert!(file.with_extension("txt.minisig").exists());
 }
 
 #[test]
@@ -3591,8 +3618,8 @@ fn test_password_file_oversized_rejected() {
 
 #[test]
 fn test_sign_batch_failure_summary_visible_in_quiet_mode() {
-    // The failure summary (count + file list) must appear even with -q.
-    // Per-file errors are always shown; the summary must be too.
+    // A nonexistent file in a batch fails immediately at canonicalization (before
+    // any signing starts).  Even with -q the error must appear on stderr.
     let temp_dir = TempDir::new().unwrap();
     let sk = temp_dir.path().join("test.key");
     let pk = temp_dir.path().join("test.pub");
@@ -3627,12 +3654,12 @@ fn test_sign_batch_failure_summary_visible_in_quiet_mode() {
 
     let stderr = String::from_utf8_lossy(&stderr);
     assert!(
-        stderr.contains("Summary:"),
-        "failure summary must appear even with -q, got:\n{stderr}"
+        stderr.contains("nonexistent"),
+        "error for missing file must appear even with -q, got:\n{stderr}"
     );
     assert!(
-        stderr.contains("nonexistent"),
-        "failed file name must appear in summary, got:\n{stderr}"
+        stderr.contains("failed to read"),
+        "error text must appear even with -q, got:\n{stderr}"
     );
 }
 

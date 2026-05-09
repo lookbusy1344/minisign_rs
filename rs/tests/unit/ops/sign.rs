@@ -687,7 +687,7 @@ fn test_sign_multiple_files_sequential() {
     .trusted_comment("Batch signature")
     .build();
 
-    let result = sign_multiple_files(paths, &opts, None, true);
+    let result = sign_multiple_files(&paths, &opts, None, true);
     assert!(result.is_ok());
 
     // Verify all signature files exist
@@ -716,7 +716,7 @@ fn test_sign_multiple_files_parallel() {
     .trusted_comment("Parallel batch")
     .build();
 
-    let result = sign_multiple_files(paths.clone(), &opts, None, false);
+    let result = sign_multiple_files(&paths, &opts, None, false);
     assert!(result.is_ok());
 
     // Verify all signature files exist
@@ -730,17 +730,19 @@ fn test_sign_multiple_files_parallel() {
 }
 
 #[test]
-fn test_sign_multiple_files_partial_failure() {
+fn test_sign_multiple_files_nonexistent_fails_fast() {
+    // A nonexistent file in the batch causes an immediate FileRead error during
+    // deduplication — before any signing starts — so no signatures are produced.
     let temp_dir = TempDir::new().unwrap();
 
     let file1 = temp_dir.path().join("file1.txt");
-    let file2 = temp_dir.path().join("nonexistent.txt"); // This will fail
+    let file2 = temp_dir.path().join("nonexistent.txt");
     let file3 = temp_dir.path().join("file3.txt");
 
     fs::write(&file1, b"Message 1").unwrap();
     fs::write(&file3, b"Message 3").unwrap();
 
-    let paths = vec![file1.clone(), file2.clone(), file3.clone()];
+    let paths = vec![file1.clone(), file2, file3.clone()];
 
     let opts = SignOptions::builder(
         Path::new("tests/fixtures/keys/unencrypted.key"),
@@ -749,23 +751,21 @@ fn test_sign_multiple_files_partial_failure() {
     .force(true)
     .build();
 
-    let result = sign_multiple_files(paths, &opts, None, true);
+    let result = sign_multiple_files(&paths, &opts, None, true);
 
-    // Should return PartialFailure error
-    assert!(result.is_err());
-    assert!(matches!(result, Err(Error::PartialFailure)));
+    assert!(matches!(result, Err(Error::FileRead { .. })));
 
-    // file1 and file3 should have signatures despite file2 failing
-    assert!(file1.with_extension("txt.minisig").exists());
-    assert!(!file2.with_extension("txt.minisig").exists());
-    assert!(file3.with_extension("txt.minisig").exists());
+    // No signatures written — we errored before signing any file
+    assert!(!file1.with_extension("txt.minisig").exists());
+    assert!(!file3.with_extension("txt.minisig").exists());
 }
 
 #[test]
-fn test_sign_multiple_files_all_attempted() {
+fn test_sign_multiple_files_first_nonexistent_fails_fast() {
+    // The first nonexistent file in the list causes immediate FileRead failure;
+    // no subsequent files are signed.
     let temp_dir = TempDir::new().unwrap();
 
-    // Create mix of valid and invalid files
     let file1 = temp_dir.path().join("file1.txt");
     let file2 = temp_dir.path().join("missing1.txt");
     let file3 = temp_dir.path().join("file3.txt");
@@ -776,13 +776,7 @@ fn test_sign_multiple_files_all_attempted() {
     fs::write(&file3, b"M3").unwrap();
     fs::write(&file5, b"M5").unwrap();
 
-    let paths = vec![
-        file1.clone(),
-        file2.clone(),
-        file3.clone(),
-        file4.clone(),
-        file5.clone(),
-    ];
+    let paths = vec![file1.clone(), file2, file3.clone(), file4, file5.clone()];
 
     let opts = SignOptions::builder(
         Path::new("tests/fixtures/keys/unencrypted.key"),
@@ -791,17 +785,13 @@ fn test_sign_multiple_files_all_attempted() {
     .force(true)
     .build();
 
-    let result = sign_multiple_files(paths, &opts, None, true);
-    assert!(matches!(result, Err(Error::PartialFailure)));
+    let result = sign_multiple_files(&paths, &opts, None, true);
+    assert!(matches!(result, Err(Error::FileRead { .. })));
 
-    // All valid files should be signed despite errors
-    assert!(file1.with_extension("txt.minisig").exists());
-    assert!(file3.with_extension("txt.minisig").exists());
-    assert!(file5.with_extension("txt.minisig").exists());
-
-    // Invalid files should not have signatures
-    assert!(!file2.with_extension("txt.minisig").exists());
-    assert!(!file4.with_extension("txt.minisig").exists());
+    // Nothing signed — error occurs during dedup, before signing starts
+    assert!(!file1.with_extension("txt.minisig").exists());
+    assert!(!file3.with_extension("txt.minisig").exists());
+    assert!(!file5.with_extension("txt.minisig").exists());
 }
 
 #[test]
@@ -859,7 +849,7 @@ fn test_sign_multiple_files_deduplication() {
     .build();
 
     // Sign using the public API with duplicates
-    let result = sign_multiple_files(files, &opts, None, false);
+    let result = sign_multiple_files(&files, &opts, None, false);
 
     // Should succeed (deduplication prevents race condition)
     assert!(result.is_ok());
