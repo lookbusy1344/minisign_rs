@@ -63,7 +63,7 @@ fn run() -> Result<i32> {
 
 fn handle_generate(cli: &Cli) -> Result<i32> {
     // Get secret key path (use default if not specified)
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Get public key path (use default if not specified)
@@ -240,7 +240,7 @@ fn handle_sign(cli: &Cli) -> Result<i32> {
     let prehashed = cli.prehashed || !cli.legacy;
 
     // Get secret key path
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Load secret key to get credential ID for credential store lookup
@@ -503,7 +503,7 @@ fn handle_recreate(cli: &Cli) -> Result<i32> {
     }
 
     // Get secret key path
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Get public key path
@@ -551,7 +551,7 @@ fn handle_recreate(cli: &Cli) -> Result<i32> {
 
 fn handle_change(cli: &Cli) -> Result<i32> {
     // Get secret key path
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Load the key to get credential ID and check if it's encrypted
@@ -760,7 +760,7 @@ fn handle_inspect(cli: &Cli) -> Result<i32> {
 
     // Determine the source key file path first (before any credential store access)
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let key_file_path: Option<&std::path::Path> = if cli.secret_key_file.is_some() {
         cli.secret_key_file.as_deref()
     } else if cli.public_key_file.is_some() {

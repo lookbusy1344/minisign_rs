@@ -98,7 +98,7 @@ fn test_inspect_action_detection() {
 #[test]
 #[serial]
 fn test_default_paths() {
-    let secret_path = Cli::default_secret_key_path();
+    let secret_path = Cli::default_secret_key_path().unwrap();
     assert!(secret_path.to_string_lossy().contains(".minisign"));
     assert!(secret_path.to_string_lossy().contains("minisign.key"));
 
@@ -217,7 +217,7 @@ fn test_minisign_config_dir_override() {
         env::set_var("MINISIGN_CONFIG_DIR", "/custom/config/path");
     }
 
-    let secret_path = Cli::default_secret_key_path();
+    let secret_path = Cli::default_secret_key_path().unwrap();
 
     // Should use the custom path from env var
     assert_eq!(
@@ -241,7 +241,7 @@ fn test_minisign_config_dir_fallback_to_home() {
         env::remove_var("MINISIGN_CONFIG_DIR");
     }
 
-    let secret_path = Cli::default_secret_key_path();
+    let secret_path = Cli::default_secret_key_path().unwrap();
 
     // Should fall back to home directory
     if let Some(home) = dirs::home_dir() {
@@ -249,6 +249,36 @@ fn test_minisign_config_dir_fallback_to_home() {
     } else {
         assert_eq!(secret_path, Path::new(".minisign.key"));
     }
+}
+
+// M8: MINISIGN_CONFIG_DIR set but empty must be a hard error, not a silent fallback.
+#[test]
+#[serial]
+fn test_minisign_config_dir_empty_is_error() {
+    use std::env;
+
+    // SAFETY: sets env var in a serial test; cleaned up immediately after.
+    unsafe {
+        env::set_var("MINISIGN_CONFIG_DIR", "");
+    }
+
+    let result = Cli::default_secret_key_path();
+
+    // SAFETY: clean up before any assert so we don't leak the env var on failure.
+    unsafe {
+        env::remove_var("MINISIGN_CONFIG_DIR");
+    }
+
+    assert!(
+        result.is_err(),
+        "expected error for empty MINISIGN_CONFIG_DIR, got Ok({:?})",
+        result.unwrap()
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("MINISIGN_CONFIG_DIR"),
+        "error message should name the variable: {err_msg}"
+    );
 }
 
 #[test]
