@@ -585,8 +585,12 @@ fn handle_change(cli: &Cli) -> Result<i32> {
         )?)
     };
 
+    debug_assert!(
+        !cli.no_password || new_password.is_none(),
+        "no_password flag set but new_password is Some — logic invariant violated"
+    );
     let options = ChangeOptions::builder(secret_key_file)
-        .remove_password(cli.no_password && new_password.is_none())
+        .remove_password(cli.no_password)
         .allow_kdf_fallback(cli.allow_kdf_fallback)
         .force_weak_kdf(resolve_force_weak_kdf(cli))
         .build();
