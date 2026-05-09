@@ -30,7 +30,7 @@ const MIN_RECOMMENDED_PASSWORD_LEN: usize = 8;
 fn main() {
     let result = run();
     match result {
-        Ok(()) => process::exit(0),
+        Ok(exit_code) => process::exit(exit_code),
         Err(e) => {
             eprintln!("{e}");
             // Exit code 2 for usage errors, 1 for other errors
@@ -43,7 +43,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<()> {
+fn run() -> Result<i32> {
     let cli = Cli::parse()?;
 
     // Determine which action to perform
@@ -61,7 +61,7 @@ fn run() -> Result<()> {
     }
 }
 
-fn handle_generate(cli: &Cli) -> Result<()> {
+fn handle_generate(cli: &Cli) -> Result<i32> {
     // Get secret key path (use default if not specified)
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
@@ -151,7 +151,8 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         println!("minisign_rs -Vm <file> -P {}", result.public_key_base64());
     }
 
-    Ok(())
+    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
+    Ok(if result.kdf_fallback_used { 3 } else { 0 })
 }
 
 /// Get password for a key: check credential store first, then prompt
@@ -215,7 +216,7 @@ fn forget_password_with_feedback(credential_id: &str, quiet: bool) -> Result<()>
     Ok(())
 }
 
-fn handle_sign(cli: &Cli) -> Result<()> {
+fn handle_sign(cli: &Cli) -> Result<i32> {
     let message_files = cli.all_message_files();
 
     // Validate required arguments
@@ -288,7 +289,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         forget_password_with_feedback(&credential_id, cli.quiet)?;
     }
 
-    Ok(())
+    Ok(0)
 }
 
 /// Apply common CLI flags to a `SignOptions` builder chain
@@ -381,7 +382,7 @@ fn handle_sign_multiple(
     Ok(())
 }
 
-fn handle_verify(cli: &Cli) -> Result<()> {
+fn handle_verify(cli: &Cli) -> Result<i32> {
     let message_files = cli.all_message_files();
 
     // Validate required arguments
@@ -487,10 +488,10 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         )?;
     }
 
-    Ok(())
+    Ok(0)
 }
 
-fn handle_recreate(cli: &Cli) -> Result<()> {
+fn handle_recreate(cli: &Cli) -> Result<i32> {
     // Reject -W flag for recreate operation
     // -W is documented as "generate and change only" in cli.rs
     if cli.no_password {
@@ -545,10 +546,10 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
         forget_password_with_feedback(&credential_id, cli.quiet)?;
     }
 
-    Ok(())
+    Ok(0)
 }
 
-fn handle_change(cli: &Cli) -> Result<()> {
+fn handle_change(cli: &Cli) -> Result<i32> {
     // Get secret key path
     let default_secret_key = Cli::default_secret_key_path();
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
@@ -559,7 +560,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     // Handle --forget-password (standalone usage)
     if cli.forget_password {
-        return forget_password_with_feedback(&old_credential_id, cli.quiet);
+        return forget_password_with_feedback(&old_credential_id, cli.quiet).map(|()| 0);
     }
 
     // Get current password: check credential store first, then prompt if needed
@@ -616,7 +617,8 @@ fn handle_change(cli: &Cli) -> Result<()> {
         );
     }
 
-    Ok(())
+    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
+    Ok(if result.kdf_fallback_used { 3 } else { 0 })
 }
 
 /// Display the signature inspection result
@@ -746,14 +748,14 @@ fn build_inspect_options(path: &std::path::Path, no_decrypt: bool) -> InspectOpt
     }
 }
 
-fn handle_inspect(cli: &Cli) -> Result<()> {
+fn handle_inspect(cli: &Cli) -> Result<i32> {
     // Check if we're inspecting a signature file
     if let Some(ref sig_file) = cli.signature_file {
         let result = inspect_signature(sig_file)?;
 
         println!("Inspecting: {}\n", sig_file.display());
         display_signature_inspect_result(&result);
-        return Ok(());
+        return Ok(0);
     }
 
     // Determine the source key file path first (before any credential store access)
@@ -776,7 +778,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     {
         let seckey = load_secret_key(path)?;
         let credential_id = seckey.credential_id();
-        return forget_password_with_feedback(&credential_id, cli.quiet);
+        return forget_password_with_feedback(&credential_id, cli.quiet).map(|()| 0);
     }
 
     let (mut result, source_description, key_file_path) =
@@ -856,7 +858,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         decrypted || result.key_type() != KeyType::SecretEncrypted,
     );
 
-    Ok(())
+    Ok(0)
 }
 
 /// Check if stdin is a terminal (interactive mode)

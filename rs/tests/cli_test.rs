@@ -834,6 +834,31 @@ fn test_force_weak_kdf_creates_weak_key() {
         .stdout(predicate::str::contains("Fallback (reduced parameters)"));
 }
 
+// Exit code 3 signals "KDF fallback used — key has reduced security parameters".
+// It can only be triggered when scrypt fails with memory pressure AND --allow-kdf-fallback
+// is set, which we cannot reliably simulate in a unit test. This test covers the normal
+// (no-fallback) path and verifies it exits 0, acting as a regression guard.
+#[test]
+fn test_generate_exits_zero_when_no_kdf_fallback() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .args([
+            "-G",
+            "-s",
+            sk_path.to_str().unwrap(),
+            "-p",
+            pk_path.to_str().unwrap(),
+            "-W",
+            "--allow-kdf-fallback",
+        ])
+        .assert()
+        .success()
+        .code(0);
+}
+
 #[test]
 #[cfg(debug_assertions)]
 fn test_force_weak_kdf_requires_no_password_or_password_file() {

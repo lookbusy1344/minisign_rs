@@ -122,6 +122,9 @@ pub struct GenerateResult {
     public_key_base64: String,
     /// Credential store lookup key (for --save-password)
     credential_id: String,
+    /// True when scrypt succeeded only after reducing KDF parameters due to memory pressure.
+    /// Callers should signal this to the user (exit code 3).
+    pub kdf_fallback_used: bool,
 }
 
 impl GenerateResult {
@@ -234,8 +237,8 @@ pub fn generate_with_log_n(
     let (secret_key, public_key, keynum) = generate_keypair()?;
 
     // Create the secret key structure
-    let seckey = if options.encryption == EncryptionMode::Unprotected {
-        SeckeyStruct::new_unencrypted(keynum, &secret_key)
+    let (seckey, kdf_fallback_used) = if options.encryption == EncryptionMode::Unprotected {
+        (SeckeyStruct::new_unencrypted(keynum, &secret_key), false)
     } else {
         use rand_core::{OsRng, RngCore};
 
@@ -248,7 +251,7 @@ pub fn generate_with_log_n(
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
 
-        SeckeyStruct::new_encrypted(
+        let seckey = SeckeyStruct::new_encrypted(
             keynum,
             &secret_key,
             pwd,
@@ -256,7 +259,11 @@ pub fn generate_with_log_n(
             kdf_opslimit,
             kdf_memlimit,
             options.allow_kdf_fallback,
-        )?
+        )?;
+        // Detect fallback by comparing stored params against what was requested.
+        // new_encrypted stores the actual (potentially reduced) params on the struct.
+        let fallback = seckey.kdf_opslimit() < kdf_opslimit || seckey.kdf_memlimit() < kdf_memlimit;
+        (seckey, fallback)
     };
 
     // Create the public key structure
@@ -322,6 +329,7 @@ pub fn generate_with_log_n(
         keynum_words,
         public_key_base64,
         credential_id,
+        kdf_fallback_used,
     })
 }
 
