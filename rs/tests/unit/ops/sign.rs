@@ -215,13 +215,38 @@ fn test_create_global_signature_data() {
 
 #[test]
 fn test_generate_default_trusted_comment() {
-    let comment = generate_default_trusted_comment();
-    assert!(comment.starts_with("timestamp:"));
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("message.txt");
+    fs::write(&file_path, b"test").unwrap();
 
-    // Parse the timestamp to ensure it's valid
-    let timestamp_str = comment.strip_prefix("timestamp:").unwrap();
-    let timestamp: u64 = timestamp_str.parse().expect("should be valid number");
+    let comment = generate_default_trusted_comment(&file_path, false);
+    assert!(comment.starts_with("timestamp:"));
+    assert!(
+        comment.contains("\tfile:message.txt"),
+        "should include filename tab-separated"
+    );
+    assert!(
+        !comment.contains("\thashed"),
+        "non-prehashed should not have \\thashed suffix"
+    );
+
+    let timestamp_str = comment
+        .strip_prefix("timestamp:")
+        .unwrap()
+        .split('\t')
+        .next()
+        .unwrap();
+    let timestamp: u64 = timestamp_str
+        .parse()
+        .expect("timestamp should be a valid integer");
     assert!(timestamp > 0);
+
+    let prehashed = generate_default_trusted_comment(&file_path, true);
+    assert!(prehashed.contains("\tfile:message.txt"));
+    assert!(
+        prehashed.ends_with("\thashed"),
+        "prehashed mode should append \\thashed"
+    );
 }
 
 #[test]

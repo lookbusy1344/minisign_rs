@@ -536,8 +536,10 @@ pub fn create_signature(
     // This ensures we fail fast on invalid input without wasting resources
 
     // Generate trusted comment if not provided
-    let trusted_comment =
-        trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
+    let trusted_comment = trusted_comment.map_or_else(
+        || generate_default_trusted_comment(message_file, prehashed),
+        String::from,
+    );
 
     // Generate untrusted comment if not provided
     let untrusted_comment =
@@ -627,14 +629,15 @@ pub fn create_global_signature_data(sig_struct: &SigStruct, trusted_comment: &st
     data
 }
 
-/// Generate a default trusted comment with timestamp
+/// Generate a default trusted comment with timestamp, matching the C minisign format.
+///
+/// Output: `timestamp:<secs>\tfile:<basename>` with `\thashed` appended for prehashed mode.
 ///
 /// # Note
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
 #[must_use]
-pub fn generate_default_trusted_comment() -> String {
-    // Get current timestamp in UTC
+pub fn generate_default_trusted_comment(message_file: &Path, prehashed: bool) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let timestamp = SystemTime::now()
@@ -645,7 +648,16 @@ pub fn generate_default_trusted_comment() -> String {
         })
         .as_secs();
 
-    format!("timestamp:{timestamp}")
+    let basename = message_file
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
+    if prehashed {
+        format!("timestamp:{timestamp}\tfile:{basename}\thashed")
+    } else {
+        format!("timestamp:{timestamp}\tfile:{basename}")
+    }
 }
 
 pub use super::file_utils::write_signature_file;
