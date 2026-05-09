@@ -593,7 +593,7 @@ fn test_force_overwrite_stale_lock_times_out() {
 
     assert!(
         result.is_err(),
-        "stale lock should fail instead of blocking"
+        "a fresh lock (newer than stale threshold) should time out"
     );
     assert!(
         started_at.elapsed().as_secs() < 1,
@@ -601,7 +601,44 @@ fn test_force_overwrite_stale_lock_times_out() {
     );
     assert!(
         lock_path.exists(),
-        "stale lock should not be removed by a non-owner"
+        "a lock younger than the stale threshold must not be removed"
+    );
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn test_force_overwrite_truly_stale_lock_is_auto_removed() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    let lock_path = temp_dir.path().join(".test.key.force.lock");
+
+    let initial_options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .no_password(true)
+        .build();
+    generate(&initial_options, None).expect("initial keypair generation should succeed");
+
+    // Set a tiny timeout so the stale threshold (2× timeout) is only 2 ms.
+    let _timeout_guard = set_force_overwrite_lock_timeout_for_tests(Duration::from_millis(1));
+    fs::write(&lock_path, "stale lock").unwrap();
+    // Wait until the lock file is definitely older than the 2 ms stale threshold.
+    std::thread::sleep(Duration::from_millis(10));
+
+    let result = generate(
+        &GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+            .force(true)
+            .no_password(true)
+            .build(),
+        None,
+    );
+
+    assert!(
+        result.is_ok(),
+        "a truly stale lock should be auto-removed so the operation succeeds"
+    );
+    assert!(
+        !lock_path.exists(),
+        "the stale lock file should have been removed"
     );
 }
 

@@ -18,12 +18,32 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     thread::sleep,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 const FORCE_OVERWRITE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 const FORCE_OVERWRITE_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn warn_cleanup_failure(path: &Path, result: std::io::Result<()>) {
+    if let Err(e) = result {
+        eprintln!(
+            "Warning: could not remove '{}': {e}; delete manually",
+            path.display()
+        );
+    }
+}
+
+fn lock_is_stale(path: &Path, stale_age: Duration) -> bool {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .is_ok_and(|mtime| {
+            SystemTime::now()
+                .duration_since(mtime)
+                .unwrap_or(Duration::ZERO)
+                >= stale_age
+        })
+}
 
 /// Options for key generation
 #[derive(Debug, Clone)]
@@ -504,39 +524,39 @@ fn write_keypair_files_create_new(
     let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
         Ok(path) => path,
         Err(e) => {
-            let _ = std::fs::remove_file(&secret_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
             return Err(e);
         }
     };
 
     if let Err(e) = std::fs::hard_link(&secret_tmp, secret_path) {
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(Error::file_write(secret_path, e));
     }
     if let Err(e) = sync_parent_directory(secret_path) {
-        let _ = std::fs::remove_file(secret_path);
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(secret_path, std::fs::remove_file(secret_path));
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(e);
     }
 
     if let Err(e) = std::fs::hard_link(&public_tmp, public_path) {
-        let _ = std::fs::remove_file(secret_path);
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(secret_path, std::fs::remove_file(secret_path));
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(Error::file_write(public_path, e));
     }
     if let Err(e) = sync_parent_directory(public_path) {
-        let _ = std::fs::remove_file(public_path);
-        let _ = std::fs::remove_file(secret_path);
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(public_path, std::fs::remove_file(public_path));
+        warn_cleanup_failure(secret_path, std::fs::remove_file(secret_path));
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(e);
     }
 
-    let _ = std::fs::remove_file(&secret_tmp);
-    let _ = std::fs::remove_file(&public_tmp);
+    warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+    warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
     Ok(())
 }
 
@@ -563,7 +583,7 @@ fn write_keypair_files_with_overwrite(
     let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
         Ok(path) => path,
         Err(e) => {
-            let _ = std::fs::remove_file(&secret_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
             return Err(e);
         }
     };
@@ -571,13 +591,13 @@ fn write_keypair_files_with_overwrite(
     let secret_backup = if secret_path.exists() {
         let backup = sibling_temp_path(secret_path, "bak");
         if let Err(e) = std::fs::rename(secret_path, &backup) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
             return Err(Error::file_write(secret_path, e));
         }
         if let Err(e) = sync_parent_directory(secret_path) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
             if let Err(re) = std::fs::rename(&backup, secret_path) {
                 eprintln!(
                     "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
@@ -595,8 +615,8 @@ fn write_keypair_files_with_overwrite(
     let public_backup = if public_path.exists() {
         let backup = sibling_temp_path(public_path, "bak");
         if let Err(e) = std::fs::rename(public_path, &backup) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
             if let Some(sb) = secret_backup.as_ref()
                 && let Err(re) = std::fs::rename(sb, secret_path)
             {
@@ -609,8 +629,8 @@ fn write_keypair_files_with_overwrite(
             return Err(Error::file_write(public_path, e));
         }
         if let Err(e) = sync_parent_directory(public_path) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
             if let Err(re) = std::fs::rename(&backup, public_path) {
                 eprintln!(
                     "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
@@ -637,16 +657,16 @@ fn write_keypair_files_with_overwrite(
     match commit_keypair_files(secret_path, public_path, &secret_tmp, &public_tmp) {
         Ok(()) => {
             if let Some(backup) = secret_backup {
-                let _ = std::fs::remove_file(backup);
+                warn_cleanup_failure(&backup, std::fs::remove_file(&backup));
             }
             if let Some(backup) = public_backup {
-                let _ = std::fs::remove_file(backup);
+                warn_cleanup_failure(&backup, std::fs::remove_file(&backup));
             }
             Ok(())
         }
         Err(e) => {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
             rollback_keypair_commit(
                 secret_path,
                 public_path,
@@ -677,6 +697,18 @@ fn acquire_force_overwrite_lock(secret_path: &Path) -> Result<ForceOverwriteLock
         {
             Ok(_) => return Ok(ForceOverwriteLockGuard { lock_path }),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                let stale_age = 2 * force_overwrite_lock_timeout();
+                if lock_is_stale(&lock_path, stale_age) {
+                    eprintln!(
+                        "Warning: removing stale force-overwrite lock '{}' (older than {}s); \
+                         if another --force is running concurrently this may cause conflicts",
+                        lock_path.display(),
+                        stale_age.as_secs()
+                    );
+                    if std::fs::remove_file(&lock_path).is_ok() {
+                        continue;
+                    }
+                }
                 if started_at.elapsed() >= force_overwrite_lock_timeout() {
                     return Err(Error::Other(format!(
                         "Timed out waiting for force-overwrite lock: {}",
@@ -696,7 +728,7 @@ struct ForceOverwriteLockGuard {
 
 impl Drop for ForceOverwriteLockGuard {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.lock_path);
+        warn_cleanup_failure(&self.lock_path, std::fs::remove_file(&self.lock_path));
     }
 }
 

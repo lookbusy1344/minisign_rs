@@ -296,8 +296,13 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &[u8], mode: u32) -> Resul
         sync_parent_directory(path)
     })();
 
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp_path);
+    if result.is_err()
+        && let Err(e) = std::fs::remove_file(&tmp_path)
+    {
+        eprintln!(
+            "Warning: could not remove '{}': {e}; delete manually",
+            tmp_path.display()
+        );
     }
 
     result
@@ -368,7 +373,12 @@ fn atomic_create_secret_key(path: &Path, contents: &[u8], mode: u32) -> Result<(
         sync_parent_directory(path)
     })();
 
-    let _ = std::fs::remove_file(&tmp_path);
+    if let Err(e) = std::fs::remove_file(&tmp_path) {
+        eprintln!(
+            "Warning: could not remove '{}': {e}; delete manually",
+            tmp_path.display()
+        );
+    }
     result
 }
 
