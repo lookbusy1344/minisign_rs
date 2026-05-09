@@ -17,6 +17,18 @@
 //!
 //! When the `credential_store` feature is disabled, all functions become no-ops
 //! that never access the OS keyring, avoiding keychain popup dialogs during testing.
+//!
+//! # Residual secret exposure
+//!
+//! [`get_password`] uses `Entry::get_secret()` (raw bytes) rather than
+//! `Entry::get_password()` (owned `String`) so the caller-side buffer is wrapped
+//! in `Zeroizing` and wiped on drop. However, the OS backend transport layers —
+//! D-Bus message body on Linux, `SecKeychainItemCopyContent` buffer on macOS,
+//! Windows credential blob — allocate their own copies of the secret inside the
+//! process address space that we cannot reach. Those copies will persist until
+//! the OS deallocates them (typically at the next `malloc`/`free` cycle). This
+//! is an inherent limitation of the `keyring` crate's architecture, not a bug
+//! we can fix here.
 
 use crate::Result;
 use zeroize::Zeroizing;
@@ -75,8 +87,16 @@ cfg_select! {
         pub fn get_password(credential_id: &str) -> Result<Option<Zeroizing<String>>> {
             let entry = Entry::new(SERVICE_NAME, credential_id)
                 .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
-            match entry.get_password() {
-                Ok(password) => Ok(Some(Zeroizing::new(password))),
+            match entry.get_secret() {
+                Ok(raw) => {
+                    let raw = Zeroizing::new(raw);
+                    let password = std::str::from_utf8(&raw).map_err(|e| {
+                        Error::CredentialStoreError(format!(
+                            "stored secret is not valid UTF-8: {e}"
+                        ))
+                    })?;
+                    Ok(Some(Zeroizing::new(password.to_owned())))
+                }
                 Err(keyring::Error::NoEntry) => Ok(None),
                 Err(e) => Err(Error::CredentialStoreError(format!("failed to get password: {e}"))),
             }
