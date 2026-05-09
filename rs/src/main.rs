@@ -189,8 +189,40 @@ fn save_password_to_credential_store(
         if let Some(pwd) = password {
             match minisign::credential_store::save_password(key_id, pwd) {
                 Ok(()) => {
-                    if !quiet {
-                        eprintln!("Password saved to OS credential store");
+                    // Verify the round-trip: some backends silently drop secrets
+                    // larger than their internal limits.
+                    match minisign::credential_store::get_password(key_id) {
+                        Ok(Some(retrieved))
+                            if retrieved.as_bytes().ct_eq(pwd.as_bytes()).into() =>
+                        {
+                            if !quiet {
+                                eprintln!("Password saved to OS credential store");
+                            }
+                        }
+                        Ok(Some(_)) => {
+                            eprintln!(
+                                "Error: credential store save appeared to succeed but the retrieved password does not match; your password was NOT persisted."
+                            );
+                            if let Some(msg) = extra_context_on_error {
+                                eprintln!("{msg}");
+                            }
+                        }
+                        Ok(None) => {
+                            eprintln!(
+                                "Error: credential store save appeared to succeed but the entry cannot be retrieved; your password was NOT persisted."
+                            );
+                            if let Some(msg) = extra_context_on_error {
+                                eprintln!("{msg}");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Error: credential store save appeared to succeed but verification failed: {e}; your password may NOT have been persisted."
+                            );
+                            if let Some(msg) = extra_context_on_error {
+                                eprintln!("{msg}");
+                            }
+                        }
                     }
                 }
                 Err(e) => {
