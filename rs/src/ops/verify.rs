@@ -488,33 +488,24 @@ pub fn verify_multiple_files(
     options: &VerifyOptions<'_>,
     sequential: bool,
 ) -> Result<()> {
-    // Fast path for single file
-    if files.len() == 1 {
-        let result =
-            verify_file_with_key(&files[0], &load_public_key(options.public_key())?, options)?;
-        if !options.quiet {
-            println!(
-                "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
-                sanitised_path_display(&files[0]),
-                result.trusted_comment(),
-                result.key_id(),
-                result.key_id_words()
-            );
-        }
-        return Ok(());
-    }
-
-    // Load public key once — avoids N-1 redundant I/O operations
+    // Load public key once — avoids N-1 redundant I/O operations.
     let pubkey = load_public_key(options.public_key())?;
 
-    // Show key ID once at the top (like signing does)
+    // Show key ID header for all invocations (single or multi), so output
+    // format is identical regardless of file count.
     if !options.quiet {
         let key_id = pubkey.keynum().to_key_id();
         let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
         println!("Verifying with key: {key_id} ({key_id_words})");
     }
 
-    // Multi-file path: verify all files with the already-loaded key.
+    // Fast path for single file: skip rayon setup.
+    if files.len() == 1 {
+        let result = verify_file_with_key(&files[0], &pubkey, options)?;
+        report_file_result(&files[0], &Ok(result), options);
+        return Ok(());
+    }
+
     let results = collect_verify_results(files, &pubkey, options, sequential);
 
     print_summary(&results, options)

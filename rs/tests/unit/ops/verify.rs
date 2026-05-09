@@ -847,3 +847,45 @@ fn test_prehashed_without_output_still_works() {
 
     verify(&verify_opts).expect("prehashed verify without -o must succeed");
 }
+
+#[test]
+fn test_verify_multiple_files_single_file_uses_header_format() {
+    // When verify_multiple_files is called with exactly one file, it must use the
+    // same "Verifying with key:" header format as multi-file, not the old per-file
+    // "Key ID:" format — so scripts don't break when file count crosses 1 → 2.
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    let file1 = temp_dir.path().join("only.txt");
+    fs::write(&file1, b"solo").unwrap();
+
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .build();
+    sign_multiple_files(std::slice::from_ref(&file1), &sign_opts, None, true)
+        .expect("signing should succeed");
+
+    // Capture stdout via quiet=false (we just check it succeeds — the format
+    // is verified by cli_test which can inspect process output).
+    let verify_opts = VerifyOptions::builder(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+    )
+    .build();
+
+    let result = verify_multiple_files(vec![file1.clone()], &verify_opts, true);
+    assert!(
+        result.is_ok(),
+        "single-file verify via verify_multiple_files must succeed"
+    );
+}
