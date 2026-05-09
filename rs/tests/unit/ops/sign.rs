@@ -886,3 +886,41 @@ fn test_create_signature_accepts_zero_timestamp_comment() {
         .verify_global_signature(&public_key)
         .expect("global signature from zero-timestamp path must verify");
 }
+
+/// Pins M4: post-sign self-verification (parity with C minisign).
+///
+/// `create_signature` must produce signatures that verify against the public key
+/// derived from the scalar — not just the stored bytes. This is the same check
+/// C minisign performs before writing the `.minisig` file.
+///
+/// Exercises both the message signature (over raw file content in non-prehashed
+/// mode) and the global signature (over `sig_bytes || trusted_comment`).
+#[test]
+fn test_create_signature_output_verifies_against_derived_public_key() {
+    let temp_dir = TempDir::new().unwrap();
+    let message = b"M4 post-sign self-verification test";
+    let message_path = temp_dir.path().join("message.txt");
+    fs::write(&message_path, message).unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+
+    let sig_box = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        false, // non-prehashed: data_to_sign == raw file bytes
+        Some("trusted comment for M4 test"),
+        Some("untrusted comment"),
+    )
+    .expect("create_signature must succeed for a valid key");
+
+    // Message signature must verify against the derived public key.
+    crypto_verify(&public_key, message, sig_box.sig_struct().signature())
+        .expect("message signature must verify against derived public key");
+
+    // Global signature must verify against the derived public key.
+    let global_sig_data =
+        create_global_signature_data(sig_box.sig_struct(), sig_box.trusted_comment());
+    crypto_verify(&public_key, &global_sig_data, sig_box.global_signature())
+        .expect("global signature must verify against derived public key");
+}

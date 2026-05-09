@@ -5,7 +5,9 @@
 use super::file_utils::{load_secret_key, read_message_file};
 use crate::{
     Result,
-    crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
+    crypto::{
+        PublicKey, SecretKey, blake2b_512_stream, sign as crypto_sign, verify as crypto_verify,
+    },
     errors::Error,
     keys::SeckeyStruct,
     signature::{
@@ -14,6 +16,7 @@ use crate::{
     },
     validation::validate_comment_with_length,
 };
+use ed25519_dalek::SigningKey;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -579,6 +582,25 @@ pub fn create_signature(
     // Create global signature (signs: signature_bytes || trusted_comment)
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
     let global_signature = crypto_sign(secret_key, &global_sig_data)?;
+
+    // M4: Post-sign self-verification (parity with C minisign, which re-verifies before writing).
+    // Derives the public key from the scalar — never trusts stored bytes (H4).
+    // Catches bugs in the crypto wrapper layer before the .minisig is serialised.
+    let derived_pk = {
+        let signing_key = SigningKey::from_keypair_bytes(secret_key.as_bytes())
+            .map_err(|e| Error::InvalidSecretKey(format!("key inconsistency detected: {e}")))?;
+        PublicKey::from_bytes(signing_key.verifying_key().to_bytes())
+    };
+    crypto_verify(&derived_pk, data_to_sign, sig_struct.signature()).map_err(|_| {
+        Error::other(
+            "post-sign self-verification failed for message signature; signing key may be corrupt",
+        )
+    })?;
+    crypto_verify(&derived_pk, &global_sig_data, &global_signature).map_err(|_| {
+        Error::other(
+            "post-sign self-verification failed for global signature; signing key may be corrupt",
+        )
+    })?;
 
     SignatureBox::new(
         untrusted_comment,
