@@ -6,8 +6,10 @@ use super::file_utils::{load_secret_key, write_public_key_file};
 use crate::{
     Result,
     crypto::PublicKey,
+    errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
 };
+use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
 
 /// Options for recreating a public key
@@ -133,9 +135,7 @@ pub fn recreate_with_key(
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = seckey.extract_key(password)?;
 
-    // Extract public key from secret key
-    // Ed25519 secret keys contain the public key in the second half (bytes 32-64)
-    let public_key = extract_public_key_from_secret(&secret_key);
+    let public_key = extract_public_key_from_secret(&secret_key)?;
 
     // Create public key structure
     let pubkey = PubkeyStruct::new(keynum, public_key);
@@ -155,17 +155,20 @@ pub fn recreate_with_key(
     })
 }
 
-/// Extract the public key from an Ed25519 secret key
+/// Extract the public key from an Ed25519 secret key, verifying scalar/pubkey consistency.
 ///
-/// Ed25519 secret keys are 64 bytes: [32-byte scalar || 32-byte public key]
+/// `from_keypair_bytes` validates that the stored public-key half (bytes 32..64) matches
+/// the scalar (bytes 0..32). We return the *derived* key so tampered stored bytes are
+/// always rejected, not silently trusted.
+///
+/// # Errors
+///
+/// Returns `Error::InvalidSecretKey` if the stored public-key bytes do not match the scalar.
 // pub for unit tests
-#[must_use]
-pub fn extract_public_key_from_secret(secret_key: &crate::crypto::SecretKey) -> PublicKey {
-    let secret_bytes = secret_key.as_bytes();
-
-    // Ed25519 secret key format: [secret_scalar (32 bytes) || public_key (32 bytes)]
-    let mut public_key_bytes = [0u8; 32];
-    public_key_bytes.copy_from_slice(&secret_bytes[32..64]);
-
-    PublicKey::from_bytes(public_key_bytes)
+pub fn extract_public_key_from_secret(secret_key: &crate::crypto::SecretKey) -> Result<PublicKey> {
+    let signing_key = SigningKey::from_keypair_bytes(secret_key.as_bytes())
+        .map_err(|e| Error::InvalidSecretKey(format!("public key does not match scalar: {e}")))?;
+    Ok(PublicKey::from_bytes(
+        signing_key.verifying_key().to_bytes(),
+    ))
 }

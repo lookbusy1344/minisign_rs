@@ -1,4 +1,4 @@
-use minisign::crypto::generate_keypair;
+use minisign::crypto::{SecretKey, generate_keypair};
 use minisign::errors::Error;
 use minisign::keys::{PubkeyStruct, SeckeyStruct};
 use minisign::ops::recreate::{RecreateOptions, extract_public_key_from_secret, recreate};
@@ -207,9 +207,27 @@ fn test_recreate_force_overwrite() {
 fn test_extract_public_key_from_secret() {
     let (secret_key, expected_public_key, _keynum) = generate_keypair().expect("RNG should work");
 
-    let extracted_public = extract_public_key_from_secret(&secret_key);
+    let extracted_public =
+        extract_public_key_from_secret(&secret_key).expect("valid keypair should succeed");
 
     assert_eq!(extracted_public.as_bytes(), expected_public_key.as_bytes());
+}
+
+#[test]
+fn test_extract_public_key_rejects_tampered_stored_bytes() {
+    // Build a key where bytes[32..64] (the stored public-key half) are all-zeros,
+    // which will not match the scalar at bytes[0..32] for any real key.
+    let (secret_key, _, _) = generate_keypair().expect("RNG should work");
+    let mut raw = *secret_key.as_bytes();
+    raw[32..64].fill(0); // zero out the stored public-key half
+    let tampered = SecretKey::from_bytes(raw);
+
+    let result = extract_public_key_from_secret(&tampered);
+    assert!(
+        result.is_err(),
+        "tampered stored public-key bytes must be rejected"
+    );
+    assert!(matches!(result.unwrap_err(), Error::InvalidSecretKey(_)));
 }
 
 #[test]
