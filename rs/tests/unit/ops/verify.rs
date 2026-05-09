@@ -747,3 +747,103 @@ fn test_output_uses_content_captured_at_verify_time() {
         "output must be the verified content, not post-verification disk content"
     );
 }
+
+/// H6: prehashed + output buffers at verify time — no TOCTOU window.
+///
+/// Prehashed mode used to: stream-hash → verify → rewind fd → `io::copy`.
+/// An attacker who modifies the file after hashing but before `io::copy` would
+/// see their bytes emitted on stdout while `verify` returned success.
+/// The fix buffers the file first so the hash and the returned bytes are the
+/// same allocation. This test confirms: file modified after `verify()` returns
+/// does NOT affect the bytes emitted by `write_to`.
+#[test]
+fn test_prehashed_output_captures_content_at_verify_time() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let original = b"prehashed TOCTOU test content";
+    let tampered = b"attacker-supplied bytes - must NOT appear in output";
+
+    fs::write(&message_path, original).unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().unwrap();
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    sign(
+        &SignOptions::builder(sk_path.as_path(), message_path.as_path())
+            .signature_file(sig_path.as_path())
+            .prehashed(true)
+            .quiet(true)
+            .build(),
+        None,
+    )
+    .unwrap();
+
+    let verify_opts = VerifyOptions::builder(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+    )
+    .output(true)
+    .build();
+
+    let mut result = verify(&verify_opts).expect("prehashed verification must succeed");
+
+    // Simulate attacker replacing the file after verification completes.
+    fs::write(&message_path, tampered).unwrap();
+
+    let mut out = Vec::new();
+    result
+        .take_message_output()
+        .expect("output must be captured when output=true")
+        .write_to(&mut out)
+        .unwrap();
+
+    assert_eq!(
+        out, original,
+        "prehashed output must be the content verified, not post-verification disk state"
+    );
+}
+
+/// H6 regression: prehashed verify WITHOUT -o must still stream (no buffering regression).
+#[test]
+fn test_prehashed_without_output_still_works() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    fs::write(&message_path, b"streaming regression test").unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().unwrap();
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    sign(
+        &SignOptions::builder(sk_path.as_path(), message_path.as_path())
+            .signature_file(sig_path.as_path())
+            .prehashed(true)
+            .quiet(true)
+            .build(),
+        None,
+    )
+    .unwrap();
+
+    let verify_opts = VerifyOptions::builder(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+    )
+    .build(); // output=false
+
+    verify(&verify_opts).expect("prehashed verify without -o must succeed");
+}

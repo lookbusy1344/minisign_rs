@@ -7,7 +7,8 @@ use super::file_utils::{
 };
 use crate::{
     Result,
-    crypto::{blake2b_512_stream, verify as crypto_verify},
+    constants::MAX_MESSAGE_SIZE_BYTES,
+    crypto::{blake2b_512, blake2b_512_stream, verify as crypto_verify},
     errors::Error,
     keys::PubkeyStruct,
     signature::SignatureBox,
@@ -15,7 +16,7 @@ use crate::{
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::fs::File;
-use std::io::{self, Seek, SeekFrom};
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Options for signature verification
@@ -114,14 +115,13 @@ pub enum PublicKeySource<'a> {
     Base64(&'a str),
 }
 
-/// The verified message content, held from the original file descriptor to prevent TOCTOU.
+/// Verified message content captured at verification time.
 ///
-/// Non-prehashed: the file was fully buffered during verification.
-/// Prehashed: the file descriptor is rewound to the start after streaming the hash.
+/// All paths (prehashed and non-prehashed) buffer the file content before verification,
+/// so the bytes returned here are exactly what was hashed — no TOCTOU window.
 #[derive(Debug)]
 pub enum MessageSource {
     Buffer(Vec<u8>),
-    File(File),
 }
 
 impl MessageSource {
@@ -129,14 +129,10 @@ impl MessageSource {
     ///
     /// # Errors
     ///
-    /// Returns an error if the write or (for `File`) the read fails.
+    /// Returns an error if the write fails.
     pub fn write_to(self, w: &mut impl io::Write) -> io::Result<()> {
         match self {
             Self::Buffer(buf) => w.write_all(&buf),
-            Self::File(mut f) => {
-                io::copy(&mut f, w)?;
-                Ok(())
-            }
         }
     }
 }
@@ -384,15 +380,31 @@ pub fn verify_message_signature(
     }
 
     if sig_box.sig_struct().is_prehashed() {
-        // Pass &mut file so we keep the fd open for output — avoids re-opening the path.
-        let mut file = File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
-        let hash = blake2b_512_stream(&mut file)?;
-        crypto_verify(pubkey.public_key(), &hash, sig_box.sig_struct().signature())?;
         if capture_output {
-            file.seek(SeekFrom::Start(0))
-                .map_err(|e| Error::file_read(message_file, e))?;
-            return Ok(Some(MessageSource::File(file)));
+            // H6: close the TOCTOU window between hashing and emitting.
+            // The old path (stream-hash → seek → io::copy) lets an attacker modify the file
+            // between verification and output. Buffering first means the hash and the returned
+            // bytes are the same allocation: no window exists.
+            // Files > MAX_MESSAGE_SIZE_BYTES cannot be safely buffered; refuse that combination.
+            let file_size = std::fs::metadata(message_file)
+                .map_err(|e| Error::file_read(message_file, e))?
+                .len();
+            if file_size > MAX_MESSAGE_SIZE_BYTES {
+                return Err(Error::other(format!(
+                    "cannot combine prehashed mode (-H) with output (-o) for files larger \
+                     than {MAX_MESSAGE_SIZE_BYTES} bytes: the file must be buffered to \
+                     eliminate the TOCTOU window between hash verification and output"
+                )));
+            }
+            let file_buf = read_message_file(message_file)?;
+            let hash = blake2b_512(&file_buf);
+            crypto_verify(pubkey.public_key(), &hash, sig_box.sig_struct().signature())?;
+            return Ok(Some(MessageSource::Buffer(file_buf)));
         }
+        // No output needed: stream-hash without buffering (handles files > 1 GB).
+        let file = File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        let hash = blake2b_512_stream(file)?;
+        crypto_verify(pubkey.public_key(), &hash, sig_box.sig_struct().signature())?;
         Ok(None)
     } else {
         let file_buf = read_message_file(message_file)?;
