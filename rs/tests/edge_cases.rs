@@ -307,7 +307,6 @@ fn test_generate_key_with_empty_password() {
 
 /// Test changing password from non-empty to empty
 #[test]
-#[cfg_attr(not(unix), ignore = "change-password not yet implemented on Windows")]
 fn test_change_password_to_empty() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let secret_key = temp_dir.path().join("test.key");
@@ -342,7 +341,6 @@ fn test_change_password_to_empty() {
 
 /// Test changing password from empty to non-empty
 #[test]
-#[cfg_attr(not(unix), ignore = "change-password not yet implemented on Windows")]
 fn test_change_password_from_empty() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let secret_key = temp_dir.path().join("test.key");

@@ -183,17 +183,6 @@ pub fn change_with_log_n(
         (seckey, fallback)
     };
 
-    // Windows has no atomic rename + O_NOFOLLOW equivalent implemented yet.
-    // Truncate-then-write risks key corruption on crash; refuse until properly implemented.
-    #[cfg(not(unix))]
-    if options.secret_key_file.exists() {
-        return Err(Error::Other(
-            "Changing the password of an existing secret key is not yet supported on Windows. \
-             Use minisign on a Unix system to change the key password."
-                .into(),
-        ));
-    }
-
     // Write the modified secret key back to file
     let seckey_comment = if options.encryption == EncryptionMode::Unprotected {
         "minisign secret key"

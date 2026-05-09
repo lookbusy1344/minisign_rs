@@ -1,16 +1,18 @@
 //! Unit tests for key generation operations
 
 use minisign::ops::file_utils::{write_public_key_file, write_secret_key_file};
+#[cfg(all(debug_assertions, unix))]
+use minisign::ops::generate::set_force_overwrite_lock_timeout_for_tests;
 use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
     ops::generate::{
         GenerateOptions, ensure_parent_directory, generate, generate_with_log_n,
         inject_commit_failure_before_public_rename, inject_commit_failure_before_secret_rename,
-        set_force_overwrite_lock_timeout_for_tests,
     },
 };
 use std::fs;
+#[cfg(all(debug_assertions, unix))]
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
@@ -569,6 +571,7 @@ fn test_force_secret_key_fail_restores_keypair() {
 
 #[test]
 #[cfg(debug_assertions)]
+#[cfg(unix)]
 fn test_force_overwrite_stale_lock_times_out() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");
@@ -607,6 +610,7 @@ fn test_force_overwrite_stale_lock_times_out() {
 
 #[test]
 #[cfg(debug_assertions)]
+#[cfg(unix)]
 fn test_force_overwrite_truly_stale_lock_is_auto_removed() {
     let temp_dir = TempDir::new().unwrap();
     let sk_path = temp_dir.path().join("test.key");

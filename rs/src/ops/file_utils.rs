@@ -6,7 +6,7 @@ use crate::{
 };
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Maximum file size accepted for key files (secret key and public key).
 ///
@@ -115,9 +115,86 @@ cfg_select! {
         fn configure_write_options(_options: &mut OpenOptions, _force: bool, _unix_mode: Option<u32>) {}
 
         fn write_secret_key_file_impl(path: &Path, contents: &[u8], force: bool) -> Result<()> {
-            write_file(path, contents, force, None)
+            if force {
+                overwrite_secret_key_via_backup(path, contents)
+            } else {
+                write_file(path, contents, false, None)
+            }
         }
     }
+}
+
+fn sibling_temp_path(path: &Path, suffix: &str) -> PathBuf {
+    use rand_core::{OsRng, RngCore};
+
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    let mut nonce_bytes = [0u8; 8];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = u64::from_le_bytes(nonce_bytes);
+    let file_name = path
+        .file_name()
+        .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned);
+    let name = file_name.to_string_lossy();
+
+    dir.join(format!(".{name}.{nonce:016x}.{suffix}"))
+}
+
+#[cfg(not(unix))]
+fn overwrite_secret_key_via_backup(path: &Path, contents: &[u8]) -> Result<()> {
+    validate_windows_path(path)?;
+
+    let tmp_path = sibling_temp_path(path, "tmp");
+    let backup_path = sibling_temp_path(path, "bak");
+    let mut backup_created = false;
+
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+        file.write_all(contents)
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+        file.sync_all()
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+        drop(file);
+
+        match std::fs::rename(path, &backup_path) {
+            Ok(()) => backup_created = true,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(Error::file_write(path, e)),
+        }
+
+        if let Err(e) = std::fs::rename(&tmp_path, path) {
+            if backup_created && let Err(restore_error) = std::fs::rename(&backup_path, path) {
+                eprintln!(
+                    "CRITICAL: rollback failed - could not restore '{}' from backup '{}': {restore_error}; recover manually",
+                    path.display(),
+                    backup_path.display()
+                );
+            }
+            return Err(Error::file_write(path, e));
+        }
+
+        Ok(())
+    })();
+
+    if let Err(e) = std::fs::remove_file(&tmp_path)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        eprintln!(
+            "Warning: could not remove '{}': {e}; delete manually",
+            tmp_path.display()
+        );
+    }
+    if result.is_ok() && backup_created {
+        std::fs::remove_file(&backup_path).map_err(|e| Error::file_write(&backup_path, e))?;
+    }
+
+    result
 }
 
 /// Read a file into a `String`, rejecting files that exceed `max_bytes`.
@@ -257,27 +334,10 @@ fn write_file(path: &Path, contents: &[u8], force: bool, unix_mode: Option<u32>)
 /// Returns [`Error::FileWrite`] on any I/O failure.
 #[cfg(unix)]
 fn atomic_overwrite_secret_key(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
-    use rand_core::{OsRng, RngCore};
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     validate_windows_path(path)?;
-
-    let dir = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(std::path::Path::new("."));
-
-    // Use a CSPRNG nonce for an unpredictable, collision-resistant temp name.
-    let mut nonce_bytes = [0u8; 8];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = u64::from_le_bytes(nonce_bytes);
-    let tmp_name = format!(
-        ".{}.{nonce:016x}.tmp",
-        path.file_name()
-            .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned)
-            .to_string_lossy()
-    );
-    let tmp_path = dir.join(&tmp_name);
+    let tmp_path = sibling_temp_path(path, "tmp");
 
     let result = (|| -> Result<()> {
         let mut file = OpenOptions::new()
@@ -329,26 +389,10 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &[u8], mode: u32) -> Resul
 /// Returns [`Error::FileWrite`] on any other I/O failure.
 #[cfg(unix)]
 fn atomic_create_secret_key(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
-    use rand_core::{OsRng, RngCore};
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     validate_windows_path(path)?;
-
-    let dir = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(std::path::Path::new("."));
-
-    let mut nonce_bytes = [0u8; 8];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = u64::from_le_bytes(nonce_bytes);
-    let tmp_name = format!(
-        ".{}.{nonce:016x}.tmp",
-        path.file_name()
-            .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned)
-            .to_string_lossy()
-    );
-    let tmp_path = dir.join(&tmp_name);
+    let tmp_path = sibling_temp_path(path, "tmp");
 
     let result = (|| -> Result<()> {
         let mut file = OpenOptions::new()
