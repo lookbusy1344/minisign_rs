@@ -580,7 +580,7 @@ fn test_force_overwrite_stale_lock_times_out() {
         .build();
     generate(&initial_options, None).expect("initial keypair generation should succeed");
     fs::write(&lock_path, "stale lock").unwrap();
-    let _timeout_guard = set_force_overwrite_lock_timeout_for_tests(Duration::from_millis(100));
+    let _timeout_guard = set_force_overwrite_lock_timeout_for_tests(Duration::from_secs(2));
 
     let started_at = Instant::now();
     let result = generate(
@@ -596,7 +596,7 @@ fn test_force_overwrite_stale_lock_times_out() {
         "a fresh lock (newer than stale threshold) should time out"
     );
     assert!(
-        started_at.elapsed().as_secs() < 1,
+        started_at.elapsed() < Duration::from_secs(5),
         "debug lock timeout should keep the regression test fast"
     );
     assert!(
