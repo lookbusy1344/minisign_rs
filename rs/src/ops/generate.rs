@@ -2,6 +2,7 @@
 //!
 //! This module implements keypair generation for minisign.
 
+use super::file_utils::sync_parent_directory;
 use super::{EncryptionMode, OverwritePolicy};
 use crate::{
     Result,
@@ -380,23 +381,6 @@ fn sibling_temp_path(path: &Path, suffix: &str) -> PathBuf {
         .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned);
     let name = name.to_string_lossy();
     dir.join(format!(".{name}.{nonce:016x}.{suffix}"))
-}
-
-#[cfg(unix)]
-fn sync_parent_directory(path: &Path) -> Result<()> {
-    use std::fs::File;
-
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        let dir = File::open(parent).map_err(|e| Error::file_write(parent, e))?;
-        dir.sync_all().map_err(|e| Error::file_write(parent, e))?;
-    }
-    Ok(())
-}
-
-#[cfg(not(unix))]
-#[allow(clippy::unnecessary_wraps)]
-fn sync_parent_directory(_path: &Path) -> Result<()> {
-    Ok(())
 }
 
 #[cfg(not(debug_assertions))]
