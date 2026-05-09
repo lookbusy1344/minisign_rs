@@ -374,28 +374,29 @@ impl SeckeyStruct {
             let (log_n, r, p) =
                 Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit)?;
 
-            // Attempt key derivation
-            if let Ok(key) =
-                derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)
-            {
-                break key;
+            match derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE) {
+                Ok(key) => break key,
+                // scrypt() itself failed (memory pressure) — fall through to retry logic.
+                Err(Error::KdfMemoryError(_)) => {}
+                // Programmer/parameter bug or any other variant — never retry, propagate immediately.
+                Err(e) => return Err(e),
             }
 
-            // Derivation failed - check if we can fallback
+            // Memory failure — check if we can fallback
             if !allow_fallback {
-                return Err(Error::KdfError(
-                    "Key derivation failed - more memory needed (use --allow-kdf-fallback to reduce security parameters, not recommended)".to_string(),
+                return Err(Error::KdfMemoryError(
+                    "Key derivation failed — more memory needed (use --allow-kdf-fallback to reduce security parameters, not recommended)".to_string(),
                 ));
             }
 
-            // Fallback is allowed - try with reduced parameters
+            // Fallback is allowed — try with reduced parameters
             current_opslimit /= 2;
             current_memlimit /= 2;
 
             // Check if we've fallen below minimum thresholds
             if current_opslimit < SCRYPT_OPSLIMIT_MIN || current_memlimit < SCRYPT_MEMLIMIT_MIN {
-                return Err(Error::KdfError(
-                    "Unable to complete key derivation - more memory needed even with minimum parameters".to_string(),
+                return Err(Error::KdfMemoryError(
+                    "Unable to complete key derivation — more memory needed even with minimum parameters".to_string(),
                 ));
             }
 

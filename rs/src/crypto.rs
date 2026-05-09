@@ -533,8 +533,10 @@ const MAX_KDF_OUTPUT_LEN: usize = 1024;
 ///
 /// # Errors
 ///
-/// Returns `Error::KdfError` if key derivation fails or if `output_len`
-/// exceeds `MAX_KDF_OUTPUT_LEN` (1024 bytes).
+/// Returns `Error::KdfError` if `output_len` exceeds `MAX_KDF_OUTPUT_LEN` (1024 bytes) or if
+/// `ScryptParams::new` rejects the parameters (programmer/parameter bugs, fallback must NOT retry).
+/// Returns `Error::KdfMemoryError` if the underlying `scrypt()` call fails (memory pressure,
+/// fallback may retry with reduced parameters).
 pub fn derive_key_with_params(
     password: &[u8],
     salt: &[u8],
@@ -558,8 +560,12 @@ pub fn derive_key_with_params(
     let params = ScryptParams::new(log_n, r, p, params_len)
         .map_err(|e| Error::KdfError(format!("invalid scrypt parameters: {e}")))?;
 
+    // scrypt() returns Err(InvalidOutputLen) only for empty or astronomically large output
+    // buffers; with our 1..=MAX_KDF_OUTPUT_LEN guard above, this is unreachable via the
+    // standard Rust allocator (OOM panics rather than errors). KdfMemoryError is mapped here
+    // so the fallback loop in keys.rs can distinguish this class from programmer/param errors.
     scrypt(password, salt, &params, &mut output)
-        .map_err(|e| Error::KdfError(format!("scrypt failed: {e}")))?;
+        .map_err(|e| Error::KdfMemoryError(format!("scrypt failed: {e}")))?;
 
     // Verified against scrypt-0.11.0: the low-level scrypt() uses output.len() directly,
     // ignoring Params.len. A future version that validates them would error here rather
