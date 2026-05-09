@@ -276,7 +276,7 @@ fn test_verify_multiple_files_sequential() {
         .trusted_comment("Batch verification test")
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Now verify multiple files
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
@@ -325,7 +325,7 @@ fn test_verify_multiple_files_parallel() {
         .trusted_comment("Parallel verification test")
         .build();
 
-    sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
+    sign_multiple_files(&paths, &sign_opts, None, false).expect("signing should succeed");
 
     // Now verify multiple files in parallel
     let verify_opts = VerifyOptions::builder(
@@ -378,7 +378,7 @@ fn test_verify_multiple_files_partial_failure() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Corrupt file2's content (signature won't match)
     fs::write(&file2, b"Corrupted message").unwrap();
@@ -438,7 +438,7 @@ fn test_verify_multiple_files_all_attempted() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Now create file2 but don't sign it
     fs::write(&file2, b"M2").unwrap();
@@ -500,7 +500,7 @@ fn test_verify_multiple_files_quiet_mode() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Verify with quiet mode (should suppress output)
     let verify_paths = vec![file1.clone(), file2.clone()];
