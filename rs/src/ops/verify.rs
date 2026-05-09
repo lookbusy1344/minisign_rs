@@ -261,6 +261,11 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
 
 cfg_select! {
     feature = "parallel" => {
+        // Memory note: non-prehashed (legacy) signatures buffer the full file (up to 1 GB) per
+        // worker. With N rayon threads, peak RSS can reach N × 1 GB. Unlike sign, we cannot know
+        // each file's signature mode until the .minisig is parsed, so we cannot gate on it here.
+        // To guarantee bounded memory when verifying large legacy-signed files, pass `--prehashed`
+        // (`-H`) to reject non-prehashed signatures upfront, or use `--sequential`.
         fn collect_verify_results(
             files: Vec<PathBuf>,
             pubkey: &PubkeyStruct,

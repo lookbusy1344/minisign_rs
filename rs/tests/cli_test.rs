@@ -1747,6 +1747,56 @@ fn cli_sign_multiple_files_sequential() {
     assert!(file2.with_extension("txt.minisig").exists());
 }
 
+// Legacy (-l) mode buffers each file fully (up to 1 GB). With the parallel feature, the
+// implementation must force sequential execution to bound peak RSS to a single buffer. Verify
+// that multi-file legacy signing completes correctly when the parallel feature is active.
+#[cfg(feature = "parallel")]
+#[test]
+fn cli_sign_multiple_files_legacy_parallel_falls_back_to_sequential() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("a_legacy.txt");
+    let file2 = temp_dir.path().join("b_legacy.txt");
+    let file3 = temp_dir.path().join("c_legacy.txt");
+
+    fs::write(&file1, b"legacy content A").unwrap();
+    fs::write(&file2, b"legacy content B").unwrap();
+    fs::write(&file3, b"legacy content C").unwrap();
+
+    minisign_cmd()
+        .args([
+            "-S",
+            "-l",
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-W",
+            "-q",
+            "-m",
+            file1.to_str().unwrap(),
+            file2.to_str().unwrap(),
+            file3.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    for file in [&file1, &file2, &file3] {
+        let sig_path = file.with_extension("txt.minisig");
+        assert!(
+            sig_path.exists(),
+            "signature missing: {}",
+            sig_path.display()
+        );
+
+        let sig_contents = fs::read_to_string(&sig_path).unwrap();
+        let sig_box = minisign::signature::SignatureBox::from_file_contents(&sig_contents).unwrap();
+        assert!(
+            !sig_box.sig_struct().is_prehashed(),
+            "expected legacy (non-prehashed) signature for {}",
+            file.display()
+        );
+    }
+}
+
 #[test]
 fn cli_sign_multiple_files_partial_failure_exit_code() {
     let temp_dir = TempDir::new().unwrap();

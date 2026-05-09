@@ -32,7 +32,8 @@ OPTIONS:
     -f, --force                         Force overwrite existing files
     -h, --help                          Show this help
     -H, --prehashed                     Sign or verify a prehashed file
-    -l, --legacy                        Legacy mode (sign only)
+    -l, --legacy                        Legacy mode (sign only); forces sequential execution
+                                        to bound memory (non-prehashed buffers up to 1 GB per file)
     -m, --input <FILE>                  Message file
     -o, --output                        Output verification result to stdout
     -p, --publickey-path <FILE>         Public key file

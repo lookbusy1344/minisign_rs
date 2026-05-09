@@ -337,7 +337,10 @@ cfg_select! {
             options: &SignOptions<'_>,
             sequential: bool,
         ) -> Vec<FileSignResult> {
-            if sequential {
+            // Legacy (non-prehashed) mode buffers the full file into memory (up to 1 GB each).
+            // Running N workers in parallel risks N × 1 GB peak RSS. Force sequential to bound
+            // memory use to a single in-flight buffer.
+            if sequential || !options.prehashed {
                 files
                     .into_iter()
                     .map(|file| {
