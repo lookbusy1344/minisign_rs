@@ -891,7 +891,6 @@ fn prompt_password(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
         // Open once; derive metadata from the fd to avoid TOCTOU races.
-        // Open once; derive metadata from the fd to avoid TOCTOU races.
         let file = File::open(path)
             .map_err(|e| Error::Io(format!("Failed to open password file: {e}")))?;
         let metadata = file
@@ -909,19 +908,22 @@ fn prompt_password(
                 "Password file too large: {size} bytes exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
             )));
         }
-        let capacity = usize::try_from(size).unwrap_or(0);
-        let mut password = Zeroizing::new(String::with_capacity(capacity));
+        // Pre-allocate the exact capacity so read_to_end cannot reallocate,
+        // which would orphan an unzeroed buffer that Zeroizing cannot wipe.
+        let max = usize::try_from(MAX_PASSWORD_FILE_BYTES)
+            .map_err(|e| Error::Io(format!("MAX_PASSWORD_FILE_BYTES overflow: {e}")))?;
+        let mut buf = Zeroizing::new(Vec::with_capacity(max + 1));
         file.take(MAX_PASSWORD_FILE_BYTES + 1)
-            .read_to_string(&mut password)
+            .read_to_end(&mut buf)
             .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
-        if password.len() as u64 > MAX_PASSWORD_FILE_BYTES {
+        if buf.len() > max {
             return Err(Error::Io(format!(
                 "Password file too large: exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
             )));
         }
-        // Trim trailing newline in place
-        let trimmed_len = password.trim_end().len();
-        password.truncate(trimmed_len);
+        let text = std::str::from_utf8(&buf)
+            .map_err(|_| Error::Io("Password file contains invalid UTF-8".into()))?;
+        let password = Zeroizing::new(text.trim_end().to_owned());
         return Ok(password);
     }
 
