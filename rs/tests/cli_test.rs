@@ -834,6 +834,31 @@ fn test_force_weak_kdf_creates_weak_key() {
         .stdout(predicate::str::contains("Fallback (reduced parameters)"));
 }
 
+// Exit code 3 signals "KDF fallback used — key has reduced security parameters".
+// It can only be triggered when scrypt fails with memory pressure AND --allow-kdf-fallback
+// is set, which we cannot reliably simulate in a unit test. This test covers the normal
+// (no-fallback) path and verifies it exits 0, acting as a regression guard.
+#[test]
+fn test_generate_exits_zero_when_no_kdf_fallback() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .args([
+            "-G",
+            "-s",
+            sk_path.to_str().unwrap(),
+            "-p",
+            pk_path.to_str().unwrap(),
+            "-W",
+            "--allow-kdf-fallback",
+        ])
+        .assert()
+        .success()
+        .code(0);
+}
+
 #[test]
 #[cfg(debug_assertions)]
 fn test_force_weak_kdf_requires_no_password_or_password_file() {
@@ -1747,8 +1772,60 @@ fn cli_sign_multiple_files_sequential() {
     assert!(file2.with_extension("txt.minisig").exists());
 }
 
+// Legacy (-l) mode buffers each file fully (up to 1 GB). With the parallel feature, the
+// implementation must force sequential execution to bound peak RSS to a single buffer. Verify
+// that multi-file legacy signing completes correctly when the parallel feature is active.
+#[cfg(feature = "parallel")]
 #[test]
-fn cli_sign_multiple_files_partial_failure_exit_code() {
+fn cli_sign_multiple_files_legacy_parallel_falls_back_to_sequential() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("a_legacy.txt");
+    let file2 = temp_dir.path().join("b_legacy.txt");
+    let file3 = temp_dir.path().join("c_legacy.txt");
+
+    fs::write(&file1, b"legacy content A").unwrap();
+    fs::write(&file2, b"legacy content B").unwrap();
+    fs::write(&file3, b"legacy content C").unwrap();
+
+    minisign_cmd()
+        .args([
+            "-S",
+            "-l",
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-W",
+            "-q",
+            "-m",
+            file1.to_str().unwrap(),
+            file2.to_str().unwrap(),
+            file3.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    for file in [&file1, &file2, &file3] {
+        let sig_path = file.with_extension("txt.minisig");
+        assert!(
+            sig_path.exists(),
+            "signature missing: {}",
+            sig_path.display()
+        );
+
+        let sig_contents = fs::read_to_string(&sig_path).unwrap();
+        let sig_box = minisign::signature::SignatureBox::from_file_contents(&sig_contents).unwrap();
+        assert!(
+            !sig_box.sig_struct().is_prehashed(),
+            "expected legacy (non-prehashed) signature for {}",
+            file.display()
+        );
+    }
+}
+
+#[test]
+fn cli_sign_multiple_files_nonexistent_fails_fast() {
+    // A nonexistent file in a batch fails at canonicalization (before any signing
+    // starts), so no signatures are produced for any file in the batch.
     let temp_dir = TempDir::new().unwrap();
 
     let file1 = temp_dir.path().join("exists.txt");
@@ -1772,8 +1849,33 @@ fn cli_sign_multiple_files_partial_failure_exit_code() {
         .code(1)
         .stderr(predicate::str::contains("failed to read"));
 
-    // Valid file should still be signed despite the other failing
-    assert!(file1.with_extension("txt.minisig").exists());
+    // No signatures written — we failed before signing started
+    assert!(!file1.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn cli_sign_multiple_files_dedup_same_path() {
+    // Passing the same file path twice should sign it exactly once (no race on .minisig)
+    let temp_dir = TempDir::new().unwrap();
+    let file = temp_dir.path().join("dup.txt");
+    fs::write(&file, b"content").unwrap();
+
+    let path = file.to_str().unwrap();
+
+    minisign_cmd()
+        .args([
+            "-S",
+            "-s",
+            "tests/fixtures/keys/unencrypted.key",
+            "-W",
+            "-m",
+            path,
+            path,
+        ])
+        .assert()
+        .success();
+
+    assert!(file.with_extension("txt.minisig").exists());
 }
 
 #[test]
@@ -2252,7 +2354,7 @@ fn test_save_password_flag_with_generate() {
     eprintln!("credential_id: {credential_id}");
 
     // Verify password was saved to credential store
-    let saved_password = credential_store::get_password(&credential_id);
+    let saved_password = credential_store::get_password(&credential_id).unwrap();
     let is_some = saved_password.is_some();
     eprintln!("saved_password.is_some(): {is_some}");
     assert!(
@@ -2319,7 +2421,10 @@ fn test_save_password_short_flag() {
         .expect("Key ID not found");
 
     // Verify password saved using credential_id
-    assert!(credential_store::has_password(&credential_id));
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved
+    );
 
     // Guard will clean up on drop
 }
@@ -2377,7 +2482,10 @@ fn test_forget_password_standalone() {
     let credential_id = get_credential_id_from_file(&sk_path);
     #[cfg(feature = "credential_store_tests")]
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
-    assert!(credential_store::has_password(&credential_id));
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved
+    );
 
     // Forget password using standalone --forget-password
     minisign_cmd()
@@ -2389,7 +2497,10 @@ fn test_forget_password_standalone() {
         .success();
 
     // Verify password was removed
-    assert!(!credential_store::has_password(&credential_id));
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved
+    );
 }
 
 #[test]
@@ -2450,7 +2561,10 @@ fn test_forget_password_short_flag() {
         .success();
 
     // Verify removed
-    assert!(!credential_store::has_password(key_id));
+    assert_eq!(
+        credential_store::has_password(key_id),
+        credential_store::CredentialStatus::NotSaved
+    );
 }
 
 #[test]
@@ -2917,8 +3031,9 @@ fn test_inspect_save_password_flag() {
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
     // Verify password not saved yet
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "Password should not be saved yet"
     );
 
@@ -2946,8 +3061,9 @@ fn test_inspect_save_password_flag() {
     );
 
     // Verify password is now saved
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "Password should be saved after --save-password flag"
     );
 
@@ -3012,8 +3128,9 @@ fn test_change_password_with_credential_store() {
     let old_credential_id = get_credential_id_from_file(&sk_path);
 
     // Verify old password is saved
-    assert!(
+    assert_eq!(
         credential_store::has_password(&old_credential_id),
+        credential_store::CredentialStatus::Saved,
         "Old password should be saved in credential store"
     );
 
@@ -3046,14 +3163,16 @@ fn test_change_password_with_credential_store() {
     );
 
     // Verify old credential_id no longer has a password
-    assert!(
-        !credential_store::has_password(&old_credential_id),
+    assert_eq!(
+        credential_store::has_password(&old_credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "Old credential should be removed from credential store"
     );
 
     // Verify new credential_id has the new password saved
-    assert!(
+    assert_eq!(
         credential_store::has_password(&new_credential_id),
+        credential_store::CredentialStatus::Saved,
         "New password should be saved in credential store"
     );
 
@@ -3176,8 +3295,9 @@ fn test_forget_password_via_inspect() {
     let credential_id = get_credential_id_from_file(&sk_path);
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "password should be saved before forget"
     );
 
@@ -3190,8 +3310,9 @@ fn test_forget_password_via_inspect() {
         .assert()
         .success();
 
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "-I --forget-password must remove the saved password"
     );
 }
@@ -3228,8 +3349,9 @@ fn test_forget_password_after_sign() {
     let credential_id = get_credential_id_from_file(&sk_path);
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "password should be saved before sign"
     );
 
@@ -3251,8 +3373,9 @@ fn test_forget_password_after_sign() {
     assert!(sig_path.exists(), "signature file must be written");
 
     // Credential must be gone
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "-S --forget-password must remove the saved password after signing"
     );
 }
@@ -3287,8 +3410,9 @@ fn test_forget_password_after_recreate() {
     let credential_id = get_credential_id_from_file(&sk_path);
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "password should be saved before recreate"
     );
 
@@ -3314,8 +3438,9 @@ fn test_forget_password_after_recreate() {
     );
 
     // Credential must be gone
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "-R --forget-password must remove the saved password after recreating"
     );
 }
@@ -3493,8 +3618,8 @@ fn test_password_file_oversized_rejected() {
 
 #[test]
 fn test_sign_batch_failure_summary_visible_in_quiet_mode() {
-    // The failure summary (count + file list) must appear even with -q.
-    // Per-file errors are always shown; the summary must be too.
+    // A nonexistent file in a batch fails immediately at canonicalization (before
+    // any signing starts).  Even with -q the error must appear on stderr.
     let temp_dir = TempDir::new().unwrap();
     let sk = temp_dir.path().join("test.key");
     let pk = temp_dir.path().join("test.pub");
@@ -3529,12 +3654,12 @@ fn test_sign_batch_failure_summary_visible_in_quiet_mode() {
 
     let stderr = String::from_utf8_lossy(&stderr);
     assert!(
-        stderr.contains("Summary:"),
-        "failure summary must appear even with -q, got:\n{stderr}"
+        stderr.contains("nonexistent"),
+        "error for missing file must appear even with -q, got:\n{stderr}"
     );
     assert!(
-        stderr.contains("nonexistent"),
-        "failed file name must appear in summary, got:\n{stderr}"
+        stderr.contains("failed to read"),
+        "error text must appear even with -q, got:\n{stderr}"
     );
 }
 

@@ -4,6 +4,7 @@
 //! and display their security parameters and KDF configuration.
 
 use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
+use crate::credential_store::CredentialStatus;
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
 use crate::ops::file_utils::{MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded};
@@ -73,7 +74,7 @@ impl<'a> InspectOptions<'a> {
 
     /// Disable the OS credential store lookup.
     ///
-    /// When called, `inspect()` will set `password_saved = false` without
+    /// When called, `inspect()` will set `password_saved` to `CredentialStatus::NotSaved` without
     /// touching the keychain, preventing any authorization prompt.
     #[must_use]
     pub fn skip_credential_store_check(mut self) -> Self {
@@ -90,7 +91,7 @@ pub struct InspectResult {
     key_type: KeyType,
     security_level: Option<SecurityLevel>,
     kdf_info: Option<KdfInfo>,
-    password_saved: bool,
+    password_saved: CredentialStatus,
     credential_id: Option<String>,
 }
 
@@ -121,8 +122,8 @@ impl InspectResult {
     }
 
     #[must_use]
-    pub const fn password_saved(&self) -> bool {
-        self.password_saved
+    pub fn password_saved(&self) -> &CredentialStatus {
+        &self.password_saved
     }
 
     #[must_use]
@@ -188,6 +189,31 @@ impl KdfInfo {
     }
 }
 
+/// Key file type inferred from the untrusted comment line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyFileType {
+    Secret,
+    Public,
+}
+
+/// Sniff the key file type from the `untrusted comment:` line.
+///
+/// Returns `None` when the first line does not carry a recognised minisign
+/// key-type marker ("secret key" / "public key"). Non-standard comments
+/// produced by third-party tools or the test fixtures fall through to the
+/// caller's fallback logic.
+fn sniff_key_file_type(contents: &str) -> Option<KeyFileType> {
+    let first_line = contents.lines().next()?;
+    let comment = first_line.strip_prefix("untrusted comment: ")?;
+    if comment.contains("secret key") {
+        Some(KeyFileType::Secret)
+    } else if comment.contains("public key") {
+        Some(KeyFileType::Public)
+    } else {
+        None
+    }
+}
+
 /// Inspect a key file and return detailed information
 ///
 /// # Errors
@@ -200,19 +226,28 @@ pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
     let contents = read_file_bounded(options.key_file(), MAX_KEY_FILE_BYTES)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
-    // Try to parse as secret key first
-    if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
-        return inspect_secret_key(&seckey, options.check_credential_store);
+    match sniff_key_file_type(&contents) {
+        Some(KeyFileType::Secret) => {
+            let seckey = SeckeyStruct::from_file_contents(&contents)?;
+            inspect_secret_key(&seckey, options.check_credential_store)
+        }
+        Some(KeyFileType::Public) => {
+            let pubkey = PubkeyStruct::from_file_contents(&contents)?;
+            Ok(inspect_public_key(&pubkey))
+        }
+        None => {
+            // Non-standard comment — try both parsers for backward compatibility.
+            if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
+                return inspect_secret_key(&seckey, options.check_credential_store);
+            }
+            if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
+                return Ok(inspect_public_key(&pubkey));
+            }
+            Err(Error::InvalidKeyFormat(
+                "File is not a valid minisign key".to_string(),
+            ))
+        }
     }
-
-    // Try to parse as public key
-    if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
-        return Ok(inspect_public_key(&pubkey));
-    }
-
-    Err(Error::InvalidKeyFormat(
-        "File is not a valid minisign key".to_string(),
-    ))
 }
 
 /// Inspect a pre-loaded secret key
@@ -301,19 +336,28 @@ pub fn inspect_private(key_file: &Path, password: &[u8]) -> Result<InspectResult
     let contents = read_file_bounded(key_file, MAX_KEY_FILE_BYTES)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
-    // Try to parse as secret key first
-    if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
-        return inspect_private_with_key(&seckey, password);
+    match sniff_key_file_type(&contents) {
+        Some(KeyFileType::Secret) => {
+            let seckey = SeckeyStruct::from_file_contents(&contents)?;
+            inspect_private_with_key(&seckey, password)
+        }
+        Some(KeyFileType::Public) => {
+            let pubkey = PubkeyStruct::from_file_contents(&contents)?;
+            Ok(inspect_public_key(&pubkey))
+        }
+        None => {
+            // Non-standard comment — try both parsers for backward compatibility.
+            if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
+                return inspect_private_with_key(&seckey, password);
+            }
+            if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
+                return Ok(inspect_public_key(&pubkey));
+            }
+            Err(Error::InvalidKeyFormat(
+                "File is not a valid minisign key".to_string(),
+            ))
+        }
     }
-
-    // Try to parse as public key
-    if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
-        return Ok(inspect_public_key(&pubkey));
-    }
-
-    Err(Error::InvalidKeyFormat(
-        "File is not a valid minisign key".to_string(),
-    ))
 }
 
 /// Inspect a secret key structure
@@ -327,8 +371,11 @@ fn inspect_secret_key(
 
     if !seckey.is_encrypted() {
         // Unencrypted key
-        let password_saved =
-            check_credential_store && crate::credential_store::has_password(&credential_id);
+        let password_saved = if check_credential_store {
+            crate::credential_store::has_password(&credential_id)
+        } else {
+            CredentialStatus::NotSaved
+        };
         return Ok(InspectResult {
             key_id,
             key_id_words,
@@ -361,8 +408,11 @@ fn inspect_secret_key(
     // Classify security level
     let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
-    let password_saved =
-        check_credential_store && crate::credential_store::has_password(&credential_id);
+    let password_saved = if check_credential_store {
+        crate::credential_store::has_password(&credential_id)
+    } else {
+        CredentialStatus::NotSaved
+    };
 
     Ok(InspectResult {
         key_id,
@@ -394,7 +444,7 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
         key_type: KeyType::Public,
         security_level: None,
         kdf_info: None,
-        password_saved: false, // Public keys don't have passwords
+        password_saved: CredentialStatus::NotSaved,
         credential_id: None,
     }
 }

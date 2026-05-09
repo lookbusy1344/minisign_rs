@@ -121,6 +121,61 @@ mod symlink_protection {
     }
 }
 
+mod sanitised_path_display {
+    use minisign::ops::file_utils::sanitised_path_display;
+    use std::path::Path;
+
+    #[test]
+    fn clean_path_unchanged() {
+        let path = Path::new("/home/user/documents/file.txt");
+        assert_eq!(
+            sanitised_path_display(path),
+            "/home/user/documents/file.txt"
+        );
+    }
+
+    #[test]
+    fn escapes_ascii_control_characters() {
+        // ESC (0x1B) and BEL (0x07) are the classic terminal-injection chars
+        let path = Path::new("evil\x1b[2Kfile.txt");
+        let result = sanitised_path_display(path);
+        assert_eq!(result, "evil\\x1B[2Kfile.txt");
+    }
+
+    #[test]
+    fn escapes_carriage_return() {
+        let path = Path::new("file\rVerified ok.txt");
+        assert_eq!(sanitised_path_display(path), "file\\x0DVerified ok.txt");
+    }
+
+    #[test]
+    fn escapes_del() {
+        let path = Path::new("file\x7fname.txt");
+        assert_eq!(sanitised_path_display(path), "file\\x7Fname.txt");
+    }
+
+    #[test]
+    fn escapes_c1_codes() {
+        // U+0080 is the first C1 control code
+        let path = Path::new("file\u{0080}name.txt");
+        assert_eq!(sanitised_path_display(path), "file\\x80name.txt");
+        let path2 = Path::new("file\u{009F}name.txt");
+        assert_eq!(sanitised_path_display(path2), "file\\x9Fname.txt");
+    }
+
+    #[test]
+    fn does_not_escape_regular_unicode() {
+        let path = Path::new("résumé/文档/ключ.txt");
+        assert_eq!(sanitised_path_display(path), "résumé/文档/ключ.txt");
+    }
+
+    #[test]
+    fn escapes_null_byte() {
+        let path = Path::new("file\x00name.txt");
+        assert_eq!(sanitised_path_display(path), "file\\x00name.txt");
+    }
+}
+
 #[cfg(unix)]
 mod permissions {
     use minisign::ops::file_utils::has_lax_permissions;

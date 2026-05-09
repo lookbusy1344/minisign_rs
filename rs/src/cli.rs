@@ -32,7 +32,8 @@ OPTIONS:
     -f, --force                         Force overwrite existing files
     -h, --help                          Show this help
     -H, --prehashed                     Sign or verify a prehashed file
-    -l, --legacy                        Legacy mode (sign only)
+    -l, --legacy                        Legacy mode (sign only); forces sequential execution
+                                        to bound memory (non-prehashed buffers up to 1 GB per file)
     -m, --input <FILE>                  Message file
     -o, --output                        Output verification result to stdout
     -p, --publickey-path <FILE>         Public key file
@@ -315,19 +316,32 @@ impl Cli {
     ///
     /// Checks `MINISIGN_CONFIG_DIR` first, then falls back to `~/.minisign/`.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if `MINISIGN_CONFIG_DIR` is set but empty, or (on
+    /// Windows) set to a value that is not valid Unicode.  A set-but-unreadable
+    /// variable is always a misconfiguration; silently falling back to the home
+    /// directory would sign or generate keys in the wrong location.
+    ///
     /// # Security
     ///
     /// `MINISIGN_CONFIG_DIR` is treated as trusted input — it determines the default
     /// secret key path. Users are responsible for ensuring this variable is not
     /// controlled by untrusted processes (e.g. SUID wrappers, CI pipeline injection).
-    #[must_use]
-    pub fn default_secret_key_path() -> PathBuf {
-        if let Ok(config_dir) = std::env::var("MINISIGN_CONFIG_DIR") {
-            PathBuf::from(config_dir).join("minisign.key")
-        } else if let Some(home) = dirs::home_dir() {
-            home.join(".minisign").join("minisign.key")
-        } else {
-            PathBuf::from(".minisign.key")
+    pub fn default_secret_key_path() -> Result<PathBuf> {
+        match std::env::var_os("MINISIGN_CONFIG_DIR") {
+            Some(val) if val.is_empty() => Err(Error::Other(
+                "MINISIGN_CONFIG_DIR is set but empty; unset it or provide a directory path"
+                    .to_string(),
+            )),
+            Some(val) => Ok(PathBuf::from(val).join("minisign.key")),
+            None => {
+                if let Some(home) = dirs::home_dir() {
+                    Ok(home.join(".minisign").join("minisign.key"))
+                } else {
+                    Ok(PathBuf::from(".minisign.key"))
+                }
+            }
         }
     }
 

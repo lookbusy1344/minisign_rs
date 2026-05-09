@@ -418,7 +418,11 @@ fn test_untrusted_comment_max_valid_length() {
     verify(&verify_opts).expect("Should verify signature with max valid comment");
 }
 
-/// Test untrusted comment at warning threshold (1004 bytes)
+/// Test untrusted comment at the C-compat error threshold.
+///
+/// C minisign uses `>= COMMENTMAXBYTES - sizeof("untrusted comment: ")` (i.e. >= 1004)
+/// because the prefix + NUL must fit in its fgets buffer. Max valid length = 1003; 1004
+/// and above must be rejected.
 #[test]
 fn test_untrusted_comment_error_threshold() {
     use minisign::constants::{COMMENT_PREFIX_SIZE, COMMENTMAXBYTES};
@@ -438,33 +442,38 @@ fn test_untrusted_comment_error_threshold() {
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
-    // Error threshold: comments strictly longer than COMMENTMAXBYTES - COMMENT_PREFIX_SIZE
-    // should be rejected. Exactly at the limit (1004 bytes) is valid; 1005 bytes is not.
-    let max_comment_len = COMMENTMAXBYTES - COMMENT_PREFIX_SIZE;
-    let error_comment = "a".repeat(max_comment_len + 1);
-    assert_eq!(error_comment.len(), 1005);
+    // C-compat threshold: COMMENTMAXBYTES - COMMENT_PREFIX_SIZE = 1004.
+    // Anything >= 1004 must be rejected.
+    let c_threshold = COMMENTMAXBYTES - COMMENT_PREFIX_SIZE; // 1004
+
+    // Exactly at the threshold (1004) must be rejected.
+    let at_threshold = "a".repeat(c_threshold);
+    assert_eq!(at_threshold.len(), 1004);
 
     let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
         .signature_file(sig_file.as_path())
         .force(true)
-        .untrusted_comment(error_comment.as_str())
+        .untrusted_comment(at_threshold.as_str())
         .quiet(true)
         .build();
 
     let result = sign(&sign_opts, None);
-    assert!(result.is_err());
+    assert!(
+        result.is_err(),
+        "untrusted comment of 1004 bytes should be rejected (C threshold)"
+    );
 
-    // Also verify that a comment of exactly the maximum length is accepted.
-    let max_comment = "a".repeat(max_comment_len);
-    let ok_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+    // One above threshold (1005) must also be rejected.
+    let above_threshold = "a".repeat(c_threshold + 1);
+    let sign_opts2 = SignOptions::builder(secret_key.as_path(), message_file.as_path())
         .signature_file(sig_file.as_path())
         .force(true)
-        .untrusted_comment(max_comment.as_str())
+        .untrusted_comment(above_threshold.as_str())
         .quiet(true)
         .build();
     assert!(
-        sign(&ok_opts, None).is_ok(),
-        "comment at exact limit should be accepted"
+        sign(&sign_opts2, None).is_err(),
+        "untrusted comment of 1005 bytes should be rejected"
     );
 }
 
@@ -558,7 +567,11 @@ fn test_trusted_comment_max_valid_length() {
     verify(&verify_opts).expect("Should verify signature with max valid trusted comment");
 }
 
-/// Test trusted comment at error threshold (8174 bytes)
+/// Test trusted comment at the C-compat error threshold.
+///
+/// C minisign uses `>= TRUSTEDCOMMENTMAXBYTES - sizeof("trusted comment: ")` (i.e. >= 8174)
+/// because the prefix + NUL terminator must fit in its fgets buffer. The Rust implementation
+/// mirrors this: max valid length is 8173 (= 8192 - 18 - 1); 8174 and above are rejected.
 #[test]
 fn test_trusted_comment_error_threshold() {
     use minisign::constants::{TRUSTED_COMMENT_PREFIX_SIZE, TRUSTEDCOMMENTMAXBYTES};
@@ -578,44 +591,44 @@ fn test_trusted_comment_error_threshold() {
 
     fs::write(&message_file, b"Test message").expect("Failed to write message");
 
-    // Error threshold: trusted comments strictly longer than
-    // TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE should be rejected.
-    // Exactly at the limit (8174 bytes) is valid; 8175 bytes is not.
-    let max_trusted_len = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE;
-    let too_long_trusted = "b".repeat(max_trusted_len + 1);
-    assert_eq!(too_long_trusted.len(), 8175);
+    // C-compat threshold: TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE = 8174.
+    // Anything >= 8174 must be rejected to interoperate with C verifiers.
+    let c_threshold = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE; // 8174
+
+    // Exactly at the threshold (8174) must be rejected.
+    let at_threshold = "b".repeat(c_threshold);
+    assert_eq!(at_threshold.len(), 8174);
 
     let sign_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
         .signature_file(sig_file.as_path())
         .force(true)
-        .trusted_comment(too_long_trusted.as_str())
+        .trusted_comment(at_threshold.as_str())
         .quiet(true)
         .build();
 
     let result = sign(&sign_opts, None);
     assert!(
         result.is_err(),
-        "Should fail with trusted comment exceeding the limit"
+        "trusted comment of 8174 bytes should be rejected (C threshold)"
     );
 
-    // Verify error message mentions trusted comment
     let err = result.unwrap_err();
     assert!(
         format!("{err}").to_lowercase().contains("trusted comment"),
         "Error should mention trusted comment"
     );
 
-    // Also verify that a comment of exactly the maximum length is accepted.
-    let max_trusted = "b".repeat(max_trusted_len);
-    let ok_opts = SignOptions::builder(secret_key.as_path(), message_file.as_path())
+    // One above threshold (8175) must also be rejected.
+    let above_threshold = "b".repeat(c_threshold + 1);
+    let sign_opts2 = SignOptions::builder(secret_key.as_path(), message_file.as_path())
         .signature_file(sig_file.as_path())
         .force(true)
-        .trusted_comment(max_trusted.as_str())
+        .trusted_comment(above_threshold.as_str())
         .quiet(true)
         .build();
     assert!(
-        sign(&ok_opts, None).is_ok(),
-        "trusted comment at exact limit should be accepted"
+        sign(&sign_opts2, None).is_err(),
+        "trusted comment of 8175 bytes should be rejected"
     );
 }
 

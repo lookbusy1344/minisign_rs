@@ -2,10 +2,12 @@
 //!
 //! This module implements the core signing logic for minisign.
 
-use super::file_utils::{load_secret_key, read_message_file};
+use super::file_utils::{load_secret_key, read_message_file, sanitised_path_display};
 use crate::{
     Result,
-    crypto::{SecretKey, blake2b_512_stream, sign as crypto_sign},
+    crypto::{
+        PublicKey, SecretKey, blake2b_512_stream, sign as crypto_sign, verify as crypto_verify,
+    },
     errors::Error,
     keys::SeckeyStruct,
     signature::{
@@ -14,6 +16,7 @@ use crate::{
     },
     validation::validate_comment_with_length,
 };
+use ed25519_dalek::SigningKey;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -334,7 +337,10 @@ cfg_select! {
             options: &SignOptions<'_>,
             sequential: bool,
         ) -> Vec<FileSignResult> {
-            if sequential {
+            // Legacy (non-prehashed) mode buffers the full file into memory (up to 1 GB each).
+            // Running N workers in parallel risks N × 1 GB peak RSS. Force sequential to bound
+            // memory use to a single in-flight buffer.
+            if sequential || !options.prehashed {
                 files
                     .into_iter()
                     .map(|file| {
@@ -395,23 +401,20 @@ cfg_select! {
 /// Returns `PartialFailure` if some files failed, or `TotalFailure` if all files failed.
 /// Individual file errors are reported to stderr during execution.
 pub fn sign_multiple_files(
-    files: Vec<PathBuf>,
+    files: &[PathBuf],
     options: &SignOptions<'_>,
     password: Option<&[u8]>,
     sequential: bool,
 ) -> Result<()> {
-    // Deduplicate files to prevent race conditions when signing the same file multiple times
-    // Use a HashSet to track unique paths
+    // Deduplicate files to prevent race conditions when signing the same file multiple times.
+    // Canonicalize to catch ./foo vs foo aliases; fail immediately if a file does not exist.
     let mut seen = std::collections::HashSet::new();
     let mut deduped_files = Vec::new();
 
     for file in files {
-        // Try to canonicalize for better deduplication (e.g., ./file vs file)
-        // Fall back to original path if canonicalization fails (file doesn't exist yet)
-        let canonical = file.canonicalize().unwrap_or_else(|_| file.clone());
-
+        let canonical = file.canonicalize().map_err(|e| Error::file_read(file, e))?;
         if seen.insert(canonical) {
-            deduped_files.push(file);
+            deduped_files.push(file.clone());
         }
     }
 
@@ -420,11 +423,8 @@ pub fn sign_multiple_files(
     // Fast path for single file
     if files.len() == 1 {
         sign_single_file(&files[0], options, password)?;
-        println!(
-            "Signed: {} → {}.minisig",
-            files[0].display(),
-            files[0].display()
-        );
+        let s = sanitised_path_display(&files[0]);
+        println!("Signed: {s} → {s}.minisig");
         return Ok(());
     }
 
@@ -449,12 +449,13 @@ fn report_file_result(file: &Path, result: &Result<SignResult>, options: &SignOp
     match result {
         Ok(_) => {
             if !options.quiet {
-                println!("Signed: {} → {}.minisig", file.display(), file.display());
+                let s = sanitised_path_display(file);
+                println!("Signed: {s} → {s}.minisig");
             }
         }
         Err(e) => {
             // Always show errors, even in quiet mode
-            eprintln!("Failed: {} ({})", file.display(), e);
+            eprintln!("Failed: {} ({})", sanitised_path_display(file), e);
         }
     }
 }
@@ -483,7 +484,7 @@ pub fn format_batch_summary(results: &[FileSignResult]) -> Option<String> {
     );
     for file in failures {
         use std::fmt::Write as _;
-        let _ = writeln!(out, "  - {}", file.display());
+        let _ = writeln!(out, "  - {}", sanitised_path_display(file));
     }
     Some(out)
 }
@@ -530,8 +531,10 @@ pub fn create_signature(
     // This ensures we fail fast on invalid input without wasting resources
 
     // Generate trusted comment if not provided
-    let trusted_comment =
-        trusted_comment.map_or_else(generate_default_trusted_comment, String::from);
+    let trusted_comment = match trusted_comment {
+        Some(c) => String::from(c),
+        None => generate_default_trusted_comment(message_file, prehashed)?,
+    };
 
     // Generate untrusted comment if not provided
     let untrusted_comment =
@@ -580,6 +583,25 @@ pub fn create_signature(
     let global_sig_data = create_global_signature_data(&sig_struct, &trusted_comment);
     let global_signature = crypto_sign(secret_key, &global_sig_data)?;
 
+    // M4: Post-sign self-verification (parity with C minisign, which re-verifies before writing).
+    // Derives the public key from the scalar — never trusts stored bytes (H4).
+    // Catches bugs in the crypto wrapper layer before the .minisig is serialised.
+    let derived_pk = {
+        let signing_key = SigningKey::from_keypair_bytes(secret_key.as_bytes())
+            .map_err(|e| Error::InvalidSecretKey(format!("key inconsistency detected: {e}")))?;
+        PublicKey::from_bytes(signing_key.verifying_key().to_bytes())
+    };
+    crypto_verify(&derived_pk, data_to_sign, sig_struct.signature()).map_err(|_| {
+        Error::other(
+            "post-sign self-verification failed for message signature; signing key may be corrupt",
+        )
+    })?;
+    crypto_verify(&derived_pk, &global_sig_data, &global_signature).map_err(|_| {
+        Error::other(
+            "post-sign self-verification failed for global signature; signing key may be corrupt",
+        )
+    })?;
+
     SignatureBox::new(
         untrusted_comment,
         sig_struct,
@@ -602,25 +624,46 @@ pub fn create_global_signature_data(sig_struct: &SigStruct, trusted_comment: &st
     data
 }
 
-/// Generate a default trusted comment with timestamp
+/// Earliest timestamp considered sane (2020-01-01 00:00:00 UTC).
+/// Systems with clocks before this date are misconfigured; signing is refused.
+const TIMESTAMP_SANITY_FLOOR: u64 = 1_577_836_800;
+
+/// Generate a default trusted comment with timestamp, matching the C minisign format.
+///
+/// Output: `timestamp:<secs>\tfile:<basename>` with `\thashed` appended for prehashed mode.
+///
+/// # Errors
+///
+/// Returns an error if the system clock is before the UNIX epoch or before 2020-01-01.
 ///
 /// # Note
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
-#[must_use]
-pub fn generate_default_trusted_comment() -> String {
-    // Get current timestamp in UTC
+pub fn generate_default_trusted_comment(message_file: &Path, prehashed: bool) -> Result<String> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| {
-            eprintln!("Warning: system clock is before UNIX epoch, using timestamp 0");
-            std::time::Duration::ZERO
-        })
+        .map_err(|_| Error::other("system clock is before the UNIX epoch; refusing to sign"))?
         .as_secs();
 
-    format!("timestamp:{timestamp}")
+    if timestamp < TIMESTAMP_SANITY_FLOOR {
+        return Err(Error::other(format!(
+            "system clock reports {timestamp} seconds since epoch, which is before 2020-01-01; \
+             refusing to sign with a bogus timestamp"
+        )));
+    }
+
+    let basename = message_file
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
+    if prehashed {
+        Ok(format!("timestamp:{timestamp}\tfile:{basename}\thashed"))
+    } else {
+        Ok(format!("timestamp:{timestamp}\tfile:{basename}"))
+    }
 }
 
 pub use super::file_utils::write_signature_file;

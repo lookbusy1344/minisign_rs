@@ -224,6 +224,39 @@ pub struct SignatureBox {
     global_signature: Signature,
 }
 
+fn validate_untrusted_comment(untrusted: &str) -> Result<()> {
+    validate_comment(untrusted)?;
+    if untrusted.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
+        return Err(Error::InvalidComment(format!(
+            "untrusted comment exceeds maximum length of {} bytes",
+            COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1
+        )));
+    }
+    Ok(())
+}
+
+fn validate_trusted_comment(trusted: &str) -> Result<()> {
+    validate_comment(trusted)?;
+    if trusted.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
+        return Err(Error::InvalidComment(format!(
+            "trusted comment exceeds maximum length of {} bytes",
+            TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1
+        )));
+    }
+    Ok(())
+}
+
+/// Validate both comments for printability and C-compatible length limits.
+///
+/// Used by constructors that have both comments available before any other
+/// parsing (`new`, `with_global_signature`). `from_file_contents` calls the
+/// two halves individually so it can validate each comment as soon as it is
+/// parsed, preserving the original error-reporting order.
+fn validate_comments(untrusted: &str, trusted: &str) -> Result<()> {
+    validate_untrusted_comment(untrusted)?;
+    validate_trusted_comment(trusted)
+}
+
 impl SignatureBox {
     /// Create a new signature box
     ///
@@ -238,25 +271,7 @@ impl SignatureBox {
         trusted_comment: String,
         global_signature: Signature,
     ) -> Result<Self> {
-        // H1: Validate untrusted comment for printability and newlines
-        validate_comment(&untrusted_comment)?;
-
-        // H1 & H2: Validate untrusted comment length
-        if untrusted_comment.len() > COMMENTMAXBYTES {
-            return Err(Error::InvalidComment(format!(
-                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
-            )));
-        }
-
-        // H1: Validate trusted comment for printability and newlines
-        validate_comment(&trusted_comment)?;
-
-        // H1 & H2: Validate trusted comment length
-        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
-            return Err(Error::InvalidComment(format!(
-                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
-            )));
-        }
+        validate_comments(&untrusted_comment, &trusted_comment)?;
 
         Ok(Self {
             untrusted_comment,
@@ -324,16 +339,7 @@ impl SignatureBox {
             })?
             .to_string();
 
-        // Validate untrusted comment for printability and embedded carriage returns
-        // This prevents display-based attacks via control characters
-        validate_comment(&untrusted_comment)?;
-
-        // H6: Validate untrusted comment length (DoS prevention)
-        if untrusted_comment.len() > COMMENTMAXBYTES {
-            return Err(Error::InvalidComment(format!(
-                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
-            )));
-        }
+        validate_untrusted_comment(&untrusted_comment)?;
 
         // Line 2: base64-encoded SigStruct
         let sig_struct_bytes = decode_base64(lines[1])?;
@@ -349,16 +355,7 @@ impl SignatureBox {
             })?
             .to_string();
 
-        // Validate trusted comment for printability and embedded carriage returns
-        // This matches C implementation's is_printable() check
-        validate_comment(&trusted_comment)?;
-
-        // H6: Validate trusted comment length (DoS prevention)
-        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
-            return Err(Error::InvalidComment(format!(
-                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
-            )));
-        }
+        validate_trusted_comment(&trusted_comment)?;
 
         // Line 4: base64-encoded global signature
         let global_sig_bytes = decode_base64(lines[3])?;
@@ -427,25 +424,7 @@ impl SignatureBox {
         trusted_comment: String,
         secret_key: &SecretKey,
     ) -> Result<Self> {
-        // H2: Validate untrusted comment for printability and newlines
-        validate_comment(&untrusted_comment)?;
-
-        // H2: Validate untrusted comment length
-        if untrusted_comment.len() > COMMENTMAXBYTES {
-            return Err(Error::InvalidComment(format!(
-                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
-            )));
-        }
-
-        // H2: Validate trusted comment for printability and newlines
-        validate_comment(&trusted_comment)?;
-
-        // H2: Validate trusted comment length
-        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
-            return Err(Error::InvalidComment(format!(
-                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
-            )));
-        }
+        validate_comments(&untrusted_comment, &trusted_comment)?;
 
         // Build the data to sign: signature bytes + trusted comment
         let capacity = sig_struct.signature().as_bytes().len() + trusted_comment.len();

@@ -2,6 +2,7 @@
 //!
 //! This module implements keypair generation for minisign.
 
+use super::file_utils::sync_parent_directory;
 use super::{EncryptionMode, OverwritePolicy};
 use crate::{
     Result,
@@ -17,12 +18,32 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     thread::sleep,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 const FORCE_OVERWRITE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 const FORCE_OVERWRITE_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn warn_cleanup_failure(path: &Path, result: std::io::Result<()>) {
+    if let Err(e) = result {
+        eprintln!(
+            "Warning: could not remove '{}': {e}; delete manually",
+            path.display()
+        );
+    }
+}
+
+fn lock_is_stale(path: &Path, stale_age: Duration) -> bool {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .is_ok_and(|mtime| {
+            SystemTime::now()
+                .duration_since(mtime)
+                .unwrap_or(Duration::ZERO)
+                >= stale_age
+        })
+}
 
 /// Options for key generation
 #[derive(Debug, Clone)]
@@ -121,6 +142,9 @@ pub struct GenerateResult {
     public_key_base64: String,
     /// Credential store lookup key (for --save-password)
     credential_id: String,
+    /// True when scrypt succeeded only after reducing KDF parameters due to memory pressure.
+    /// Callers should signal this to the user (exit code 3).
+    pub kdf_fallback_used: bool,
 }
 
 impl GenerateResult {
@@ -233,8 +257,8 @@ pub fn generate_with_log_n(
     let (secret_key, public_key, keynum) = generate_keypair()?;
 
     // Create the secret key structure
-    let seckey = if options.encryption == EncryptionMode::Unprotected {
-        SeckeyStruct::new_unencrypted(keynum, &secret_key)
+    let (seckey, kdf_fallback_used) = if options.encryption == EncryptionMode::Unprotected {
+        (SeckeyStruct::new_unencrypted(keynum, &secret_key), false)
     } else {
         use rand_core::{OsRng, RngCore};
 
@@ -247,7 +271,7 @@ pub fn generate_with_log_n(
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
 
-        SeckeyStruct::new_encrypted(
+        let seckey = SeckeyStruct::new_encrypted(
             keynum,
             &secret_key,
             pwd,
@@ -255,7 +279,11 @@ pub fn generate_with_log_n(
             kdf_opslimit,
             kdf_memlimit,
             options.allow_kdf_fallback,
-        )?
+        )?;
+        // Detect fallback by comparing stored params against what was requested.
+        // new_encrypted stores the actual (potentially reduced) params on the struct.
+        let fallback = seckey.kdf_opslimit() < kdf_opslimit || seckey.kdf_memlimit() < kdf_memlimit;
+        (seckey, fallback)
     };
 
     // Create the public key structure
@@ -268,7 +296,15 @@ pub fn generate_with_log_n(
     let keynum_hex = keynum.to_key_id();
     let keynum_words = crate::wordlist::keynum_to_words(&keynum);
     let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = options.comment.unwrap_or(&default_comment);
+    let comment = match options.comment {
+        Some("") => {
+            return Err(Error::InvalidComment(
+                "comment must not be empty; omit --comment to use the default".to_string(),
+            ));
+        }
+        Some(c) => c,
+        None => &default_comment,
+    };
 
     // Ensure parent directories exist
     ensure_parent_directory(options.secret_key_file)?;
@@ -321,6 +357,7 @@ pub fn generate_with_log_n(
         keynum_words,
         public_key_base64,
         credential_id,
+        kdf_fallback_used,
     })
 }
 
@@ -380,23 +417,6 @@ fn sibling_temp_path(path: &Path, suffix: &str) -> PathBuf {
         .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned);
     let name = name.to_string_lossy();
     dir.join(format!(".{name}.{nonce:016x}.{suffix}"))
-}
-
-#[cfg(unix)]
-fn sync_parent_directory(path: &Path) -> Result<()> {
-    use std::fs::File;
-
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        let dir = File::open(parent).map_err(|e| Error::file_write(parent, e))?;
-        dir.sync_all().map_err(|e| Error::file_write(parent, e))?;
-    }
-    Ok(())
-}
-
-#[cfg(not(unix))]
-#[allow(clippy::unnecessary_wraps)]
-fn sync_parent_directory(_path: &Path) -> Result<()> {
-    Ok(())
 }
 
 #[cfg(not(debug_assertions))]
@@ -504,42 +524,43 @@ fn write_keypair_files_create_new(
     let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
         Ok(path) => path,
         Err(e) => {
-            let _ = std::fs::remove_file(&secret_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
             return Err(e);
         }
     };
 
     if let Err(e) = std::fs::hard_link(&secret_tmp, secret_path) {
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(Error::file_write(secret_path, e));
     }
     if let Err(e) = sync_parent_directory(secret_path) {
-        let _ = std::fs::remove_file(secret_path);
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(secret_path, std::fs::remove_file(secret_path));
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(e);
     }
 
     if let Err(e) = std::fs::hard_link(&public_tmp, public_path) {
-        let _ = std::fs::remove_file(secret_path);
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(secret_path, std::fs::remove_file(secret_path));
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(Error::file_write(public_path, e));
     }
     if let Err(e) = sync_parent_directory(public_path) {
-        let _ = std::fs::remove_file(public_path);
-        let _ = std::fs::remove_file(secret_path);
-        let _ = std::fs::remove_file(&secret_tmp);
-        let _ = std::fs::remove_file(&public_tmp);
+        warn_cleanup_failure(public_path, std::fs::remove_file(public_path));
+        warn_cleanup_failure(secret_path, std::fs::remove_file(secret_path));
+        warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+        warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
         return Err(e);
     }
 
-    let _ = std::fs::remove_file(&secret_tmp);
-    let _ = std::fs::remove_file(&public_tmp);
+    warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+    warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn write_keypair_files_with_overwrite(
     secret_path: &Path,
     public_path: &Path,
@@ -562,7 +583,7 @@ fn write_keypair_files_with_overwrite(
     let public_tmp = match write_temp_file(public_path, public_contents.as_bytes(), None) {
         Ok(path) => path,
         Err(e) => {
-            let _ = std::fs::remove_file(&secret_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
             return Err(e);
         }
     };
@@ -570,14 +591,20 @@ fn write_keypair_files_with_overwrite(
     let secret_backup = if secret_path.exists() {
         let backup = sibling_temp_path(secret_path, "bak");
         if let Err(e) = std::fs::rename(secret_path, &backup) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
             return Err(Error::file_write(secret_path, e));
         }
         if let Err(e) = sync_parent_directory(secret_path) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
-            let _ = std::fs::rename(&backup, secret_path);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
+            if let Err(re) = std::fs::rename(&backup, secret_path) {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    secret_path.display(),
+                    backup.display()
+                );
+            }
             return Err(e);
         }
         Some(backup)
@@ -588,19 +615,37 @@ fn write_keypair_files_with_overwrite(
     let public_backup = if public_path.exists() {
         let backup = sibling_temp_path(public_path, "bak");
         if let Err(e) = std::fs::rename(public_path, &backup) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
-            if let Some(backup) = secret_backup.as_ref() {
-                let _ = std::fs::rename(backup, secret_path);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
+            if let Some(sb) = secret_backup.as_ref()
+                && let Err(re) = std::fs::rename(sb, secret_path)
+            {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    secret_path.display(),
+                    sb.display()
+                );
             }
             return Err(Error::file_write(public_path, e));
         }
         if let Err(e) = sync_parent_directory(public_path) {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
-            let _ = std::fs::rename(&backup, public_path);
-            if let Some(backup) = secret_backup.as_ref() {
-                let _ = std::fs::rename(backup, secret_path);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
+            if let Err(re) = std::fs::rename(&backup, public_path) {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    public_path.display(),
+                    backup.display()
+                );
+            }
+            if let Some(sb) = secret_backup.as_ref()
+                && let Err(re) = std::fs::rename(sb, secret_path)
+            {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    secret_path.display(),
+                    sb.display()
+                );
             }
             return Err(e);
         }
@@ -612,16 +657,16 @@ fn write_keypair_files_with_overwrite(
     match commit_keypair_files(secret_path, public_path, &secret_tmp, &public_tmp) {
         Ok(()) => {
             if let Some(backup) = secret_backup {
-                let _ = std::fs::remove_file(backup);
+                warn_cleanup_failure(&backup, std::fs::remove_file(&backup));
             }
             if let Some(backup) = public_backup {
-                let _ = std::fs::remove_file(backup);
+                warn_cleanup_failure(&backup, std::fs::remove_file(&backup));
             }
             Ok(())
         }
         Err(e) => {
-            let _ = std::fs::remove_file(&secret_tmp);
-            let _ = std::fs::remove_file(&public_tmp);
+            warn_cleanup_failure(&secret_tmp, std::fs::remove_file(&secret_tmp));
+            warn_cleanup_failure(&public_tmp, std::fs::remove_file(&public_tmp));
             rollback_keypair_commit(
                 secret_path,
                 public_path,
@@ -652,6 +697,18 @@ fn acquire_force_overwrite_lock(secret_path: &Path) -> Result<ForceOverwriteLock
         {
             Ok(_) => return Ok(ForceOverwriteLockGuard { lock_path }),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                let stale_age = 2 * force_overwrite_lock_timeout();
+                if lock_is_stale(&lock_path, stale_age) {
+                    eprintln!(
+                        "Warning: removing stale force-overwrite lock '{}' (older than {}s); \
+                         if another --force is running concurrently this may cause conflicts",
+                        lock_path.display(),
+                        stale_age.as_secs()
+                    );
+                    if std::fs::remove_file(&lock_path).is_ok() {
+                        continue;
+                    }
+                }
                 if started_at.elapsed() >= force_overwrite_lock_timeout() {
                     return Err(Error::Other(format!(
                         "Timed out waiting for force-overwrite lock: {}",
@@ -671,7 +728,7 @@ struct ForceOverwriteLockGuard {
 
 impl Drop for ForceOverwriteLockGuard {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.lock_path);
+        warn_cleanup_failure(&self.lock_path, std::fs::remove_file(&self.lock_path));
     }
 }
 
@@ -701,20 +758,41 @@ fn rollback_keypair_commit(
     public_backup: Option<&Path>,
     stage: KeypairCommitStage,
 ) {
-    if stage == KeypairCommitStage::SecretRenamed {
-        let _ = std::fs::remove_file(secret_path);
+    if stage == KeypairCommitStage::SecretRenamed
+        && let Err(e) = std::fs::remove_file(secret_path)
+    {
+        eprintln!(
+            "CRITICAL: could not remove partially-written secret key '{}': {e}; delete manually",
+            secret_path.display()
+        );
     }
     if matches!(
         stage,
         KeypairCommitStage::PublicRenamed | KeypairCommitStage::SecretRenamed
-    ) {
-        let _ = std::fs::remove_file(public_path);
+    ) && let Err(e) = std::fs::remove_file(public_path)
+    {
+        eprintln!(
+            "CRITICAL: could not remove partially-written public key '{}': {e}; delete manually",
+            public_path.display()
+        );
     }
-    if let Some(backup) = secret_backup {
-        let _ = std::fs::rename(backup, secret_path);
+    if let Some(backup) = secret_backup
+        && let Err(e) = std::fs::rename(backup, secret_path)
+    {
+        eprintln!(
+            "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {e}; recover manually",
+            secret_path.display(),
+            backup.display()
+        );
     }
-    if let Some(backup) = public_backup {
-        let _ = std::fs::rename(backup, public_path);
+    if let Some(backup) = public_backup
+        && let Err(e) = std::fs::rename(backup, public_path)
+    {
+        eprintln!(
+            "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {e}; recover manually",
+            public_path.display(),
+            backup.display()
+        );
     }
 }
 

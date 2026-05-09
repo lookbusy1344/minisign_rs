@@ -47,14 +47,43 @@ pub fn has_lax_permissions(path: &Path) -> bool {
 #[cfg(unix)]
 fn check_secret_key_permissions(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
-    if let Ok(metadata) = std::fs::metadata(path) {
-        let mode = metadata.permissions().mode();
-        if mode & 0o077 != 0 {
-            let display = path.display();
-            eprintln!("Warning: {display} is accessible to other users (mode {mode:o})");
-            eprintln!("Consider running: chmod 600 {display}");
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            let mode = metadata.permissions().mode();
+            if mode & 0o077 != 0 {
+                let display = path.display();
+                eprintln!("Warning: {display} is accessible to other users (mode {mode:o})");
+                eprintln!("Consider running: chmod 600 {display}");
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "Warning: could not check permissions for '{}': {e}",
+                path.display()
+            );
         }
     }
+}
+
+/// Fsync the parent directory of `path` to flush the directory entry to disk.
+///
+/// Required after `rename(2)` or `link(2)` to guarantee that the new directory
+/// entry survives a crash. Without this the directory block may not be flushed
+/// even though the file data is durable.
+#[cfg(unix)]
+pub(super) fn sync_parent_directory(path: &Path) -> Result<()> {
+    use std::fs::File;
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        let dir = File::open(parent).map_err(|e| Error::file_write(parent, e))?;
+        dir.sync_all().map_err(|e| Error::file_write(parent, e))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)]
+pub(super) fn sync_parent_directory(_path: &Path) -> Result<()> {
+    Ok(())
 }
 
 cfg_select! {
@@ -76,10 +105,10 @@ cfg_select! {
 
         fn write_secret_key_file_impl(path: &Path, contents: &[u8], force: bool) -> Result<()> {
             if force {
-                return atomic_overwrite_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS);
+                atomic_overwrite_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS)
+            } else {
+                atomic_create_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS)
             }
-
-            write_file(path, contents, force, Some(SECRET_KEY_FILE_PERMISSIONS))
         }
     }
     _ => {
@@ -271,13 +300,93 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &[u8], mode: u32) -> Resul
         file.sync_all()
             .map_err(|e| Error::file_write(&tmp_path, e))?;
 
-        std::fs::rename(&tmp_path, path).map_err(|e| Error::file_write(path, e))
+        std::fs::rename(&tmp_path, path).map_err(|e| Error::file_write(path, e))?;
+        sync_parent_directory(path)
     })();
 
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp_path);
+    if result.is_err()
+        && let Err(e) = std::fs::remove_file(&tmp_path)
+    {
+        eprintln!(
+            "Warning: could not remove '{}': {e}; delete manually",
+            tmp_path.display()
+        );
     }
 
+    result
+}
+
+/// Atomically create a new secret key file using write-temp-then-link.
+///
+/// Identical to [`atomic_overwrite_secret_key`] except it uses `hard_link(2)` instead of
+/// `rename(2)`. `link(2)` fails atomically with `EEXIST` if the destination already
+/// exists, giving `create_new` semantics while still guaranteeing that a partial write
+/// never reaches the final path.
+///
+/// # Errors
+///
+/// Returns [`Error::FileExists`] if `path` already exists.
+/// Returns [`Error::FileWrite`] on any other I/O failure.
+#[cfg(unix)]
+fn atomic_create_secret_key(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
+    use rand_core::{OsRng, RngCore};
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    validate_windows_path(path)?;
+
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+
+    let mut nonce_bytes = [0u8; 8];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = u64::from_le_bytes(nonce_bytes);
+    let tmp_name = format!(
+        ".{}.{nonce:016x}.tmp",
+        path.file_name()
+            .map_or_else(|| std::ffi::OsString::from("key"), ToOwned::to_owned)
+            .to_string_lossy()
+    );
+    let tmp_path = dir.join(&tmp_name);
+
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(mode)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&tmp_path)
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+
+        file.set_permissions(std::fs::Permissions::from_mode(mode))
+            .map_err(|e| Error::file_write(path, e))?;
+
+        file.write_all(contents)
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+
+        file.sync_all()
+            .map_err(|e| Error::file_write(&tmp_path, e))?;
+
+        // hard_link fails atomically with EEXIST if the destination exists —
+        // create_new semantics without the partial-write hazard of O_CREAT|O_EXCL.
+        std::fs::hard_link(&tmp_path, path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                Error::FileExists(path.into())
+            } else {
+                Error::file_write(path, e)
+            }
+        })?;
+
+        sync_parent_directory(path)
+    })();
+
+    if let Err(e) = std::fs::remove_file(&tmp_path) {
+        eprintln!(
+            "Warning: could not remove '{}': {e}; delete manually",
+            tmp_path.display()
+        );
+    }
     result
 }
 
@@ -383,4 +492,25 @@ pub fn read_message_file(path: &Path) -> Result<Vec<u8>> {
         )));
     }
     Ok(buf)
+}
+
+/// Return a sanitised string representation of `path` safe to print in a terminal.
+///
+/// Escapes ASCII control characters (U+0000–U+001F), DEL (U+007F), and C1
+/// control codes (U+0080–U+009F) as `\xNN` to prevent ANSI-injection attacks
+/// via crafted filenames.
+#[must_use]
+pub fn sanitised_path_display(path: &Path) -> String {
+    let raw = path.to_string_lossy();
+    let mut out = String::with_capacity(raw.len());
+    for c in raw.chars() {
+        let code = c as u32;
+        if code < 0x20 || code == 0x7F || (0x80..=0x9F).contains(&code) {
+            use std::fmt::Write as _;
+            let _ = write!(out, "\\x{code:02X}");
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }

@@ -316,7 +316,8 @@ fn test_derive_key_full_params() {
 ///
 /// The guard `if output_len > MAX_KDF_OUTPUT_LEN` is an early-return that prevents
 /// resource-exhaustion attacks.  This test pins that the first value over the limit
-/// (`output_len = 1025`) is rejected with `Error::KdfError`.
+/// (`output_len = 1025`) is rejected with `Error::KdfError` (programmer bug —
+/// NOT `KdfMemoryError`, so the fallback loop will not retry it).
 /// Uses fast parameters (`log_n=10`) so the test does not slow down the suite.
 #[test]
 fn test_derive_key_output_len_too_large() {
@@ -327,7 +328,22 @@ fn test_derive_key_output_len_too_large() {
     );
     assert!(
         matches!(result, Err(Error::KdfError(_))),
-        "expected Error::KdfError, got {result:?}"
+        "expected Error::KdfError (programmer bug), got {result:?}"
+    );
+}
+
+/// Verifies that an invalid scrypt parameter set (`log_n=64` overflows `N=2^64`, which the
+/// scrypt crate rejects) produces `Error::KdfError`, not `Error::KdfMemoryError`.
+///
+/// This pins the discriminator: parameter bugs must NOT cause the fallback loop to retry
+/// with halved parameters — only actual scrypt-call failures (memory pressure) may.
+#[test]
+fn test_derive_key_invalid_scrypt_params_is_kdf_error() {
+    // log_n=64 causes ScryptParams::new to fail (2^64 overflows u64 in the N calculation)
+    let result = derive_key_with_params(b"password", &[0u8; 32], 64, 8, 1, 32);
+    assert!(
+        matches!(result, Err(Error::KdfError(_))),
+        "invalid ScryptParams must produce KdfError (not KdfMemoryError), got {result:?}"
     );
 }
 

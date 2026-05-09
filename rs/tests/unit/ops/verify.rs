@@ -276,7 +276,7 @@ fn test_verify_multiple_files_sequential() {
         .trusted_comment("Batch verification test")
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Now verify multiple files
     let verify_paths = vec![file1.clone(), file2.clone(), file3.clone()];
@@ -325,7 +325,7 @@ fn test_verify_multiple_files_parallel() {
         .trusted_comment("Parallel verification test")
         .build();
 
-    sign_multiple_files(paths.clone(), &sign_opts, None, false).expect("signing should succeed");
+    sign_multiple_files(&paths, &sign_opts, None, false).expect("signing should succeed");
 
     // Now verify multiple files in parallel
     let verify_opts = VerifyOptions::builder(
@@ -378,7 +378,7 @@ fn test_verify_multiple_files_partial_failure() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Corrupt file2's content (signature won't match)
     fs::write(&file2, b"Corrupted message").unwrap();
@@ -438,7 +438,7 @@ fn test_verify_multiple_files_all_attempted() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Now create file2 but don't sign it
     fs::write(&file2, b"M2").unwrap();
@@ -500,7 +500,7 @@ fn test_verify_multiple_files_quiet_mode() {
         .force(true)
         .build();
 
-    sign_multiple_files(sign_paths, &sign_opts, None, true).expect("signing should succeed");
+    sign_multiple_files(&sign_paths, &sign_opts, None, true).expect("signing should succeed");
 
     // Verify with quiet mode (should suppress output)
     let verify_paths = vec![file1.clone(), file2.clone()];
@@ -745,5 +745,147 @@ fn test_output_uses_content_captured_at_verify_time() {
     assert_eq!(
         out, original,
         "output must be the verified content, not post-verification disk content"
+    );
+}
+
+/// H6: prehashed + output buffers at verify time — no TOCTOU window.
+///
+/// Prehashed mode used to: stream-hash → verify → rewind fd → `io::copy`.
+/// An attacker who modifies the file after hashing but before `io::copy` would
+/// see their bytes emitted on stdout while `verify` returned success.
+/// The fix buffers the file first so the hash and the returned bytes are the
+/// same allocation. This test confirms: file modified after `verify()` returns
+/// does NOT affect the bytes emitted by `write_to`.
+#[test]
+fn test_prehashed_output_captures_content_at_verify_time() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let original = b"prehashed TOCTOU test content";
+    let tampered = b"attacker-supplied bytes - must NOT appear in output";
+
+    fs::write(&message_path, original).unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().unwrap();
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    sign(
+        &SignOptions::builder(sk_path.as_path(), message_path.as_path())
+            .signature_file(sig_path.as_path())
+            .prehashed(true)
+            .quiet(true)
+            .build(),
+        None,
+    )
+    .unwrap();
+
+    let verify_opts = VerifyOptions::builder(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+    )
+    .output(true)
+    .build();
+
+    let mut result = verify(&verify_opts).expect("prehashed verification must succeed");
+
+    // Simulate attacker replacing the file after verification completes.
+    fs::write(&message_path, tampered).unwrap();
+
+    let mut out = Vec::new();
+    result
+        .take_message_output()
+        .expect("output must be captured when output=true")
+        .write_to(&mut out)
+        .unwrap();
+
+    assert_eq!(
+        out, original,
+        "prehashed output must be the content verified, not post-verification disk state"
+    );
+}
+
+/// H6 regression: prehashed verify WITHOUT -o must still stream (no buffering regression).
+#[test]
+fn test_prehashed_without_output_still_works() {
+    let temp_dir = TempDir::new().unwrap();
+    let message_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    fs::write(&message_path, b"streaming regression test").unwrap();
+
+    let (secret_key, public_key, keynum) = generate_keypair().unwrap();
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    sign(
+        &SignOptions::builder(sk_path.as_path(), message_path.as_path())
+            .signature_file(sig_path.as_path())
+            .prehashed(true)
+            .quiet(true)
+            .build(),
+        None,
+    )
+    .unwrap();
+
+    let verify_opts = VerifyOptions::builder(
+        PublicKeySource::File(pk_path.as_path()),
+        sig_path.as_path(),
+        message_path.as_path(),
+    )
+    .build(); // output=false
+
+    verify(&verify_opts).expect("prehashed verify without -o must succeed");
+}
+
+#[test]
+fn test_verify_multiple_files_single_file_uses_header_format() {
+    // When verify_multiple_files is called with exactly one file, it must use the
+    // same "Verifying with key:" header format as multi-file, not the old per-file
+    // "Key ID:" format — so scripts don't break when file count crosses 1 → 2.
+    use minisign::ops::{sign::sign_multiple_files, verify::verify_multiple_files};
+
+    let temp_dir = TempDir::new().unwrap();
+    let (secret_key, public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+    let pubkey = PubkeyStruct::new(keynum, public_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+
+    let file1 = temp_dir.path().join("only.txt");
+    fs::write(&file1, b"solo").unwrap();
+
+    let sign_opts = SignOptions::builder(sk_path.as_path(), Path::new(""))
+        .force(true)
+        .build();
+    sign_multiple_files(std::slice::from_ref(&file1), &sign_opts, None, true)
+        .expect("signing should succeed");
+
+    // Capture stdout via quiet=false (we just check it succeeds — the format
+    // is verified by cli_test which can inspect process output).
+    let verify_opts = VerifyOptions::builder(
+        PublicKeySource::File(pk_path.as_path()),
+        Path::new(""),
+        Path::new(""),
+    )
+    .build();
+
+    let result = verify_multiple_files(vec![file1.clone()], &verify_opts, true);
+    assert!(
+        result.is_ok(),
+        "single-file verify via verify_multiple_files must succeed"
     );
 }

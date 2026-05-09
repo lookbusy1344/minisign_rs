@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
-use minisign::ops::file_utils::{MAX_PASSWORD_FILE_BYTES, load_secret_key};
+use minisign::ops::file_utils::{MAX_PASSWORD_FILE_BYTES, load_secret_key, sanitised_path_display};
 use minisign::ops::sign::sign_multiple_files;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
+    credential_store::CredentialStatus,
     ops::{
         ChangeOptions, GenerateOptions, InspectOptions, InspectResult, KeyType, PublicKeySource,
         RecreateOptions, SecurityLevel, SignOptions, SignatureInspectResult, VerifyOptions, change,
@@ -29,11 +30,12 @@ const MIN_RECOMMENDED_PASSWORD_LEN: usize = 8;
 fn main() {
     let result = run();
     match result {
-        Ok(()) => process::exit(0),
+        Ok(exit_code) => process::exit(exit_code),
         Err(e) => {
             eprintln!("{e}");
-            // Exit code 2 for usage errors, 1 for other errors
+            // Exit code 130 for SIGINT/Interrupted, 2 for usage errors, 1 for all others
             let exit_code = match e {
+                Error::Interrupted => 130,
                 Error::Usage(_) | Error::MissingArgument(_) => 2,
                 _ => 1,
             };
@@ -42,7 +44,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<()> {
+fn run() -> Result<i32> {
     let cli = Cli::parse()?;
 
     // Determine which action to perform
@@ -60,9 +62,9 @@ fn run() -> Result<()> {
     }
 }
 
-fn handle_generate(cli: &Cli) -> Result<()> {
+fn handle_generate(cli: &Cli) -> Result<i32> {
     // Get secret key path (use default if not specified)
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Get public key path (use default if not specified)
@@ -138,11 +140,11 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         );
         println!(
             "The secret key was saved as {} - Keep it secret!",
-            result.secret_key_file().display()
+            sanitised_path_display(result.secret_key_file())
         );
         println!(
             "The public key was saved as {} - That one can be public.",
-            result.public_key_file().display()
+            sanitised_path_display(result.public_key_file())
         );
         println!();
         println!("Files signed using this key pair can be verified with the following command:");
@@ -150,7 +152,8 @@ fn handle_generate(cli: &Cli) -> Result<()> {
         println!("minisign_rs -Vm <file> -P {}", result.public_key_base64());
     }
 
-    Ok(())
+    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
+    Ok(if result.kdf_fallback_used { 3 } else { 0 })
 }
 
 /// Get password for a key: check credential store first, then prompt
@@ -160,13 +163,14 @@ fn get_password_with_credential_store(
     quiet: bool,
     password_file: Option<&std::path::Path>,
 ) -> Result<Zeroizing<String>> {
-    if let Some(saved_pwd) = minisign::credential_store::get_password(key_id) {
-        if !quiet {
-            eprintln!("Using saved password from credential store");
+    match minisign::credential_store::get_password(key_id)? {
+        Some(saved_pwd) => {
+            if !quiet {
+                eprintln!("Using saved password from credential store");
+            }
+            Ok(saved_pwd)
         }
-        Ok(saved_pwd)
-    } else {
-        prompt_password(prompt, password_file)
+        None => prompt_password(prompt, password_file),
     }
 }
 
@@ -186,8 +190,40 @@ fn save_password_to_credential_store(
         if let Some(pwd) = password {
             match minisign::credential_store::save_password(key_id, pwd) {
                 Ok(()) => {
-                    if !quiet {
-                        eprintln!("Password saved to OS credential store");
+                    // Verify the round-trip: some backends silently drop secrets
+                    // larger than their internal limits.
+                    match minisign::credential_store::get_password(key_id) {
+                        Ok(Some(retrieved))
+                            if retrieved.as_bytes().ct_eq(pwd.as_bytes()).into() =>
+                        {
+                            if !quiet {
+                                eprintln!("Password saved to OS credential store");
+                            }
+                        }
+                        Ok(Some(_)) => {
+                            eprintln!(
+                                "Error: credential store save appeared to succeed but the retrieved password does not match; your password was NOT persisted."
+                            );
+                            if let Some(msg) = extra_context_on_error {
+                                eprintln!("{msg}");
+                            }
+                        }
+                        Ok(None) => {
+                            eprintln!(
+                                "Error: credential store save appeared to succeed but the entry cannot be retrieved; your password was NOT persisted."
+                            );
+                            if let Some(msg) = extra_context_on_error {
+                                eprintln!("{msg}");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Error: credential store save appeared to succeed but verification failed: {e}; your password may NOT have been persisted."
+                            );
+                            if let Some(msg) = extra_context_on_error {
+                                eprintln!("{msg}");
+                            }
+                        }
                     }
                 }
                 Err(e) => {
@@ -213,7 +249,7 @@ fn forget_password_with_feedback(credential_id: &str, quiet: bool) -> Result<()>
     Ok(())
 }
 
-fn handle_sign(cli: &Cli) -> Result<()> {
+fn handle_sign(cli: &Cli) -> Result<i32> {
     let message_files = cli.all_message_files();
 
     // Validate required arguments
@@ -237,7 +273,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     let prehashed = cli.prehashed || !cli.legacy;
 
     // Get secret key path
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Load secret key to get credential ID for credential store lookup
@@ -274,7 +310,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
     } else {
         handle_sign_multiple(
             cli,
-            message_files.into_owned(),
+            message_files.as_ref(),
             secret_key_file,
             prehashed,
             &credential_id,
@@ -286,7 +322,7 @@ fn handle_sign(cli: &Cli) -> Result<()> {
         forget_password_with_feedback(&credential_id, cli.quiet)?;
     }
 
-    Ok(())
+    Ok(0)
 }
 
 /// Apply common CLI flags to a `SignOptions` builder chain
@@ -337,7 +373,10 @@ fn handle_sign_single(
             result.key_id(),
             result.key_id_words()
         );
-        println!("Signature written to {}", result.signature_file().display());
+        println!(
+            "Signature written to {}",
+            sanitised_path_display(result.signature_file())
+        );
     }
 
     Ok(())
@@ -346,7 +385,7 @@ fn handle_sign_single(
 /// Handle signing multiple files
 fn handle_sign_multiple(
     cli: &Cli,
-    message_files: Vec<std::path::PathBuf>,
+    message_files: &[std::path::PathBuf],
     secret_key_file: &std::path::Path,
     prehashed: bool,
     credential_id: &str,
@@ -379,7 +418,7 @@ fn handle_sign_multiple(
     Ok(())
 }
 
-fn handle_verify(cli: &Cli) -> Result<()> {
+fn handle_verify(cli: &Cli) -> Result<i32> {
     let message_files = cli.all_message_files();
 
     // Validate required arguments
@@ -397,21 +436,17 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     }
 
     // Get public key source (either -p or -P, one is required)
-    let default_pk;
+    let default_pk = Cli::default_public_key_path();
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
         PublicKeySource::File(pk_file.as_path())
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
         PublicKeySource::Base64(pk_base64)
+    } else if default_pk.exists() {
+        PublicKeySource::File(&default_pk)
     } else {
-        // Try default public key file
-        default_pk = Cli::default_public_key_path();
-        if default_pk.exists() {
-            PublicKeySource::File(&default_pk)
-        } else {
-            return Err(Error::Usage(
-                "Public key is required for verification. Use -p <file> or -P <key>".into(),
-            ));
-        }
+        return Err(Error::Usage(
+            "Public key is required for verification. Use -p <file> or -P <key>".into(),
+        ));
     };
 
     if message_files.len() == 1 {
@@ -485,10 +520,10 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         )?;
     }
 
-    Ok(())
+    Ok(0)
 }
 
-fn handle_recreate(cli: &Cli) -> Result<()> {
+fn handle_recreate(cli: &Cli) -> Result<i32> {
     // Reject -W flag for recreate operation
     // -W is documented as "generate and change only" in cli.rs
     if cli.no_password {
@@ -500,7 +535,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     }
 
     // Get secret key path
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Get public key path
@@ -535,7 +570,7 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
     if !cli.quiet {
         println!(
             "Public key recreated as {}",
-            result.public_key_file().display()
+            sanitised_path_display(result.public_key_file())
         );
     }
 
@@ -543,12 +578,12 @@ fn handle_recreate(cli: &Cli) -> Result<()> {
         forget_password_with_feedback(&credential_id, cli.quiet)?;
     }
 
-    Ok(())
+    Ok(0)
 }
 
-fn handle_change(cli: &Cli) -> Result<()> {
+fn handle_change(cli: &Cli) -> Result<i32> {
     // Get secret key path
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let secret_key_file = cli.secret_key_file.as_ref().unwrap_or(&default_secret_key);
 
     // Load the key to get credential ID and check if it's encrypted
@@ -557,7 +592,7 @@ fn handle_change(cli: &Cli) -> Result<()> {
 
     // Handle --forget-password (standalone usage)
     if cli.forget_password {
-        return forget_password_with_feedback(&old_credential_id, cli.quiet);
+        return forget_password_with_feedback(&old_credential_id, cli.quiet).map(|()| 0);
     }
 
     // Get current password: check credential store first, then prompt if needed
@@ -582,8 +617,12 @@ fn handle_change(cli: &Cli) -> Result<()> {
         )?)
     };
 
+    debug_assert!(
+        !cli.no_password || new_password.is_none(),
+        "no_password flag set but new_password is Some — logic invariant violated"
+    );
     let options = ChangeOptions::builder(secret_key_file)
-        .remove_password(cli.no_password && new_password.is_none())
+        .remove_password(cli.no_password)
         .allow_kdf_fallback(cli.allow_kdf_fallback)
         .force_weak_kdf(resolve_force_weak_kdf(cli))
         .build();
@@ -610,11 +649,12 @@ fn handle_change(cli: &Cli) -> Result<()> {
     if !cli.quiet {
         println!(
             "Password changed for {}",
-            result.secret_key_file().display()
+            sanitised_path_display(result.secret_key_file())
         );
     }
 
-    Ok(())
+    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
+    Ok(if result.kdf_fallback_used { 3 } else { 0 })
 }
 
 /// Display the signature inspection result
@@ -630,6 +670,14 @@ fn display_signature_inspect_result(result: &SignatureInspectResult) {
         SignatureAlgorithm::Prehashed => "Prehashed (Blake2b-512)",
     };
     println!("└─ Algorithm: {algorithm_desc}");
+}
+
+fn format_credential_status(status: &CredentialStatus) -> &'static str {
+    match status {
+        CredentialStatus::Saved => "Yes",
+        CredentialStatus::NotSaved => "No",
+        CredentialStatus::Unavailable(_) => "Unknown (credential store unavailable)",
+    }
 }
 
 /// Display the inspection result.
@@ -673,7 +721,7 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
             println!("├─ KDF Algorithm: Scrypt");
             println!(
                 "├─ Password saved: {}",
-                if result.password_saved() { "Yes" } else { "No" }
+                format_credential_status(result.password_saved())
             );
 
             if let Some(kdf) = result.kdf_info() {
@@ -715,7 +763,7 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
             println!("├─ Encrypted: No");
             println!(
                 "└─ Password saved: {}",
-                if result.password_saved() { "Yes" } else { "No" }
+                format_credential_status(result.password_saved())
             );
             println!();
             println!("*** WARNING: This key is stored in plaintext.");
@@ -736,19 +784,19 @@ fn build_inspect_options(path: &std::path::Path, no_decrypt: bool) -> InspectOpt
     }
 }
 
-fn handle_inspect(cli: &Cli) -> Result<()> {
+fn handle_inspect(cli: &Cli) -> Result<i32> {
     // Check if we're inspecting a signature file
     if let Some(ref sig_file) = cli.signature_file {
         let result = inspect_signature(sig_file)?;
 
-        println!("Inspecting: {}\n", sig_file.display());
+        println!("Inspecting: {}\n", sanitised_path_display(sig_file));
         display_signature_inspect_result(&result);
-        return Ok(());
+        return Ok(0);
     }
 
     // Determine the source key file path first (before any credential store access)
     // Priority: -s (secret key), -p (public key file), -P (public key base64), then default secret key
-    let default_secret_key = Cli::default_secret_key_path();
+    let default_secret_key = Cli::default_secret_key_path()?;
     let key_file_path: Option<&std::path::Path> = if cli.secret_key_file.is_some() {
         cli.secret_key_file.as_deref()
     } else if cli.public_key_file.is_some() {
@@ -766,7 +814,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
     {
         let seckey = load_secret_key(path)?;
         let credential_id = seckey.credential_id();
-        return forget_password_with_feedback(&credential_id, cli.quiet);
+        return forget_password_with_feedback(&credential_id, cli.quiet).map(|()| 0);
     }
 
     let (mut result, source_description, key_file_path) =
@@ -774,14 +822,14 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             let options = build_inspect_options(sk_file.as_path(), cli.no_decrypt);
             (
                 inspect(&options)?,
-                format!("Inspecting: {}", sk_file.display()),
+                format!("Inspecting: {}", sanitised_path_display(sk_file)),
                 Some(sk_file.as_path()),
             )
         } else if let Some(ref pk_file) = cli.public_key_file {
             let options = build_inspect_options(pk_file.as_path(), cli.no_decrypt);
             (
                 inspect(&options)?,
-                format!("Inspecting: {}", pk_file.display()),
+                format!("Inspecting: {}", sanitised_path_display(pk_file)),
                 Some(pk_file.as_path()),
             )
         } else if let Some(ref pk_base64) = cli.public_key_base64 {
@@ -796,7 +844,10 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
             let options = build_inspect_options(&default_secret_key, cli.no_decrypt);
             (
                 inspect(&options)?,
-                format!("Inspecting: {} (default)", default_secret_key.display()),
+                format!(
+                    "Inspecting: {} (default)",
+                    sanitised_path_display(&default_secret_key)
+                ),
                 Some(default_secret_key.as_path()),
             )
         };
@@ -846,7 +897,7 @@ fn handle_inspect(cli: &Cli) -> Result<()> {
         decrypted || result.key_type() != KeyType::SecretEncrypted,
     );
 
-    Ok(())
+    Ok(0)
 }
 
 /// Check if stdin is a terminal (interactive mode)
@@ -875,7 +926,6 @@ fn prompt_password(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
         // Open once; derive metadata from the fd to avoid TOCTOU races.
-        // Open once; derive metadata from the fd to avoid TOCTOU races.
         let file = File::open(path)
             .map_err(|e| Error::Io(format!("Failed to open password file: {e}")))?;
         let metadata = file
@@ -884,7 +934,7 @@ fn prompt_password(
         if !metadata.is_file() {
             return Err(Error::Io(format!(
                 "Password file '{}' is not a regular file",
-                path.display()
+                sanitised_path_display(path)
             )));
         }
         let size = metadata.len();
@@ -893,19 +943,22 @@ fn prompt_password(
                 "Password file too large: {size} bytes exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
             )));
         }
-        let capacity = usize::try_from(size).unwrap_or(0);
-        let mut password = Zeroizing::new(String::with_capacity(capacity));
+        // Pre-allocate the exact capacity so read_to_end cannot reallocate,
+        // which would orphan an unzeroed buffer that Zeroizing cannot wipe.
+        let max = usize::try_from(MAX_PASSWORD_FILE_BYTES)
+            .map_err(|e| Error::Io(format!("MAX_PASSWORD_FILE_BYTES overflow: {e}")))?;
+        let mut buf = Zeroizing::new(Vec::with_capacity(max + 1));
         file.take(MAX_PASSWORD_FILE_BYTES + 1)
-            .read_to_string(&mut password)
+            .read_to_end(&mut buf)
             .map_err(|e| Error::Io(format!("Failed to read password file: {e}")))?;
-        if password.len() as u64 > MAX_PASSWORD_FILE_BYTES {
+        if buf.len() > max {
             return Err(Error::Io(format!(
                 "Password file too large: exceeds maximum {MAX_PASSWORD_FILE_BYTES} bytes"
             )));
         }
-        // Trim trailing newline in place
-        let trimmed_len = password.trim_end().len();
-        password.truncate(trimmed_len);
+        let text = std::str::from_utf8(&buf)
+            .map_err(|_| Error::Io("Password file contains invalid UTF-8".into()))?;
+        let password = Zeroizing::new(text.trim_end().to_owned());
         return Ok(password);
     }
 
@@ -922,9 +975,13 @@ fn prompt_password(
         .flush()
         .map_err(|e| Error::Io(format!("Failed to flush stdout: {e}")))?;
 
-    rpassword::read_password()
-        .map(Zeroizing::new)
-        .map_err(|e| Error::Io(format!("Failed to read password: {e}")))
+    rpassword::read_password().map(Zeroizing::new).map_err(|e| {
+        if e.kind() == io::ErrorKind::Interrupted {
+            Error::Interrupted
+        } else {
+            Error::Io(format!("Failed to read password: {e}"))
+        }
+    })
 }
 
 /// Prompt for password with confirmation (for key generation)

@@ -76,6 +76,9 @@ pub struct ChangeResult {
     encrypted: bool,
     /// New credential store lookup key (after password change)
     credential_id: String,
+    /// True when scrypt succeeded only after reducing KDF parameters due to memory pressure.
+    /// Callers should signal this to the user (exit code 3).
+    pub kdf_fallback_used: bool,
 }
 
 impl ChangeResult {
@@ -150,9 +153,9 @@ pub fn change_with_log_n(
     let (secret_key, keynum) = seckey.extract_key(old_password)?;
 
     // Create new secret key structure with new password (or remove password)
-    let new_seckey = if options.encryption == EncryptionMode::Unprotected {
+    let (new_seckey, kdf_fallback_used) = if options.encryption == EncryptionMode::Unprotected {
         // Remove encryption
-        SeckeyStruct::new_unencrypted(keynum, &secret_key)
+        (SeckeyStruct::new_unencrypted(keynum, &secret_key), false)
     } else {
         use rand_core::{OsRng, RngCore};
 
@@ -166,7 +169,7 @@ pub fn change_with_log_n(
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
 
-        SeckeyStruct::new_encrypted(
+        let seckey = SeckeyStruct::new_encrypted(
             keynum,
             &secret_key,
             new_pwd,
@@ -174,8 +177,22 @@ pub fn change_with_log_n(
             kdf_opslimit,
             kdf_memlimit,
             options.allow_kdf_fallback,
-        )?
+        )?;
+        // Detect fallback by comparing stored params against what was requested.
+        let fallback = seckey.kdf_opslimit() < kdf_opslimit || seckey.kdf_memlimit() < kdf_memlimit;
+        (seckey, fallback)
     };
+
+    // Windows has no atomic rename + O_NOFOLLOW equivalent implemented yet.
+    // Truncate-then-write risks key corruption on crash; refuse until properly implemented.
+    #[cfg(not(unix))]
+    if options.secret_key_file.exists() {
+        return Err(Error::Other(
+            "Changing the password of an existing secret key is not yet supported on Windows. \
+             Use minisign on a Unix system to change the key password."
+                .into(),
+        ));
+    }
 
     // Write the modified secret key back to file
     let seckey_comment = if options.encryption == EncryptionMode::Unprotected {
@@ -194,5 +211,6 @@ pub fn change_with_log_n(
         secret_key_file: options.secret_key_file.to_path_buf(),
         encrypted: options.encryption == EncryptionMode::Protected,
         credential_id,
+        kdf_fallback_used,
     })
 }

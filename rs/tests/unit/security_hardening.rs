@@ -15,7 +15,10 @@ use minisign::{
     },
     ops::inspect::inspect_signature,
     ops::verify::{PublicKeySource, load_public_key, load_signature},
-    signature::{COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTEDCOMMENTMAXBYTES},
+    signature::{
+        COMMENT_PREFIX_SIZE, COMMENTMAXBYTES, SigStruct, SignatureBox, TRUSTED_COMMENT_PREFIX_SIZE,
+        TRUSTEDCOMMENTMAXBYTES,
+    },
 };
 use std::fs;
 use tempfile::TempDir;
@@ -255,10 +258,11 @@ fn h6_parse_rejects_oversized_trusted_comment() {
 
 #[test]
 fn h6_parse_accepts_maximum_length_comments() {
-    // Test boundary: comments at exactly COMMENTMAXBYTES / TRUSTEDCOMMENTMAXBYTES
-    // chars in the comment text should be accepted by the parser.
-    let max_untrusted = "x".repeat(COMMENTMAXBYTES);
-    let max_trusted = "x".repeat(TRUSTEDCOMMENTMAXBYTES);
+    // C-compat boundary: max valid untrusted = COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1 = 1003
+    // and max valid trusted = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1 = 8173.
+    // The full COMMENTMAXBYTES (1024) / TRUSTEDCOMMENTMAXBYTES (8192) is above the C limit.
+    let max_untrusted = "x".repeat(COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1);
+    let max_trusted = "x".repeat(TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1);
 
     // Create valid base64-encoded signature structure (74 bytes = SIG_STRUCT_SIZE)
     // Ed (2 bytes) + keynum (8 bytes) + signature (64 bytes) = 74 bytes

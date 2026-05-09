@@ -17,9 +17,36 @@
 //!
 //! When the `credential_store` feature is disabled, all functions become no-ops
 //! that never access the OS keyring, avoiding keychain popup dialogs during testing.
+//!
+//! # Residual secret exposure
+//!
+//! [`get_password`] uses `Entry::get_secret()` (raw bytes) rather than
+//! `Entry::get_password()` (owned `String`) so the caller-side buffer is wrapped
+//! in `Zeroizing` and wiped on drop. However, the OS backend transport layers —
+//! D-Bus message body on Linux, `SecKeychainItemCopyContent` buffer on macOS,
+//! Windows credential blob — allocate their own copies of the secret inside the
+//! process address space that we cannot reach. Those copies will persist until
+//! the OS deallocates them (typically at the next `malloc`/`free` cycle). This
+//! is an inherent limitation of the `keyring` crate's architecture, not a bug
+//! we can fix here.
 
 use crate::Result;
 use zeroize::Zeroizing;
+
+/// Whether a password is present in the OS credential store.
+///
+/// Used by `has_password` and stored in `InspectResult` so callers can
+/// distinguish "definitely not saved" from "store unreachable".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CredentialStatus {
+    /// A password was found and retrieved successfully.
+    Saved,
+    /// No entry exists for this credential ID (`keyring::Error::NoEntry`).
+    NotSaved,
+    /// The credential store is locked, broken, or otherwise unavailable.
+    /// The inner string contains the underlying error for display.
+    Unavailable(String),
+}
 
 cfg_select! {
     feature = "credential_store" => {
@@ -30,10 +57,6 @@ cfg_select! {
         const SERVICE_NAME: &str = "minisign";
 
         /// Save a password for a credential ID in the OS credential store.
-        ///
-        /// # Arguments
-        /// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
-        /// * `password` - The password to save
         ///
         /// # Errors
         /// Returns `CredentialStoreError` if the credential store is unavailable or
@@ -52,24 +75,34 @@ cfg_select! {
 
         /// Retrieve a saved password for a credential ID.
         ///
-        /// # Arguments
-        /// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
-        ///
         /// # Returns
-        /// `Some(Zeroizing<String>)` if a password is saved, `None` otherwise.
-        /// Returns `None` on any error (missing entry, no backend, etc.) to ensure
-        /// credential store failures never block operations.
-        #[must_use]
-        pub fn get_password(credential_id: &str) -> Option<Zeroizing<String>> {
-            let entry = Entry::new(SERVICE_NAME, credential_id).ok()?;
-            let password = entry.get_password().ok()?;
-            Some(Zeroizing::new(password))
+        /// - `Ok(Some(...))` if a password was found
+        /// - `Ok(None)` if no entry exists (`keyring::Error::NoEntry`)
+        /// - `Err(...)` for any other keyring failure (locked keychain, broken D-Bus, etc.)
+        ///
+        /// # Errors
+        /// Returns `CredentialStoreError` when the credential store is unavailable or
+        /// returns an unexpected error. Callers should warn the user and fall back to
+        /// prompting rather than silently treating this as "no password saved".
+        pub fn get_password(credential_id: &str) -> Result<Option<Zeroizing<String>>> {
+            let entry = Entry::new(SERVICE_NAME, credential_id)
+                .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
+            match entry.get_secret() {
+                Ok(raw) => {
+                    let raw = Zeroizing::new(raw);
+                    let password = std::str::from_utf8(&raw).map_err(|e| {
+                        Error::CredentialStoreError(format!(
+                            "stored secret is not valid UTF-8: {e}"
+                        ))
+                    })?;
+                    Ok(Some(Zeroizing::new(password.to_owned())))
+                }
+                Err(keyring::Error::NoEntry) => Ok(None),
+                Err(e) => Err(Error::CredentialStoreError(format!("failed to get password: {e}"))),
+            }
         }
 
         /// Remove a saved password for a credential ID.
-        ///
-        /// # Arguments
-        /// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
         ///
         /// # Errors
         /// Returns `CredentialStoreError` if the credential store is unavailable or
@@ -79,8 +112,7 @@ cfg_select! {
             let entry = Entry::new(SERVICE_NAME, credential_id)
                 .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
 
-            // delete_credential is idempotent - deleting a non-existent entry succeeds.
-            // NotFound is not an error - we already achieved the desired state.
+            // delete_credential is idempotent — NoEntry is already the desired state.
             match entry.delete_credential() {
                 Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
                 Err(e) => Err(Error::CredentialStoreError(format!(
@@ -89,16 +121,17 @@ cfg_select! {
             }
         }
 
-        /// Check if a password is saved for a credential ID.
+        /// Check whether a password is saved for a credential ID.
         ///
-        /// # Arguments
-        /// * `credential_id` - The credential ID hex string (from `SeckeyStruct::credential_id()`)
-        ///
-        /// # Returns
-        /// `true` if a password is saved and retrievable, `false` otherwise.
+        /// Returns [`CredentialStatus::Unavailable`] for any keyring error other than
+        /// `NoEntry`, allowing callers to distinguish "not saved" from "store broken".
         #[must_use]
-        pub fn has_password(credential_id: &str) -> bool {
-            get_password(credential_id).is_some()
+        pub fn has_password(credential_id: &str) -> CredentialStatus {
+            match get_password(credential_id) {
+                Ok(Some(_)) => CredentialStatus::Saved,
+                Ok(None) => CredentialStatus::NotSaved,
+                Err(e) => CredentialStatus::Unavailable(e.to_string()),
+            }
         }
     }
     _ => {
@@ -111,10 +144,13 @@ cfg_select! {
             Ok(())
         }
 
-        /// No-op stub: Always returns None when credential store is disabled.
-        #[must_use]
-        pub fn get_password(_credential_id: &str) -> Option<Zeroizing<String>> {
-            None
+        /// No-op stub: Always returns `Ok(None)` when credential store is disabled.
+        ///
+        /// # Errors
+        ///
+        /// This function never returns an error when the credential store feature is disabled.
+        pub fn get_password(_credential_id: &str) -> Result<Option<Zeroizing<String>>> {
+            Ok(None)
         }
 
         /// No-op stub: Always returns Ok when credential store is disabled.
@@ -126,10 +162,10 @@ cfg_select! {
             Ok(())
         }
 
-        /// No-op stub: Always returns false when credential store is disabled.
+        /// No-op stub: Always returns `NotSaved` when credential store is disabled.
         #[must_use]
-        pub fn has_password(_credential_id: &str) -> bool {
-            false
+        pub fn has_password(_credential_id: &str) -> CredentialStatus {
+            CredentialStatus::NotSaved
         }
     }
 }

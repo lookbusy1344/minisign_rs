@@ -72,8 +72,15 @@ pub enum Error {
     CredentialStoreError(String),
 
     // Key derivation errors
+    /// Programmer or parameter bug in KDF setup (invalid output length, bad scrypt params).
+    /// The fallback loop must NOT retry on this variant.
     #[error("key derivation failed: {0}")]
     KdfError(String),
+
+    /// `scrypt()` call itself failed — typically insufficient memory.
+    /// The fallback loop may retry with reduced parameters on this variant.
+    #[error("key derivation failed (insufficient memory): {0}")]
+    KdfMemoryError(String),
 
     #[error("random number generator failed: {0}")]
     RngError(String),
@@ -104,6 +111,9 @@ pub enum Error {
     // I/O errors (general)
     #[error("I/O error: {0}")]
     Io(String),
+
+    #[error("interrupted")]
+    Interrupted,
 
     // Multi-file batch operation errors
     // Error message provides high-level context; detailed per-file errors are printed by the caller

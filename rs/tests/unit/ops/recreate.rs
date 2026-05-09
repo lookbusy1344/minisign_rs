@@ -1,4 +1,4 @@
-use minisign::crypto::generate_keypair;
+use minisign::crypto::{SecretKey, generate_keypair};
 use minisign::errors::Error;
 use minisign::keys::{PubkeyStruct, SeckeyStruct};
 use minisign::ops::recreate::{RecreateOptions, extract_public_key_from_secret, recreate};
@@ -207,9 +207,27 @@ fn test_recreate_force_overwrite() {
 fn test_extract_public_key_from_secret() {
     let (secret_key, expected_public_key, _keynum) = generate_keypair().expect("RNG should work");
 
-    let extracted_public = extract_public_key_from_secret(&secret_key);
+    let extracted_public =
+        extract_public_key_from_secret(&secret_key).expect("valid keypair should succeed");
 
     assert_eq!(extracted_public.as_bytes(), expected_public_key.as_bytes());
+}
+
+#[test]
+fn test_extract_public_key_rejects_tampered_stored_bytes() {
+    // Build a key where bytes[32..64] (the stored public-key half) are all-zeros,
+    // which will not match the scalar at bytes[0..32] for any real key.
+    let (secret_key, _, _) = generate_keypair().expect("RNG should work");
+    let mut raw = *secret_key.as_bytes();
+    raw[32..64].fill(0); // zero out the stored public-key half
+    let tampered = SecretKey::from_bytes(raw);
+
+    let result = extract_public_key_from_secret(&tampered);
+    assert!(
+        result.is_err(),
+        "tampered stored public-key bytes must be rejected"
+    );
+    assert!(matches!(result.unwrap_err(), Error::InvalidSecretKey(_)));
 }
 
 #[test]
@@ -266,4 +284,27 @@ fn test_recreate_atomic_file_creation() {
     // Verify original content unchanged
     let contents = fs::read_to_string(&pk_path).unwrap();
     assert_eq!(contents, "existing public key");
+}
+
+// M9: empty --comment "" must be rejected for recreate as well.
+#[test]
+fn test_recreate_empty_comment_is_rejected() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
+
+    let sk_path = temp_dir.path().join("test.key");
+    fs::write(&sk_path, seckey.to_file_contents("test secret key")).unwrap();
+
+    let pk_path = temp_dir.path().join("test.pub");
+    let options = RecreateOptions::new(sk_path.as_path(), pk_path.as_path(), Some(""), false);
+
+    let result = recreate(&options, None);
+    assert!(result.is_err(), "expected error for empty comment, got Ok");
+    assert!(
+        matches!(result.unwrap_err(), Error::InvalidComment(_)),
+        "expected InvalidComment variant"
+    );
+    assert!(!pk_path.exists(), "public key file must not be created");
 }

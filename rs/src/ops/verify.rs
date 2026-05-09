@@ -4,10 +4,12 @@
 
 use super::file_utils::{
     MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded, read_message_file,
+    sanitised_path_display,
 };
 use crate::{
     Result,
-    crypto::{blake2b_512_stream, verify as crypto_verify},
+    constants::MAX_MESSAGE_SIZE_BYTES,
+    crypto::{blake2b_512, blake2b_512_stream, verify as crypto_verify},
     errors::Error,
     keys::PubkeyStruct,
     signature::SignatureBox,
@@ -15,7 +17,7 @@ use crate::{
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::fs::File;
-use std::io::{self, Seek, SeekFrom};
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Options for signature verification
@@ -114,14 +116,13 @@ pub enum PublicKeySource<'a> {
     Base64(&'a str),
 }
 
-/// The verified message content, held from the original file descriptor to prevent TOCTOU.
+/// Verified message content captured at verification time.
 ///
-/// Non-prehashed: the file was fully buffered during verification.
-/// Prehashed: the file descriptor is rewound to the start after streaming the hash.
+/// All paths (prehashed and non-prehashed) buffer the file content before verification,
+/// so the bytes returned here are exactly what was hashed — no TOCTOU window.
 #[derive(Debug)]
 pub enum MessageSource {
     Buffer(Vec<u8>),
-    File(File),
 }
 
 impl MessageSource {
@@ -129,14 +130,10 @@ impl MessageSource {
     ///
     /// # Errors
     ///
-    /// Returns an error if the write or (for `File`) the read fails.
+    /// Returns an error if the write fails.
     pub fn write_to(self, w: &mut impl io::Write) -> io::Result<()> {
         match self {
             Self::Buffer(buf) => w.write_all(&buf),
-            Self::File(mut f) => {
-                io::copy(&mut f, w)?;
-                Ok(())
-            }
         }
     }
 }
@@ -265,6 +262,11 @@ pub fn verify(options: &VerifyOptions<'_>) -> Result<VerifyResult> {
 
 cfg_select! {
     feature = "parallel" => {
+        // Memory note: non-prehashed (legacy) signatures buffer the full file (up to 1 GB) per
+        // worker. With N rayon threads, peak RSS can reach N × 1 GB. Unlike sign, we cannot know
+        // each file's signature mode until the .minisig is parsed, so we cannot gate on it here.
+        // To guarantee bounded memory when verifying large legacy-signed files, pass `--prehashed`
+        // (`-H`) to reject non-prehashed signatures upfront, or use `--sequential`.
         fn collect_verify_results(
             files: Vec<PathBuf>,
             pubkey: &PubkeyStruct,
@@ -384,15 +386,31 @@ pub fn verify_message_signature(
     }
 
     if sig_box.sig_struct().is_prehashed() {
-        // Pass &mut file so we keep the fd open for output — avoids re-opening the path.
-        let mut file = File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
-        let hash = blake2b_512_stream(&mut file)?;
-        crypto_verify(pubkey.public_key(), &hash, sig_box.sig_struct().signature())?;
         if capture_output {
-            file.seek(SeekFrom::Start(0))
-                .map_err(|e| Error::file_read(message_file, e))?;
-            return Ok(Some(MessageSource::File(file)));
+            // H6: close the TOCTOU window between hashing and emitting.
+            // The old path (stream-hash → seek → io::copy) lets an attacker modify the file
+            // between verification and output. Buffering first means the hash and the returned
+            // bytes are the same allocation: no window exists.
+            // Files > MAX_MESSAGE_SIZE_BYTES cannot be safely buffered; refuse that combination.
+            let file_size = std::fs::metadata(message_file)
+                .map_err(|e| Error::file_read(message_file, e))?
+                .len();
+            if file_size > MAX_MESSAGE_SIZE_BYTES {
+                return Err(Error::other(format!(
+                    "cannot combine prehashed mode (-H) with output (-o) for files larger \
+                     than {MAX_MESSAGE_SIZE_BYTES} bytes: the file must be buffered to \
+                     eliminate the TOCTOU window between hash verification and output"
+                )));
+            }
+            let file_buf = read_message_file(message_file)?;
+            let hash = blake2b_512(&file_buf);
+            crypto_verify(pubkey.public_key(), &hash, sig_box.sig_struct().signature())?;
+            return Ok(Some(MessageSource::Buffer(file_buf)));
         }
+        // No output needed: stream-hash without buffering (handles files > 1 GB).
+        let file = File::open(message_file).map_err(|e| Error::file_read(message_file, e))?;
+        let hash = blake2b_512_stream(file)?;
+        crypto_verify(pubkey.public_key(), &hash, sig_box.sig_struct().signature())?;
         Ok(None)
     } else {
         let file_buf = read_message_file(message_file)?;
@@ -470,33 +488,24 @@ pub fn verify_multiple_files(
     options: &VerifyOptions<'_>,
     sequential: bool,
 ) -> Result<()> {
-    // Fast path for single file
-    if files.len() == 1 {
-        let result =
-            verify_file_with_key(&files[0], &load_public_key(options.public_key())?, options)?;
-        if !options.quiet {
-            println!(
-                "Verified: {}\n  Trusted comment: {}\n  Key ID: {} ({})",
-                files[0].display(),
-                result.trusted_comment(),
-                result.key_id(),
-                result.key_id_words()
-            );
-        }
-        return Ok(());
-    }
-
-    // Load public key once — avoids N-1 redundant I/O operations
+    // Load public key once — avoids N-1 redundant I/O operations.
     let pubkey = load_public_key(options.public_key())?;
 
-    // Show key ID once at the top (like signing does)
+    // Show key ID header for all invocations (single or multi), so output
+    // format is identical regardless of file count.
     if !options.quiet {
         let key_id = pubkey.keynum().to_key_id();
         let key_id_words = crate::wordlist::keynum_to_words(pubkey.keynum());
         println!("Verifying with key: {key_id} ({key_id_words})");
     }
 
-    // Multi-file path: verify all files with the already-loaded key.
+    // Fast path for single file: skip rayon setup.
+    if files.len() == 1 {
+        let result = verify_file_with_key(&files[0], &pubkey, options)?;
+        report_file_result(&files[0], &Ok(result), options);
+        return Ok(());
+    }
+
     let results = collect_verify_results(files, &pubkey, options, sequential);
 
     print_summary(&results, options)
@@ -509,14 +518,14 @@ fn report_file_result(file: &Path, result: &Result<VerifyResult>, options: &Veri
             if !options.quiet {
                 println!(
                     "Verified: {}\n  Trusted comment: {}",
-                    file.display(),
+                    sanitised_path_display(file),
                     verify_result.trusted_comment
                 );
             }
         }
         Err(e) => {
             // Always show errors, even in quiet mode (matches sign behavior and Unix conventions)
-            eprintln!("Failed: {} ({})", file.display(), e);
+            eprintln!("Failed: {} ({})", sanitised_path_display(file), e);
         }
     }
 }
@@ -545,7 +554,7 @@ pub fn format_batch_summary(results: &[FileVerifyResult]) -> Option<String> {
     );
     for file in failures {
         use std::fmt::Write as _;
-        let _ = writeln!(out, "  - {}", file.display());
+        let _ = writeln!(out, "  - {}", sanitised_path_display(file));
     }
     Some(out)
 }
