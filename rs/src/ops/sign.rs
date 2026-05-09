@@ -536,10 +536,10 @@ pub fn create_signature(
     // This ensures we fail fast on invalid input without wasting resources
 
     // Generate trusted comment if not provided
-    let trusted_comment = trusted_comment.map_or_else(
-        || generate_default_trusted_comment(message_file, prehashed),
-        String::from,
-    );
+    let trusted_comment = match trusted_comment {
+        Some(c) => String::from(c),
+        None => generate_default_trusted_comment(message_file, prehashed)?,
+    };
 
     // Generate untrusted comment if not provided
     let untrusted_comment =
@@ -629,24 +629,35 @@ pub fn create_global_signature_data(sig_struct: &SigStruct, trusted_comment: &st
     data
 }
 
+/// Earliest timestamp considered sane (2020-01-01 00:00:00 UTC).
+/// Systems with clocks before this date are misconfigured; signing is refused.
+const TIMESTAMP_SANITY_FLOOR: u64 = 1_577_836_800;
+
 /// Generate a default trusted comment with timestamp, matching the C minisign format.
 ///
 /// Output: `timestamp:<secs>\tfile:<basename>` with `\thashed` appended for prehashed mode.
 ///
+/// # Errors
+///
+/// Returns an error if the system clock is before the UNIX epoch or before 2020-01-01.
+///
 /// # Note
 ///
 /// This function is public for unit testing purposes but is not part of the stable API.
-#[must_use]
-pub fn generate_default_trusted_comment(message_file: &Path, prehashed: bool) -> String {
+pub fn generate_default_trusted_comment(message_file: &Path, prehashed: bool) -> Result<String> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| {
-            eprintln!("Warning: system clock is before UNIX epoch, using timestamp 0");
-            std::time::Duration::ZERO
-        })
+        .map_err(|_| Error::other("system clock is before the UNIX epoch; refusing to sign"))?
         .as_secs();
+
+    if timestamp < TIMESTAMP_SANITY_FLOOR {
+        return Err(Error::other(format!(
+            "system clock reports {timestamp} seconds since epoch, which is before 2020-01-01; \
+             refusing to sign with a bogus timestamp"
+        )));
+    }
 
     let basename = message_file
         .file_name()
@@ -654,9 +665,9 @@ pub fn generate_default_trusted_comment(message_file: &Path, prehashed: bool) ->
         .unwrap_or_default();
 
     if prehashed {
-        format!("timestamp:{timestamp}\tfile:{basename}\thashed")
+        Ok(format!("timestamp:{timestamp}\tfile:{basename}\thashed"))
     } else {
-        format!("timestamp:{timestamp}\tfile:{basename}")
+        Ok(format!("timestamp:{timestamp}\tfile:{basename}"))
     }
 }
 

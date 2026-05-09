@@ -219,7 +219,8 @@ fn test_generate_default_trusted_comment() {
     let file_path = temp_dir.path().join("message.txt");
     fs::write(&file_path, b"test").unwrap();
 
-    let comment = generate_default_trusted_comment(&file_path, false);
+    let comment = generate_default_trusted_comment(&file_path, false)
+        .expect("clock should be sane on the test host");
     assert!(comment.starts_with("timestamp:"));
     assert!(
         comment.contains("\tfile:message.txt"),
@@ -241,7 +242,8 @@ fn test_generate_default_trusted_comment() {
         .expect("timestamp should be a valid integer");
     assert!(timestamp > 0);
 
-    let prehashed = generate_default_trusted_comment(&file_path, true);
+    let prehashed = generate_default_trusted_comment(&file_path, true)
+        .expect("clock should be sane on the test host");
     assert!(prehashed.contains("\tfile:message.txt"));
     assert!(
         prehashed.ends_with("\thashed"),
@@ -869,15 +871,11 @@ fn test_sign_multiple_files_deduplication() {
     assert!(sig_path.exists());
 }
 
-/// Verifies that `create_signature` accepts a zero timestamp as a custom `trusted_comment`
-/// and produces a globally-verifiable signature.
+/// Verifies that `create_signature` accepts an explicit `"timestamp:0"` trusted comment
+/// via the `Some(...)` override path and produces a globally-verifiable signature.
 ///
-/// This exercises the `Some(trusted_comment)` branch of `create_signature` with the exact
-/// string `"timestamp:0"` — the value that `generate_default_trusted_comment` would produce
-/// if the system clock were before the UNIX epoch.  The clock-fallback branch itself
-/// (`unwrap_or_else` in `generate_default_trusted_comment`) cannot be triggered without
-/// clock-injection infrastructure; see `test_generate_default_trusted_comment` for the
-/// happy-path coverage of that function.
+/// `generate_default_trusted_comment` now hard-errors on sub-epoch clocks; this test
+/// exercises the explicit-override path which bypasses that check.
 #[test]
 fn test_create_signature_accepts_zero_timestamp_comment() {
     let temp_dir = TempDir::new().unwrap();
