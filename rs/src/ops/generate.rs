@@ -540,6 +540,7 @@ fn write_keypair_files_create_new(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn write_keypair_files_with_overwrite(
     secret_path: &Path,
     public_path: &Path,
@@ -577,7 +578,13 @@ fn write_keypair_files_with_overwrite(
         if let Err(e) = sync_parent_directory(secret_path) {
             let _ = std::fs::remove_file(&secret_tmp);
             let _ = std::fs::remove_file(&public_tmp);
-            let _ = std::fs::rename(&backup, secret_path);
+            if let Err(re) = std::fs::rename(&backup, secret_path) {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    secret_path.display(),
+                    backup.display()
+                );
+            }
             return Err(e);
         }
         Some(backup)
@@ -590,17 +597,35 @@ fn write_keypair_files_with_overwrite(
         if let Err(e) = std::fs::rename(public_path, &backup) {
             let _ = std::fs::remove_file(&secret_tmp);
             let _ = std::fs::remove_file(&public_tmp);
-            if let Some(backup) = secret_backup.as_ref() {
-                let _ = std::fs::rename(backup, secret_path);
+            if let Some(sb) = secret_backup.as_ref()
+                && let Err(re) = std::fs::rename(sb, secret_path)
+            {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    secret_path.display(),
+                    sb.display()
+                );
             }
             return Err(Error::file_write(public_path, e));
         }
         if let Err(e) = sync_parent_directory(public_path) {
             let _ = std::fs::remove_file(&secret_tmp);
             let _ = std::fs::remove_file(&public_tmp);
-            let _ = std::fs::rename(&backup, public_path);
-            if let Some(backup) = secret_backup.as_ref() {
-                let _ = std::fs::rename(backup, secret_path);
+            if let Err(re) = std::fs::rename(&backup, public_path) {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    public_path.display(),
+                    backup.display()
+                );
+            }
+            if let Some(sb) = secret_backup.as_ref()
+                && let Err(re) = std::fs::rename(sb, secret_path)
+            {
+                eprintln!(
+                    "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {re}; recover manually",
+                    secret_path.display(),
+                    sb.display()
+                );
             }
             return Err(e);
         }
@@ -701,20 +726,41 @@ fn rollback_keypair_commit(
     public_backup: Option<&Path>,
     stage: KeypairCommitStage,
 ) {
-    if stage == KeypairCommitStage::SecretRenamed {
-        let _ = std::fs::remove_file(secret_path);
+    if stage == KeypairCommitStage::SecretRenamed
+        && let Err(e) = std::fs::remove_file(secret_path)
+    {
+        eprintln!(
+            "CRITICAL: could not remove partially-written secret key '{}': {e}; delete manually",
+            secret_path.display()
+        );
     }
     if matches!(
         stage,
         KeypairCommitStage::PublicRenamed | KeypairCommitStage::SecretRenamed
-    ) {
-        let _ = std::fs::remove_file(public_path);
+    ) && let Err(e) = std::fs::remove_file(public_path)
+    {
+        eprintln!(
+            "CRITICAL: could not remove partially-written public key '{}': {e}; delete manually",
+            public_path.display()
+        );
     }
-    if let Some(backup) = secret_backup {
-        let _ = std::fs::rename(backup, secret_path);
+    if let Some(backup) = secret_backup
+        && let Err(e) = std::fs::rename(backup, secret_path)
+    {
+        eprintln!(
+            "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {e}; recover manually",
+            secret_path.display(),
+            backup.display()
+        );
     }
-    if let Some(backup) = public_backup {
-        let _ = std::fs::rename(backup, public_path);
+    if let Some(backup) = public_backup
+        && let Err(e) = std::fs::rename(backup, public_path)
+    {
+        eprintln!(
+            "CRITICAL: rollback failed — could not restore '{}' from backup '{}': {e}; recover manually",
+            public_path.display(),
+            backup.display()
+        );
     }
 }
 
