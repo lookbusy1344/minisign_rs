@@ -1,6 +1,7 @@
 //! Unit tests for key inspection operations
 
 use minisign::constants::ENCRYPTED_KEYNUM_PLACEHOLDER;
+use minisign::credential_store::CredentialStatus;
 use minisign::crypto::generate_keypair;
 use minisign::keys::SeckeyStruct;
 use minisign::ops::inspect::{InspectOptions, KeyType, SecurityLevel, inspect, inspect_base64};
@@ -626,8 +627,8 @@ fn test_inspect_with_credential_store_check_disabled() {
     assert!(result.kdf_info().is_some());
     assert!(result.credential_id().is_some());
 
-    // Credential store was not consulted — password_saved must be false
-    assert!(!result.password_saved());
+    // Credential store was not consulted — password_saved must be NotSaved
+    assert_eq!(result.password_saved(), &CredentialStatus::NotSaved);
 }
 
 #[test]

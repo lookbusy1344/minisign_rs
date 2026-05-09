@@ -11,7 +11,7 @@
 #[cfg(feature = "credential_store_tests")]
 use minisign::Result;
 #[cfg(feature = "credential_store_tests")]
-use minisign::credential_store;
+use minisign::credential_store::{self, CredentialStatus};
 #[cfg(feature = "credential_store_tests")]
 use serial_test::serial;
 
@@ -57,25 +57,34 @@ fn test_save_retrieve_forget_round_trip() -> Result<()> {
     let key_id = guard.key_id();
 
     // Initially, no password should be saved
-    assert!(!credential_store::has_password(key_id));
-    assert!(credential_store::get_password(key_id).is_none());
+    assert_eq!(
+        credential_store::has_password(key_id),
+        CredentialStatus::NotSaved
+    );
+    assert!(credential_store::get_password(key_id)?.is_none());
 
     // Save a password
     let password = "test_password_123";
     credential_store::save_password(key_id, password)?;
 
     // Should now be retrievable
-    assert!(credential_store::has_password(key_id));
-    let retrieved = credential_store::get_password(key_id);
+    assert_eq!(
+        credential_store::has_password(key_id),
+        CredentialStatus::Saved
+    );
+    let retrieved = credential_store::get_password(key_id)?;
     assert!(retrieved.is_some());
-    assert_eq!(retrieved.as_ref().unwrap().as_str(), password);
+    assert_eq!(retrieved.as_ref().map(|s| s.as_str()), Some(password));
 
     // Forget the password
     credential_store::forget_password(key_id)?;
 
     // Should no longer be saved
-    assert!(!credential_store::has_password(key_id));
-    assert!(credential_store::get_password(key_id).is_none());
+    assert_eq!(
+        credential_store::has_password(key_id),
+        CredentialStatus::NotSaved
+    );
+    assert!(credential_store::get_password(key_id)?.is_none());
 
     Ok(())
     // guard drops here, ensuring cleanup
@@ -84,14 +93,18 @@ fn test_save_retrieve_forget_round_trip() -> Result<()> {
 #[test]
 #[serial]
 #[cfg(feature = "credential_store_tests")]
-fn test_get_password_returns_none_for_missing_entry() {
+fn test_get_password_returns_none_for_missing_entry() -> Result<()> {
     let guard = CredentialGuard::new(test_key_id("missing_entry"));
     let key_id = guard.key_id();
 
     // Should return None for a key that was never saved
-    assert!(credential_store::get_password(key_id).is_none());
-    assert!(!credential_store::has_password(key_id));
+    assert!(credential_store::get_password(key_id)?.is_none());
+    assert_eq!(
+        credential_store::has_password(key_id),
+        CredentialStatus::NotSaved
+    );
 
+    Ok(())
     // guard drops here, ensuring cleanup
 }
 
@@ -104,15 +117,24 @@ fn test_forget_password_is_idempotent() -> Result<()> {
 
     // Save a password
     credential_store::save_password(key_id, "password")?;
-    assert!(credential_store::has_password(key_id));
+    assert_eq!(
+        credential_store::has_password(key_id),
+        CredentialStatus::Saved
+    );
 
     // Forget it once
     credential_store::forget_password(key_id)?;
-    assert!(!credential_store::has_password(key_id));
+    assert_eq!(
+        credential_store::has_password(key_id),
+        CredentialStatus::NotSaved
+    );
 
     // Forgetting again should not error
     credential_store::forget_password(key_id)?;
-    assert!(!credential_store::has_password(key_id));
+    assert_eq!(
+        credential_store::has_password(key_id),
+        CredentialStatus::NotSaved
+    );
 
     Ok(())
     // guard drops here, ensuring cleanup
@@ -129,7 +151,7 @@ fn test_password_is_zeroized() -> Result<()> {
     credential_store::save_password(key_id, password)?;
 
     // Retrieve password
-    let retrieved = credential_store::get_password(key_id);
+    let retrieved = credential_store::get_password(key_id)?;
     assert!(retrieved.is_some());
 
     // Verify the password is wrapped in a zeroizing type
@@ -162,13 +184,13 @@ fn test_multiple_keys_independent() -> Result<()> {
 
     // Both should be retrievable independently
     assert_eq!(
-        credential_store::get_password(key_id_1)
+        credential_store::get_password(key_id_1)?
             .as_ref()
             .map(|s| s.as_str()),
         Some(password_1)
     );
     assert_eq!(
-        credential_store::get_password(key_id_2)
+        credential_store::get_password(key_id_2)?
             .as_ref()
             .map(|s| s.as_str()),
         Some(password_2)
@@ -176,8 +198,14 @@ fn test_multiple_keys_independent() -> Result<()> {
 
     // Forgetting one should not affect the other
     credential_store::forget_password(key_id_1)?;
-    assert!(!credential_store::has_password(key_id_1));
-    assert!(credential_store::has_password(key_id_2));
+    assert_eq!(
+        credential_store::has_password(key_id_1),
+        CredentialStatus::NotSaved
+    );
+    assert_eq!(
+        credential_store::has_password(key_id_2),
+        CredentialStatus::Saved
+    );
 
     Ok(())
     // guards drop here, ensuring cleanup of both credentials
@@ -193,7 +221,7 @@ fn test_update_password() -> Result<()> {
     // Save initial password
     credential_store::save_password(key_id, "old_password")?;
     assert_eq!(
-        credential_store::get_password(key_id)
+        credential_store::get_password(key_id)?
             .as_ref()
             .map(|s| s.as_str()),
         Some("old_password")
@@ -202,7 +230,7 @@ fn test_update_password() -> Result<()> {
     // Update to new password
     credential_store::save_password(key_id, "new_password")?;
     assert_eq!(
-        credential_store::get_password(key_id)
+        credential_store::get_password(key_id)?
             .as_ref()
             .map(|s| s.as_str()),
         Some("new_password")

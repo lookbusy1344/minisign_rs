@@ -11,6 +11,7 @@ pub mod recreate;
 pub mod sign;
 pub mod verify;
 
+pub use crate::credential_store::CredentialStatus;
 pub use change::{ChangeOptions, ChangeResult, change};
 pub use generate::{GenerateOptions, GenerateResult, generate};
 pub use inspect::{

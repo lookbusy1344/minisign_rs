@@ -5,6 +5,7 @@ use minisign::ops::verify::verify_multiple_files;
 use minisign::{
     Error, Result,
     cli::{Action, Cli},
+    credential_store::CredentialStatus,
     ops::{
         ChangeOptions, GenerateOptions, InspectOptions, InspectResult, KeyType, PublicKeySource,
         RecreateOptions, SecurityLevel, SignOptions, SignatureInspectResult, VerifyOptions, change,
@@ -160,13 +161,14 @@ fn get_password_with_credential_store(
     quiet: bool,
     password_file: Option<&std::path::Path>,
 ) -> Result<Zeroizing<String>> {
-    if let Some(saved_pwd) = minisign::credential_store::get_password(key_id) {
-        if !quiet {
-            eprintln!("Using saved password from credential store");
+    match minisign::credential_store::get_password(key_id)? {
+        Some(saved_pwd) => {
+            if !quiet {
+                eprintln!("Using saved password from credential store");
+            }
+            Ok(saved_pwd)
         }
-        Ok(saved_pwd)
-    } else {
-        prompt_password(prompt, password_file)
+        None => prompt_password(prompt, password_file),
     }
 }
 
@@ -632,6 +634,14 @@ fn display_signature_inspect_result(result: &SignatureInspectResult) {
     println!("└─ Algorithm: {algorithm_desc}");
 }
 
+fn format_credential_status(status: &CredentialStatus) -> &'static str {
+    match status {
+        CredentialStatus::Saved => "Yes",
+        CredentialStatus::NotSaved => "No",
+        CredentialStatus::Unavailable(_) => "Unknown (credential store unavailable)",
+    }
+}
+
 /// Display the inspection result.
 ///
 /// `key_id_known` must be `true` when the key ID has been resolved (i.e. the
@@ -673,7 +683,7 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
             println!("├─ KDF Algorithm: Scrypt");
             println!(
                 "├─ Password saved: {}",
-                if result.password_saved() { "Yes" } else { "No" }
+                format_credential_status(result.password_saved())
             );
 
             if let Some(kdf) = result.kdf_info() {
@@ -715,7 +725,7 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
             println!("├─ Encrypted: No");
             println!(
                 "└─ Password saved: {}",
-                if result.password_saved() { "Yes" } else { "No" }
+                format_credential_status(result.password_saved())
             );
             println!();
             println!("*** WARNING: This key is stored in plaintext.");

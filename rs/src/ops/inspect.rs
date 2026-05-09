@@ -4,6 +4,7 @@
 //! and display their security parameters and KDF configuration.
 
 use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
+use crate::credential_store::CredentialStatus;
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
 use crate::ops::file_utils::{MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded};
@@ -73,7 +74,7 @@ impl<'a> InspectOptions<'a> {
 
     /// Disable the OS credential store lookup.
     ///
-    /// When called, `inspect()` will set `password_saved = false` without
+    /// When called, `inspect()` will set `password_saved` to `CredentialStatus::NotSaved` without
     /// touching the keychain, preventing any authorization prompt.
     #[must_use]
     pub fn skip_credential_store_check(mut self) -> Self {
@@ -90,7 +91,7 @@ pub struct InspectResult {
     key_type: KeyType,
     security_level: Option<SecurityLevel>,
     kdf_info: Option<KdfInfo>,
-    password_saved: bool,
+    password_saved: CredentialStatus,
     credential_id: Option<String>,
 }
 
@@ -121,8 +122,8 @@ impl InspectResult {
     }
 
     #[must_use]
-    pub const fn password_saved(&self) -> bool {
-        self.password_saved
+    pub fn password_saved(&self) -> &CredentialStatus {
+        &self.password_saved
     }
 
     #[must_use]
@@ -327,8 +328,11 @@ fn inspect_secret_key(
 
     if !seckey.is_encrypted() {
         // Unencrypted key
-        let password_saved =
-            check_credential_store && crate::credential_store::has_password(&credential_id);
+        let password_saved = if check_credential_store {
+            crate::credential_store::has_password(&credential_id)
+        } else {
+            CredentialStatus::NotSaved
+        };
         return Ok(InspectResult {
             key_id,
             key_id_words,
@@ -361,8 +365,11 @@ fn inspect_secret_key(
     // Classify security level
     let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
-    let password_saved =
-        check_credential_store && crate::credential_store::has_password(&credential_id);
+    let password_saved = if check_credential_store {
+        crate::credential_store::has_password(&credential_id)
+    } else {
+        CredentialStatus::NotSaved
+    };
 
     Ok(InspectResult {
         key_id,
@@ -394,7 +401,7 @@ fn inspect_public_key(pubkey: &PubkeyStruct) -> InspectResult {
         key_type: KeyType::Public,
         security_level: None,
         kdf_info: None,
-        password_saved: false, // Public keys don't have passwords
+        password_saved: CredentialStatus::NotSaved,
         credential_id: None,
     }
 }

@@ -2252,7 +2252,7 @@ fn test_save_password_flag_with_generate() {
     eprintln!("credential_id: {credential_id}");
 
     // Verify password was saved to credential store
-    let saved_password = credential_store::get_password(&credential_id);
+    let saved_password = credential_store::get_password(&credential_id).unwrap();
     let is_some = saved_password.is_some();
     eprintln!("saved_password.is_some(): {is_some}");
     assert!(
@@ -2319,7 +2319,10 @@ fn test_save_password_short_flag() {
         .expect("Key ID not found");
 
     // Verify password saved using credential_id
-    assert!(credential_store::has_password(&credential_id));
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved
+    );
 
     // Guard will clean up on drop
 }
@@ -2377,7 +2380,10 @@ fn test_forget_password_standalone() {
     let credential_id = get_credential_id_from_file(&sk_path);
     #[cfg(feature = "credential_store_tests")]
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
-    assert!(credential_store::has_password(&credential_id));
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved
+    );
 
     // Forget password using standalone --forget-password
     minisign_cmd()
@@ -2389,7 +2395,10 @@ fn test_forget_password_standalone() {
         .success();
 
     // Verify password was removed
-    assert!(!credential_store::has_password(&credential_id));
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved
+    );
 }
 
 #[test]
@@ -2450,7 +2459,10 @@ fn test_forget_password_short_flag() {
         .success();
 
     // Verify removed
-    assert!(!credential_store::has_password(key_id));
+    assert_eq!(
+        credential_store::has_password(key_id),
+        credential_store::CredentialStatus::NotSaved
+    );
 }
 
 #[test]
@@ -2917,8 +2929,9 @@ fn test_inspect_save_password_flag() {
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
     // Verify password not saved yet
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "Password should not be saved yet"
     );
 
@@ -2946,8 +2959,9 @@ fn test_inspect_save_password_flag() {
     );
 
     // Verify password is now saved
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "Password should be saved after --save-password flag"
     );
 
@@ -3012,8 +3026,9 @@ fn test_change_password_with_credential_store() {
     let old_credential_id = get_credential_id_from_file(&sk_path);
 
     // Verify old password is saved
-    assert!(
+    assert_eq!(
         credential_store::has_password(&old_credential_id),
+        credential_store::CredentialStatus::Saved,
         "Old password should be saved in credential store"
     );
 
@@ -3046,14 +3061,16 @@ fn test_change_password_with_credential_store() {
     );
 
     // Verify old credential_id no longer has a password
-    assert!(
-        !credential_store::has_password(&old_credential_id),
+    assert_eq!(
+        credential_store::has_password(&old_credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "Old credential should be removed from credential store"
     );
 
     // Verify new credential_id has the new password saved
-    assert!(
+    assert_eq!(
         credential_store::has_password(&new_credential_id),
+        credential_store::CredentialStatus::Saved,
         "New password should be saved in credential store"
     );
 
@@ -3176,8 +3193,9 @@ fn test_forget_password_via_inspect() {
     let credential_id = get_credential_id_from_file(&sk_path);
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "password should be saved before forget"
     );
 
@@ -3190,8 +3208,9 @@ fn test_forget_password_via_inspect() {
         .assert()
         .success();
 
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "-I --forget-password must remove the saved password"
     );
 }
@@ -3228,8 +3247,9 @@ fn test_forget_password_after_sign() {
     let credential_id = get_credential_id_from_file(&sk_path);
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "password should be saved before sign"
     );
 
@@ -3251,8 +3271,9 @@ fn test_forget_password_after_sign() {
     assert!(sig_path.exists(), "signature file must be written");
 
     // Credential must be gone
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "-S --forget-password must remove the saved password after signing"
     );
 }
@@ -3287,8 +3308,9 @@ fn test_forget_password_after_recreate() {
     let credential_id = get_credential_id_from_file(&sk_path);
     let _guard = credential_guard::CredentialGuard::new(&credential_id);
 
-    assert!(
+    assert_eq!(
         credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::Saved,
         "password should be saved before recreate"
     );
 
@@ -3314,8 +3336,9 @@ fn test_forget_password_after_recreate() {
     );
 
     // Credential must be gone
-    assert!(
-        !credential_store::has_password(&credential_id),
+    assert_eq!(
+        credential_store::has_password(&credential_id),
+        credential_store::CredentialStatus::NotSaved,
         "-R --forget-password must remove the saved password after recreating"
     );
 }
