@@ -163,6 +163,10 @@ fn get_password_with_credential_store(
     quiet: bool,
     password_file: Option<&std::path::Path>,
 ) -> Result<Zeroizing<String>> {
+    // An explicit --password-file bypasses the credential store entirely.
+    if password_file.is_some() {
+        return prompt_password(prompt, password_file);
+    }
     match minisign::credential_store::get_password(key_id)? {
         Some(saved_pwd) => {
             if !quiet {
@@ -170,7 +174,7 @@ fn get_password_with_credential_store(
             }
             Ok(saved_pwd)
         }
-        None => prompt_password(prompt, password_file),
+        None => prompt_password(prompt, None),
     }
 }
 
