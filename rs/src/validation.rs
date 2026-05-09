@@ -172,13 +172,14 @@ pub fn validate_comment_with_length(
     validate_comment(s)?;
 
     // Then validate length if provided
+    // C uses >= against its fgets buffer limit (prefix + NUL consume headroom)
     if let Some(max_len) = max_length
-        && s.len() > max_len
+        && s.len() >= max_len
     {
         return Err(Error::InvalidComment(format!(
             "{comment_type} comment too long: {} bytes (limit: {} bytes)",
             s.len(),
-            max_len
+            max_len - 1
         )));
     }
 

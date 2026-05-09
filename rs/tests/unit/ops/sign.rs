@@ -363,10 +363,8 @@ fn test_trusted_comment_too_long() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create a trusted comment that exceeds the limit.
-    // TRUSTEDCOMMENTMAXBYTES = 8192, TRUSTED_COMMENT_PREFIX_SIZE = 18
-    // Maximum allowed comment length is 8174 bytes (= 8192 - 18).
-    // 8175 bytes is the first value that must be rejected.
+    // C-compat: max valid = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1 = 8173.
+    // Threshold is 8174 (>= rejected); 8175 is clearly over.
     let too_long_comment = "a".repeat(8175);
 
     let result = create_signature(
@@ -391,19 +389,36 @@ fn test_trusted_comment_at_limit() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create a trusted comment at exactly the limit (should succeed)
-    let at_limit_comment = "a".repeat(8174);
+    // C-compat limit: max valid = TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1 = 8173.
+    // 8174 (= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE) is the C threshold and must
+    // be rejected.
+    let max_valid_comment = "a".repeat(8173);
 
     let result = create_signature(
         &secret_key,
         keynum,
         &message_path,
         false,
-        Some(&at_limit_comment),
+        Some(&max_valid_comment),
         None,
     );
 
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "comment of 8173 bytes should be accepted");
+
+    // 8174 is the C threshold — must be rejected.
+    let at_c_threshold = "a".repeat(8174);
+    let result2 = create_signature(
+        &secret_key,
+        keynum,
+        &message_path,
+        false,
+        Some(&at_c_threshold),
+        None,
+    );
+    assert!(
+        result2.is_err(),
+        "comment of 8174 bytes must be rejected (C threshold)"
+    );
 }
 
 #[test]
@@ -414,10 +429,8 @@ fn test_untrusted_comment_too_long_errors() {
 
     let (secret_key, _, keynum) = generate_keypair().expect("RNG should work");
 
-    // Create an untrusted comment that exceeds the limit.
-    // COMMENTMAXBYTES = 1024, COMMENT_PREFIX_SIZE = 20
-    // Maximum allowed comment length is 1004 bytes (= 1024 - 20).
-    // 1005 bytes is the first value that must be rejected.
+    // C-compat: max valid = COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1 = 1003.
+    // Threshold is 1004 (>= rejected); 1005 is clearly over.
     let too_long_comment = "a".repeat(1005);
 
     // Should now error (changed from warning for consistency with trusted comments)

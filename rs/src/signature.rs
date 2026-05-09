@@ -241,10 +241,12 @@ impl SignatureBox {
         // H1: Validate untrusted comment for printability and newlines
         validate_comment(&untrusted_comment)?;
 
-        // H1 & H2: Validate untrusted comment length
-        if untrusted_comment.len() > COMMENTMAXBYTES {
+        // H1 & H2: Validate untrusted comment length (C uses fgets with fixed buffer, so
+        // `prefix + comment + newline` must fit — subtract prefix+NUL to match C's limit)
+        if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
             return Err(Error::InvalidComment(format!(
-                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
+                "untrusted comment exceeds maximum length of {} bytes",
+                COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1
             )));
         }
 
@@ -252,9 +254,10 @@ impl SignatureBox {
         validate_comment(&trusted_comment)?;
 
         // H1 & H2: Validate trusted comment length
-        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
+        if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
             return Err(Error::InvalidComment(format!(
-                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
+                "trusted comment exceeds maximum length of {} bytes",
+                TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1
             )));
         }
 
@@ -328,10 +331,11 @@ impl SignatureBox {
         // This prevents display-based attacks via control characters
         validate_comment(&untrusted_comment)?;
 
-        // H6: Validate untrusted comment length (DoS prevention)
-        if untrusted_comment.len() > COMMENTMAXBYTES {
+        // H6: Validate untrusted comment length (C-compat: prefix+comment+NUL must fit fgets buffer)
+        if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
             return Err(Error::InvalidComment(format!(
-                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
+                "untrusted comment exceeds maximum length of {} bytes",
+                COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1
             )));
         }
 
@@ -353,10 +357,11 @@ impl SignatureBox {
         // This matches C implementation's is_printable() check
         validate_comment(&trusted_comment)?;
 
-        // H6: Validate trusted comment length (DoS prevention)
-        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
+        // H6: Validate trusted comment length (C-compat: prefix+comment+NUL must fit fgets buffer)
+        if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
             return Err(Error::InvalidComment(format!(
-                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
+                "trusted comment exceeds maximum length of {} bytes",
+                TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1
             )));
         }
 
@@ -430,20 +435,22 @@ impl SignatureBox {
         // H2: Validate untrusted comment for printability and newlines
         validate_comment(&untrusted_comment)?;
 
-        // H2: Validate untrusted comment length
-        if untrusted_comment.len() > COMMENTMAXBYTES {
+        // H2: Validate untrusted comment length (C-compat)
+        if untrusted_comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
             return Err(Error::InvalidComment(format!(
-                "untrusted comment exceeds maximum length of {COMMENTMAXBYTES} bytes"
+                "untrusted comment exceeds maximum length of {} bytes",
+                COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1
             )));
         }
 
         // H2: Validate trusted comment for printability and newlines
         validate_comment(&trusted_comment)?;
 
-        // H2: Validate trusted comment length
-        if trusted_comment.len() > TRUSTEDCOMMENTMAXBYTES {
+        // H2: Validate trusted comment length (C-compat)
+        if trusted_comment.len() >= TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE {
             return Err(Error::InvalidComment(format!(
-                "trusted comment exceeds maximum length of {TRUSTEDCOMMENTMAXBYTES} bytes"
+                "trusted comment exceeds maximum length of {} bytes",
+                TRUSTEDCOMMENTMAXBYTES - TRUSTED_COMMENT_PREFIX_SIZE - 1
             )));
         }
 
