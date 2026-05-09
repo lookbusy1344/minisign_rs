@@ -1103,6 +1103,7 @@ fn test_recreate_long_name() {
 }
 
 #[test]
+#[cfg_attr(not(unix), ignore = "change-password not yet implemented on Windows")]
 fn test_change_password_long_name() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let secret_key = temp_dir.path().join("test.key");
@@ -2136,6 +2137,7 @@ fn test_cli_verify_h_flag_accepts_prehashed() {
 
 #[test]
 #[cfg(debug_assertions)]
+#[cfg_attr(not(unix), ignore = "change-password not yet implemented on Windows")]
 fn test_change_password_remove_with_w_flag() {
     // Test M9: -W flag with change operation should remove password
     // but still prompt for current password if key is encrypted
@@ -2189,6 +2191,7 @@ fn test_change_password_remove_with_w_flag() {
 
 #[test]
 #[cfg(debug_assertions)]
+#[cfg_attr(not(unix), ignore = "change-password not yet implemented on Windows")]
 fn test_change_password_add_with_w_flag_on_unencrypted() {
     // Test that -W on an already unencrypted key during change is a no-op
     let temp_dir = TempDir::new().unwrap();
