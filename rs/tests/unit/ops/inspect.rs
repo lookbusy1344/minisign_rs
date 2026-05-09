@@ -575,6 +575,71 @@ fn test_inspect_signature_prehashed() {
     );
 }
 
+// M7: sniff-based routing — specific errors surface through recognised comments
+
+#[test]
+fn test_inspect_truncated_secret_key_surfaces_specific_error() {
+    // A file claiming to be a secret key ("minisign encrypted secret key" comment) but
+    // with truncated base64 must return a specific parse error, not the generic
+    // "File is not a valid minisign key" message.
+    let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
+    let password = b"pw";
+    let mut salt = [0u8; 32];
+    rand::rng().fill(&mut salt);
+
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        password,
+        salt,
+        4_194_304,
+        134_217_728,
+        false,
+    )
+    .unwrap();
+
+    // Produce a file with the standard "minisign encrypted secret key" comment.
+    let full_contents = seckey.to_file_contents("minisign encrypted secret key");
+
+    // Truncate the base64 line by removing its last character.
+    let mut lines: Vec<&str> = full_contents.lines().collect();
+    let truncated_b64 = &lines[1][..lines[1].len() - 1];
+    lines[1] = truncated_b64;
+    let truncated = lines.join("\n") + "\n";
+
+    let temp_file = create_temp_key_file(&truncated);
+    let result = inspect(&InspectOptions::new(temp_file.path()));
+
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg != "File is not a valid minisign key",
+        "expected a specific parser error, got the generic fallback: {err_msg}"
+    );
+}
+
+#[test]
+fn test_inspect_truncated_public_key_surfaces_specific_error() {
+    // Same guarantee for public keys with the standard comment.
+    let contents = std::fs::read_to_string("tests/fixtures/keys/test.pub")
+        .expect("Failed to read test.pub fixture");
+
+    let mut lines: Vec<&str> = contents.lines().collect();
+    let truncated_b64 = &lines[1][..lines[1].len() - 1];
+    lines[1] = truncated_b64;
+    let truncated = lines.join("\n") + "\n";
+
+    let temp_file = create_temp_key_file(&truncated);
+    let result = inspect(&InspectOptions::new(temp_file.path()));
+
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg != "File is not a valid minisign key",
+        "expected a specific parser error, got the generic fallback: {err_msg}"
+    );
+}
+
 #[test]
 fn test_inspect_signature_invalid_file() {
     use minisign::ops::inspect::inspect_signature;
