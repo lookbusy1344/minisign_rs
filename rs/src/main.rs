@@ -33,8 +33,9 @@ fn main() {
         Ok(exit_code) => process::exit(exit_code),
         Err(e) => {
             eprintln!("{e}");
-            // Exit code 2 for usage errors, 1 for other errors
+            // Exit code 130 for SIGINT/Interrupted, 2 for usage errors, 1 for all others
             let exit_code = match e {
+                Error::Interrupted => 130,
                 Error::Usage(_) | Error::MissingArgument(_) => 2,
                 _ => 1,
             };
@@ -435,21 +436,17 @@ fn handle_verify(cli: &Cli) -> Result<i32> {
     }
 
     // Get public key source (either -p or -P, one is required)
-    let default_pk;
+    let default_pk = Cli::default_public_key_path();
     let public_key = if let Some(ref pk_file) = cli.public_key_file {
         PublicKeySource::File(pk_file.as_path())
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
         PublicKeySource::Base64(pk_base64)
+    } else if default_pk.exists() {
+        PublicKeySource::File(&default_pk)
     } else {
-        // Try default public key file
-        default_pk = Cli::default_public_key_path();
-        if default_pk.exists() {
-            PublicKeySource::File(&default_pk)
-        } else {
-            return Err(Error::Usage(
-                "Public key is required for verification. Use -p <file> or -P <key>".into(),
-            ));
-        }
+        return Err(Error::Usage(
+            "Public key is required for verification. Use -p <file> or -P <key>".into(),
+        ));
     };
 
     if message_files.len() == 1 {
@@ -978,9 +975,13 @@ fn prompt_password(
         .flush()
         .map_err(|e| Error::Io(format!("Failed to flush stdout: {e}")))?;
 
-    rpassword::read_password()
-        .map(Zeroizing::new)
-        .map_err(|e| Error::Io(format!("Failed to read password: {e}")))
+    rpassword::read_password().map(Zeroizing::new).map_err(|e| {
+        if e.kind() == io::ErrorKind::Interrupted {
+            Error::Interrupted
+        } else {
+            Error::Io(format!("Failed to read password: {e}"))
+        }
+    })
 }
 
 /// Prompt for password with confirmation (for key generation)

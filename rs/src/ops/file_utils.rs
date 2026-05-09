@@ -47,12 +47,20 @@ pub fn has_lax_permissions(path: &Path) -> bool {
 #[cfg(unix)]
 fn check_secret_key_permissions(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
-    if let Ok(metadata) = std::fs::metadata(path) {
-        let mode = metadata.permissions().mode();
-        if mode & 0o077 != 0 {
-            let display = path.display();
-            eprintln!("Warning: {display} is accessible to other users (mode {mode:o})");
-            eprintln!("Consider running: chmod 600 {display}");
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            let mode = metadata.permissions().mode();
+            if mode & 0o077 != 0 {
+                let display = path.display();
+                eprintln!("Warning: {display} is accessible to other users (mode {mode:o})");
+                eprintln!("Consider running: chmod 600 {display}");
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "Warning: could not check permissions for '{}': {e}",
+                path.display()
+            );
         }
     }
 }

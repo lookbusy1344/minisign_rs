@@ -112,6 +112,9 @@ pub enum Error {
     #[error("I/O error: {0}")]
     Io(String),
 
+    #[error("interrupted")]
+    Interrupted,
+
     // Multi-file batch operation errors
     // Error message provides high-level context; detailed per-file errors are printed by the caller
     #[error("Some files in batch operation failed")]
