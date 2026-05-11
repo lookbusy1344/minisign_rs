@@ -420,6 +420,12 @@ pub fn sign_multiple_files(
 
     let files = deduped_files;
 
+    if files.len() > 1 && options.signature_file.is_some() {
+        return Err(Error::Usage(
+            "Custom signature file (-x) not supported with multiple message files".into(),
+        ));
+    }
+
     // Fast path for single file
     if files.len() == 1 {
         sign_single_file(&files[0], options, password)?;

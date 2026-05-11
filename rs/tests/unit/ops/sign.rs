@@ -730,6 +730,88 @@ fn test_sign_multiple_files_parallel() {
 }
 
 #[test]
+fn test_sign_multiple_files_rejects_shared_custom_signature_path() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file1 = temp_dir.path().join("file1.txt");
+    let file2 = temp_dir.path().join("file2.txt");
+    let sig_path = temp_dir.path().join("shared.minisig");
+
+    fs::write(&file1, b"Message 1").unwrap();
+    fs::write(&file2, b"Message 2").unwrap();
+
+    let paths = vec![file1, file2];
+
+    let opts = SignOptions::builder(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+    )
+    .signature_file(sig_path.as_path())
+    .force(true)
+    .build();
+
+    let result = sign_multiple_files(&paths, &opts, None, true);
+
+    assert!(matches!(result, Err(Error::Usage(_))));
+    assert!(
+        !sig_path.exists(),
+        "shared signature path must not be written for multi-file signing"
+    );
+}
+
+#[test]
+fn test_sign_multiple_files_single_file_custom_signature_path_succeeds() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file = temp_dir.path().join("file.txt");
+    let sig_path = temp_dir.path().join("custom.minisig");
+
+    fs::write(&file, b"Message").unwrap();
+
+    let paths = vec![file.clone()];
+
+    let opts = SignOptions::builder(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+    )
+    .signature_file(sig_path.as_path())
+    .force(true)
+    .build();
+
+    let result = sign_multiple_files(&paths, &opts, None, true);
+
+    assert!(result.is_ok());
+    assert!(sig_path.exists());
+    assert!(!file.with_extension("txt.minisig").exists());
+}
+
+#[test]
+fn test_sign_multiple_files_duplicate_inputs_with_custom_signature_path_succeeds() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let file = temp_dir.path().join("file.txt");
+    let sig_path = temp_dir.path().join("custom.minisig");
+
+    fs::write(&file, b"Message").unwrap();
+
+    let paths = vec![file.clone(), file.clone()];
+
+    let opts = SignOptions::builder(
+        Path::new("tests/fixtures/keys/unencrypted.key"),
+        Path::new(""),
+    )
+    .signature_file(sig_path.as_path())
+    .force(true)
+    .build();
+
+    let result = sign_multiple_files(&paths, &opts, None, true);
+
+    assert!(result.is_ok());
+    assert!(sig_path.exists());
+    assert!(!file.with_extension("txt.minisig").exists());
+}
+
+#[test]
 fn test_sign_multiple_files_nonexistent_fails_fast() {
     // A nonexistent file in the batch causes an immediate FileRead error during
     // deduplication — before any signing starts — so no signatures are produced.
