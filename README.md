@@ -236,3 +236,4 @@ Other tools and libraries:
 - [py-minisign](https://github.com/x13a/py-minisign) - Python implementation
 - [minisign](https://hexdocs.pm/minisign/Minisign.html) - Elixir implementation (verification only)
 - [minisign-java](https://github.com/linux-china/minisign-java) - Java implementation
+- [minisign4j](https://codeberg.org/FalsePattern/minisign4j) - Java implementation (CLI and library)
