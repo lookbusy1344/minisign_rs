@@ -78,13 +78,12 @@ pub enum Error {
     CredentialStoreError(String),
 
     // Key derivation errors
-    /// Programmer or parameter bug in KDF setup (invalid output length, bad scrypt params).
-    /// The fallback loop must NOT retry on this variant.
+    /// Invalid KDF setup or a `scrypt()` error (invalid output length or parameters).
     #[error("key derivation failed: {0}")]
     KdfError(String),
 
-    /// `scrypt()` call itself failed — typically insufficient memory.
-    /// The fallback loop may retry with reduced parameters on this variant.
+    /// Not produced. scrypt allocates with `vec!`, so allocation failure aborts the process
+    /// instead of returning an error. Retained for API compatibility.
     #[error("key derivation failed (insufficient memory): {0}")]
     KdfMemoryError(String),
 

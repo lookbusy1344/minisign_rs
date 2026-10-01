@@ -47,6 +47,13 @@ fn main() {
 fn run() -> Result<i32> {
     let cli = Cli::parse()?;
 
+    if cli.allow_kdf_fallback {
+        eprintln!(
+            "Warning: --allow-kdf-fallback is deprecated and has no effect: \
+             scrypt cannot recover from a failed memory allocation."
+        );
+    }
+
     // Determine which action to perform
     let action = cli
         .action()
@@ -96,7 +103,6 @@ fn handle_generate(cli: &Cli) -> Result<i32> {
     let mut builder = GenerateOptions::builder(secret_key_file, public_key_file)
         .force(cli.force)
         .no_password(cli.no_password)
-        .allow_kdf_fallback(cli.allow_kdf_fallback)
         .force_weak_kdf(resolve_force_weak_kdf(cli));
 
     if let Some(comment) = comment {
@@ -152,8 +158,7 @@ fn handle_generate(cli: &Cli) -> Result<i32> {
         println!("minisign_rs -Vm <file> -P {}", result.public_key_base64());
     }
 
-    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
-    Ok(if result.kdf_fallback_used { 3 } else { 0 })
+    Ok(0)
 }
 
 /// Get password for a key: check credential store first, then prompt
@@ -631,7 +636,6 @@ fn handle_change(cli: &Cli) -> Result<i32> {
     );
     let options = ChangeOptions::builder(secret_key_file)
         .remove_password(cli.no_password)
-        .allow_kdf_fallback(cli.allow_kdf_fallback)
         .force_weak_kdf(resolve_force_weak_kdf(cli))
         .build();
 
@@ -661,8 +665,7 @@ fn handle_change(cli: &Cli) -> Result<i32> {
         );
     }
 
-    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
-    Ok(if result.kdf_fallback_used { 3 } else { 0 })
+    Ok(0)
 }
 
 /// Display the signature inspection result

@@ -348,11 +348,12 @@ impl SeckeyStruct {
     /// * `kdf_salt` - The salt for key derivation
     /// * `kdf_opslimit` - Operations limit (N * r * `OPSLIMIT_MULTIPLIER`)
     /// * `kdf_memlimit` - Memory limit (N * r * `MEMLIMIT_MULTIPLIER`)
-    /// * `allow_fallback` - If true, allow reduced parameters on failure (LESS SECURE, opt-in only)
+    /// * `_allow_fallback` - Ignored. scrypt aborts the process on allocation failure, so no
+    ///   reduced-parameter retry can run. Retained for source compatibility.
     ///
     /// # Errors
     ///
-    /// Returns an error if key derivation fails or if fallback would be needed but is not allowed
+    /// Returns an error if the KDF parameters are invalid or exceed the KDF budget
     pub fn new_encrypted(
         keynum: KeyNum,
         secret_key: &SecretKey,
@@ -360,64 +361,14 @@ impl SeckeyStruct {
         kdf_salt: [u8; KDF_SALT_BYTES],
         kdf_opslimit: u64,
         kdf_memlimit: u64,
-        allow_fallback: bool,
+        _allow_fallback: bool,
     ) -> Result<Self> {
-        use crate::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
-
         // Compute checksum of unencrypted keynum + secret_key (before encryption)
         let computed_checksum = Self::compute_checksum(keynum, secret_key.as_bytes());
 
-        // Implement scrypt parameter fallback (matches C minisign.c:419-427)
-        // Try derivation with initial parameters, halving on failure until minimum reached
-        // SECURITY: Fallback is opt-in only (allow_fallback must be true)
-        let mut current_opslimit = kdf_opslimit;
-        let mut current_memlimit = kdf_memlimit;
-        let mut fallback_used = false;
-
-        let derived_key = loop {
-            // Convert opslimit/memlimit to scrypt parameters
-            let (log_n, r, p) =
-                Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit)?;
-
-            match derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE) {
-                Ok(key) => break key,
-                // scrypt() itself failed (memory pressure) — fall through to retry logic.
-                Err(Error::KdfMemoryError(_)) => {}
-                // Programmer/parameter bug or any other variant — never retry, propagate immediately.
-                Err(e) => return Err(e),
-            }
-
-            // Memory failure — check if we can fallback
-            if !allow_fallback {
-                return Err(Error::KdfMemoryError(
-                    "Key derivation failed — more memory needed (use --allow-kdf-fallback to reduce security parameters, not recommended)".to_string(),
-                ));
-            }
-
-            // Fallback is allowed — try with reduced parameters
-            current_opslimit /= 2;
-            current_memlimit /= 2;
-
-            // Check if we've fallen below minimum thresholds
-            if current_opslimit < SCRYPT_OPSLIMIT_MIN || current_memlimit < SCRYPT_MEMLIMIT_MIN {
-                return Err(Error::KdfMemoryError(
-                    "Unable to complete key derivation — more memory needed even with minimum parameters".to_string(),
-                ));
-            }
-
-            fallback_used = true;
-        };
-
-        // Display CLEAR WARNING if fallback was used
-        if fallback_used {
-            eprintln!("\n*** WARNING: REDUCED SECURITY PARAMETERS ***");
-            eprintln!("Key derivation used weaker parameters due to memory constraints:");
-            eprintln!("  Original: opslimit={kdf_opslimit}, memlimit={kdf_memlimit}");
-            eprintln!("  Reduced:  opslimit={current_opslimit}, memlimit={current_memlimit}");
-            eprintln!(
-                "This makes your key easier to brute-force. Consider using a system with more memory.\n"
-            );
-        }
+        let (log_n, r, p) = Self::opslimit_memlimit_to_params(kdf_opslimit, kdf_memlimit)?;
+        let derived_key =
+            derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
 
         let mut blob = Zeroizing::new([0u8; ENCRYPTED_BLOB_SIZE]);
         blob[0..KEYNUM_BYTES].copy_from_slice(keynum.as_bytes());
@@ -444,8 +395,8 @@ impl SeckeyStruct {
         Ok(Self {
             encrypted: true,
             kdf_salt,
-            kdf_opslimit: current_opslimit, // Store actual parameters that worked
-            kdf_memlimit: current_memlimit,
+            kdf_opslimit,
+            kdf_memlimit,
             keynum,
             encrypted_keynum,
             secret_key_encrypted,
@@ -576,8 +527,9 @@ impl SeckeyStruct {
     /// Check if this key was created with weak KDF parameters (fallback parameters)
     ///
     /// Returns `true` if the key's KDF parameters are below production strength,
-    /// indicating it was created with `--allow-kdf-fallback` or on a memory-constrained
-    /// system using the C implementation's automatic fallback.
+    /// indicating it was created by the C implementation's automatic fallback on a
+    /// memory-constrained system, by an older minisign-rs with `--allow-kdf-fallback`,
+    /// or with debug-only weak parameters.
     ///
     /// Production strength parameters:
     /// - `opslimit` = 33,554,432 (N=2^20, r=8, p=1)

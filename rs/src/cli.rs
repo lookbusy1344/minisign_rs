@@ -45,7 +45,7 @@ OPTIONS:
     -v, --version                       Show version
     -W, --no-password                   Do not use password (generate and change only)
     -x, --signature <FILE>              Signature file
-        --allow-kdf-fallback            Allow KDF parameter fallback if 128MB allocation fails
+        --allow-kdf-fallback            Deprecated; has no effect
         --forget-password, --fp         Remove saved password from credential store
         --no-decrypt                    Skip decryption of encrypted keys
         --password-file <FILE>          Read password from file (testing only - insecure)

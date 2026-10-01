@@ -3741,3 +3741,45 @@ fn test_generate_rejects_multiline_comment() {
     assert!(!secret_key.exists(), "secret key file must not be created");
     assert!(!public_key.exists(), "public key file must not be created");
 }
+
+// --allow-kdf-fallback is a deprecated no-op: scrypt aborts on allocation failure,
+// so no fallback can run. Scripts that pass it keep working and see a warning.
+#[test]
+fn test_allow_kdf_fallback_is_deprecated_no_op() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .args(["-G", "-W", "--allow-kdf-fallback", "-s"])
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .assert()
+        .success()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "--allow-kdf-fallback is deprecated",
+        ));
+
+    minisign_cmd()
+        .args(["-K", "-W", "--allow-kdf-fallback", "-s"])
+        .arg(&sk_path)
+        .assert()
+        .success()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "--allow-kdf-fallback is deprecated",
+        ));
+}
+
+#[test]
+fn test_help_marks_allow_kdf_fallback_deprecated() {
+    minisign_cmd()
+        .arg("-h")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "--allow-kdf-fallback            Deprecated; has no effect",
+        ));
+}

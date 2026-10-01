@@ -713,3 +713,22 @@ fn test_generate_rejects_injected_key_line_without_writing() {
         );
     }
 }
+
+// The KDF fallback cannot run: requesting it changes nothing and the result field
+// stays false.
+#[test]
+#[allow(deprecated)]
+fn test_allow_kdf_fallback_has_no_effect() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .allow_kdf_fallback(true)
+        .build();
+    let result = generate_with_log_n(&options, Some(b"password"), 10).unwrap();
+
+    assert!(!result.kdf_fallback_used);
+    let seckey = SeckeyStruct::from_file_contents(&fs::read_to_string(&sk_path).unwrap()).unwrap();
+    assert_eq!(seckey.kdf_memlimit(), 128 * (1 << 10) * 8);
+}

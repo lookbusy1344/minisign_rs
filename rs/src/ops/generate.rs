@@ -59,8 +59,6 @@ pub struct GenerateOptions<'a> {
     overwrite: OverwritePolicy,
     /// Whether to encrypt the secret key with a password
     encryption: EncryptionMode,
-    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
-    allow_kdf_fallback: bool,
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
     #[cfg_attr(not(debug_assertions), allow(dead_code))]
     force_weak_kdf: bool,
@@ -75,7 +73,6 @@ impl<'a> GenerateOptions<'a> {
             comment: None,
             overwrite: OverwritePolicy::Preserve,
             encryption: EncryptionMode::Protected,
-            allow_kdf_fallback: false,
             force_weak_kdf: false,
         }
     }
@@ -111,10 +108,11 @@ impl<'a> GenerateOptions<'a> {
         self
     }
 
-    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    /// Has no effect. scrypt aborts the process on allocation failure, so no
+    /// reduced-parameter fallback can run.
+    #[deprecated(note = "KDF fallback cannot run; this option has no effect")]
     #[must_use]
-    pub const fn allow_kdf_fallback(mut self, allow: bool) -> Self {
-        self.allow_kdf_fallback = allow;
+    pub const fn allow_kdf_fallback(self, _allow: bool) -> Self {
         self
     }
 
@@ -143,8 +141,9 @@ pub struct GenerateResult {
     public_key_base64: String,
     /// Credential store lookup key (for --save-password)
     credential_id: String,
-    /// True when scrypt succeeded only after reducing KDF parameters due to memory pressure.
-    /// Callers should signal this to the user (exit code 3).
+    /// Always `false`: scrypt aborts the process on allocation failure, so no
+    /// reduced-parameter fallback can run.
+    #[deprecated(note = "KDF fallback cannot run; always false")]
     pub kdf_fallback_used: bool,
 }
 
@@ -265,8 +264,8 @@ pub fn generate_with_log_n(
     let (secret_key, public_key, keynum) = generate_keypair()?;
 
     // Create the secret key structure
-    let (seckey, kdf_fallback_used) = if options.encryption == EncryptionMode::Unprotected {
-        (SeckeyStruct::new_unencrypted(keynum, &secret_key), false)
+    let seckey = if options.encryption == EncryptionMode::Unprotected {
+        SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
         use rand_core::{OsRng, RngCore};
 
@@ -279,19 +278,15 @@ pub fn generate_with_log_n(
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
 
-        let seckey = SeckeyStruct::new_encrypted(
+        SeckeyStruct::new_encrypted(
             keynum,
             &secret_key,
             pwd,
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
-            options.allow_kdf_fallback,
-        )?;
-        // Detect fallback by comparing stored params against what was requested.
-        // new_encrypted stores the actual (potentially reduced) params on the struct.
-        let fallback = seckey.kdf_opslimit() < kdf_opslimit || seckey.kdf_memlimit() < kdf_memlimit;
-        (seckey, fallback)
+            false,
+        )?
     };
 
     // Create the public key structure
@@ -350,6 +345,7 @@ pub fn generate_with_log_n(
     // Encode the public key for command-line usage
     let public_key_base64 = encode_base64(pubkey.to_bytes());
 
+    #[allow(deprecated)]
     Ok(GenerateResult {
         secret_key_file: options.secret_key_file.to_path_buf(),
         public_key_file: options.public_key_file.to_path_buf(),
@@ -357,7 +353,7 @@ pub fn generate_with_log_n(
         keynum_words,
         public_key_base64,
         credential_id,
-        kdf_fallback_used,
+        kdf_fallback_used: false,
     })
 }
 

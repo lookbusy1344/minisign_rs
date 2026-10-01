@@ -66,7 +66,7 @@ These reflect zig-minisign where it differs from classic C implementation. https
 | `-h` | `--help` | Display help message and exit |
 | `-v` | `--version` | Show version information and exit |
 | | `--password-file <FILE>` | Read password from file (testing only - insecure) |
-| | `--allow-kdf-fallback` | Allow KDF parameter fallback if 128MB allocation fails (permission only, does not force fallback) |
+| | `--allow-kdf-fallback` | Deprecated; has no effect (prints a warning) |
 | | `--no-decrypt` | Skip decryption of encrypted keys (show [encrypted] instead of prompting) |
 
 ## Common Usage Examples
