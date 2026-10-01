@@ -8,6 +8,8 @@ We aim for 100% compatibility with the C/Zig version, with a few extra switches 
 
 The root folder contains the original C/Zig code while the Rust implementation is in the [`rs/` directory](rs/).
 
+This repo is managed with Jujutsu rather than Git. Try it out! https://docs.jj-vcs.dev/latest/
+
 The remainer of this document is from the original forked minisign project:
 
 ## Table of Contents

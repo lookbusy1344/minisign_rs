@@ -8,6 +8,10 @@ A pure Rust implementation of the classic C project [minisign](https://jedisct1.
 
 We aim for 100% compatibility with the C/Zig version, with a few extra switches for enhanced security and usability.
 
+## Jujutsu
+
+This repo is managed with Jujutsu rather than Git. Try it out! https://docs.jj-vcs.dev/latest/
+
 ## Project Status
 
 **Version 2.0.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
