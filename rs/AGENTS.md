@@ -18,8 +18,6 @@ Before pushing or moving a shared bookmark, run `rs/scripts/pre-push.sh` (paths 
 
 `rs/scripts/agent-pre-push-hook.sh` runs the script before every `jj git push` and `git push`, and blocks the push on failure. Claude Code (`.claude/settings.json`) and Codex (`.codex/hooks.json`) call it as a `PreToolUse` hook. It checks the tip, not the ref being pushed, so push only the branch you are working on. In jj, that is the bookmark on `@-`, with an empty `@` above it.
 
-CI runs build, clippy and tests on every push to `master` and `lb_rust`.
-
 Push only on explicit request. "Push this" means: if `@` is non-empty, `jj commit` it (after the pre-commit checks). Move the bookmark to `@-` with `jj bookmark set <name> -r @-`, then `jj git push --bookmark <name>`. Use the feature bookmark already on the stack; otherwise `lb_rust`. Do not use `jj git push -c`.
 
 ## Workflow
