@@ -88,6 +88,12 @@ pub enum Error {
     #[error("key derivation failed (insufficient memory): {0}")]
     KdfMemoryError(String),
 
+    /// A key file requests more scrypt memory than the decryption budget allows.
+    #[error(
+        "key file requests {memlimit} bytes of scrypt memory, which exceeds the supported maximum of {max} bytes"
+    )]
+    KdfOverBudget { memlimit: u64, max: u64 },
+
     #[error("random number generator failed: {0}")]
     RngError(String),
 

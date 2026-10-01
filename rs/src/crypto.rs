@@ -44,14 +44,30 @@ pub const LIBSODIUM_MEMLIMIT_MULTIPLIER: u64 = 128;
 pub const SCRYPT_OPSLIMIT_MIN: u64 = 32_768; // 2^15
 pub const SCRYPT_MEMLIMIT_MIN: u64 = 16_777_216; // 16 MB
 
-/// Maximum `log_n` accepted when decrypting a key from an untrusted file.
+/// Maximum scrypt memory (`memlimit`, bytes) accepted when decrypting a key file.
 ///
-/// This caps the attacker-controlled KDF work factor at N = 2^25 = 33 554 432.
-/// At the standard r=8 block size, that corresponds to ~32 GiB of scrypt memory —
-/// 32× the production default (N = 2^20, ~1 GiB). Any key file requesting
-/// higher parameters is almost certainly crafted for denial of service and is
-/// rejected with a clear error before the expensive computation begins.
-pub const MAX_SCRYPT_LOG_N: u8 = 25;
+/// Equal to the production parameters (N = 2^20, r = 8, 1 GiB), which is libsodium's
+/// SENSITIVE limit used by C minisign. Key files carry their own KDF parameters, so a
+/// crafted file could otherwise request any amount. `scrypt` allocates its working
+/// memory with `vec!`, and allocation failure aborts the process, so the limit is
+/// enforced before any KDF call. The limit bounds the request; it does not
+/// guarantee that a 1 GiB allocation succeeds on a constrained host.
+pub const MAX_KDF_MEMLIMIT: u64 = crate::constants::PRODUCTION_MEMLIMIT;
+
+/// Reject a stored `memlimit` above [`MAX_KDF_MEMLIMIT`].
+///
+/// # Errors
+///
+/// Returns `Error::KdfOverBudget` if `memlimit` exceeds the budget.
+pub const fn check_kdf_budget(memlimit: u64) -> Result<()> {
+    if memlimit > MAX_KDF_MEMLIMIT {
+        return Err(Error::KdfOverBudget {
+            memlimit,
+            max: MAX_KDF_MEMLIMIT,
+        });
+    }
+    Ok(())
+}
 
 /// Buffer size for streaming hash operations (64 KB)
 ///
@@ -458,10 +474,32 @@ pub fn calculate_kdf_params(log_n: u8, force_weak_kdf: bool) -> Result<(u64, u64
 ///
 /// # Errors
 ///
-/// Returns `Error::ScryptParamError` if the stored limits are not an exact
-/// minisign-compatible pair, if `N` is zero or not a power of two, if `log_n`
-/// exceeds the policy cap, or if arithmetic overflows.
+/// Applies [`decode_kdf_params`] and then the decryption budget
+/// ([`check_kdf_budget`]). Use this before running the KDF.
+///
+/// # Errors
+///
+/// Returns the errors of [`decode_kdf_params`], or `Error::KdfOverBudget` if
+/// `memlimit` exceeds [`MAX_KDF_MEMLIMIT`].
 pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
+    let params = decode_kdf_params(opslimit, memlimit)?;
+    check_kdf_budget(memlimit)?;
+    Ok(params)
+}
+
+/// Decode stored opslimit/memlimit into scrypt parameters (`log_n`, r, p) without
+/// applying the decryption budget.
+///
+/// Checks the exact minisign encoding and arithmetic bounds only, and allocates no
+/// KDF memory. Used to describe over-budget keys; do not pass the result to the KDF
+/// without [`check_kdf_budget`].
+///
+/// # Errors
+///
+/// Returns `Error::ScryptParamError` if the stored limits are not an exact
+/// minisign-compatible pair, if `N` is zero or not a power of two, or if
+/// arithmetic overflows.
+pub fn decode_kdf_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
     let r = SCRYPT_R;
     let p = SCRYPT_P;
 
@@ -490,12 +528,6 @@ pub fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, 
 
     let log_n = u8::try_from(n.trailing_zeros())
         .map_err(|_| Error::ScryptParamError("log_n out of valid range".into()))?;
-
-    if log_n > MAX_SCRYPT_LOG_N {
-        return Err(Error::ScryptParamError(format!(
-            "KDF log_n {log_n} exceeds policy cap {MAX_SCRYPT_LOG_N} — key file may be crafted for denial of service"
-        )));
-    }
 
     let opslimit_divisor = LIBSODIUM_OPSLIMIT_MULTIPLIER
         .checked_mul(n)

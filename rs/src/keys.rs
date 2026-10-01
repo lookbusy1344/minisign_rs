@@ -469,6 +469,7 @@ impl SeckeyStruct {
         if !self.encrypted {
             return Err(Error::Other("key is not encrypted".to_string()));
         }
+        crate::crypto::check_kdf_budget(self.kdf_memlimit)?;
 
         // Warn if key was created with weak KDF parameters (fallback)
         if self.is_weak_kdf() {
@@ -604,6 +605,23 @@ impl SeckeyStruct {
         // Key is weak if either parameter is below production strength
         self.kdf_opslimit < crate::constants::PRODUCTION_OPSLIMIT
             || self.kdf_memlimit < crate::constants::PRODUCTION_MEMLIMIT
+    }
+
+    /// Reject an encrypted key whose KDF parameters exceed the decryption budget.
+    ///
+    /// Call before retrieving a password so an unusable key fails without a prompt
+    /// or credential-store access. [`decrypt`](Self::decrypt) applies the same check.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::KdfOverBudget` if the key is encrypted and its `memlimit`
+    /// exceeds [`MAX_KDF_MEMLIMIT`](crate::crypto::MAX_KDF_MEMLIMIT).
+    pub const fn check_kdf_budget(&self) -> Result<()> {
+        if self.encrypted {
+            crate::crypto::check_kdf_budget(self.kdf_memlimit)
+        } else {
+            Ok(())
+        }
     }
 
     /// Compute the checksum (Blake2b-256 of keynum + `secret_key`)

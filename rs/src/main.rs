@@ -282,6 +282,7 @@ fn handle_sign(cli: &Cli) -> Result<i32> {
 
     // Load secret key to get credential ID for credential store lookup
     let seckey = load_secret_key(secret_key_file)?;
+    seckey.check_kdf_budget()?;
     let credential_id = seckey.credential_id();
 
     // Try to get password from credential store first, then prompt if needed
@@ -548,6 +549,7 @@ fn handle_recreate(cli: &Cli) -> Result<i32> {
 
     // Load the key to check if it's encrypted
     let seckey = load_secret_key(secret_key_file)?;
+    seckey.check_kdf_budget()?;
     let credential_id = seckey.credential_id();
 
     // Get password: check credential store first, then prompt if needed
@@ -598,6 +600,8 @@ fn handle_change(cli: &Cli) -> Result<i32> {
     if cli.forget_password {
         return forget_password_with_feedback(&old_credential_id, cli.quiet).map(|()| 0);
     }
+
+    seckey.check_kdf_budget()?;
 
     // Get current password: check credential store first, then prompt if needed
     let current_password = if seckey.is_encrypted() {
@@ -698,6 +702,9 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
             SecurityLevel::Medium => println!("Security Level: MEDIUM [WARNING]\n"),
             SecurityLevel::Low => println!("Security Level: LOW [CRITICAL]\n"),
             SecurityLevel::None => println!("Security Level: NONE (UNENCRYPTED) [WARNING]\n"),
+            SecurityLevel::Unsupported => {
+                println!("Security Level: UNSUPPORTED (exceeds KDF memory budget) [ERROR]\n");
+            }
         }
     }
 
@@ -743,7 +750,11 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
                     kdf.memlimit() / 1_048_576
                 );
 
-                if kdf.is_fallback() {
+                if result.security_level() == Some(SecurityLevel::Unsupported) {
+                    println!(
+                        "   └─ Creation: Exceeds the supported KDF memory budget; this key cannot be decrypted"
+                    );
+                } else if kdf.is_fallback() {
                     println!("   ├─ Creation: Fallback (reduced parameters)");
                     if let Some(multiplier) = kdf.weakness_multiplier() {
                         println!(
@@ -866,6 +877,7 @@ fn handle_inspect(cli: &Cli) -> Result<i32> {
     {
         // Load secret key to get credential ID for credential store lookup
         let seckey = load_secret_key(path)?;
+        seckey.check_kdf_budget()?;
         let credential_id = seckey.credential_id();
 
         // Try credential store first, then prompt if needed

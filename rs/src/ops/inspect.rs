@@ -22,6 +22,8 @@ pub enum SecurityLevel {
     Low,
     /// Unencrypted key (no KDF protection)
     None,
+    /// KDF parameters exceed the decryption budget; the key cannot be used
+    Unsupported,
 }
 
 impl SecurityLevel {
@@ -37,7 +39,9 @@ impl SecurityLevel {
     /// The appropriate security level based on the parameters
     #[must_use]
     pub fn from_kdf_params(memlimit: u64, is_fallback: bool) -> Self {
-        if !is_fallback {
+        if crate::crypto::check_kdf_budget(memlimit).is_err() {
+            Self::Unsupported
+        } else if !is_fallback {
             Self::High
         } else if memlimit >= 256_000_000 {
             Self::Medium
@@ -503,7 +507,8 @@ pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult
 
 /// Convert opslimit/memlimit to scrypt parameters (`log_n`, r, p)
 ///
-/// Delegates to the shared implementation in [`crate::crypto::opslimit_memlimit_to_params`].
+/// Delegates to [`crate::crypto::decode_kdf_params`]: inspection describes
+/// over-budget parameters instead of rejecting them.
 fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
-    crate::crypto::opslimit_memlimit_to_params(opslimit, memlimit)
+    crate::crypto::decode_kdf_params(opslimit, memlimit)
 }
