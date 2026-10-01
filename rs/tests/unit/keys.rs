@@ -178,7 +178,7 @@ fn test_public_key_file_format_roundtrip() {
     let pubkey = PubkeyStruct::new(keynum, public_key);
 
     // Serialize to file format
-    let file_contents = pubkey.to_file_contents("test comment");
+    let file_contents = pubkey.to_file_contents("test comment").unwrap();
 
     // Verify format
     assert!(file_contents.starts_with("untrusted comment: test comment\n"));
@@ -1016,4 +1016,131 @@ fn test_credential_id_for_unencrypted_key() {
 
     // Should be valid uppercase hex
     assert!(credential_id.chars().all(|c| c.is_ascii_hexdigit()));
+}
+
+// ============================================================================
+// SA-02: key comments must not change key-file field boundaries
+// ============================================================================
+
+use minisign::signature::{COMMENT_PREFIX_SIZE, COMMENTMAXBYTES};
+
+/// Longest comment whose `untrusted comment: <comment>\n` line fits C's
+/// `fgets(COMMENTMAXBYTES)` read.
+const KEY_COMMENT_MAX_BYTES: usize = COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1;
+
+const INJECTED_COMMENTS: [&str; 7] = [
+    "line\nbreak",
+    "carriage\rreturn",
+    "crlf\r\nbreak",
+    "nul\0byte",
+    "bell\x07char",
+    "delete\x7fchar",
+    "c1\u{85}next-line",
+];
+
+fn sample_pubkey() -> PubkeyStruct {
+    PubkeyStruct::new(
+        KeyNum::from_bytes([1, 2, 3, 4, 5, 6, 7, 8]),
+        PublicKey::from_bytes([42u8; PUBLIC_KEY_BYTES]),
+    )
+}
+
+fn sample_seckey() -> SeckeyStruct {
+    let (secret_key, _pk, keynum) = generate_keypair().unwrap();
+    SeckeyStruct::new_unencrypted(keynum, &secret_key)
+}
+
+#[test]
+fn test_pubkey_serializer_rejects_control_characters_in_comment() {
+    let pubkey = sample_pubkey();
+    for comment in INJECTED_COMMENTS {
+        assert!(
+            matches!(
+                pubkey.to_file_contents(comment),
+                Err(Error::InvalidComment(_))
+            ),
+            "public key comment {comment:?} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_seckey_serializer_rejects_control_characters_in_comment() {
+    let seckey = sample_seckey();
+    for comment in INJECTED_COMMENTS {
+        assert!(
+            matches!(
+                seckey.to_file_contents(comment),
+                Err(Error::InvalidComment(_))
+            ),
+            "secret key comment {comment:?} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_key_serializers_enforce_comment_length_limit() {
+    let at_limit = "a".repeat(KEY_COMMENT_MAX_BYTES);
+    let over_limit = "a".repeat(KEY_COMMENT_MAX_BYTES + 1);
+
+    let pubkey = sample_pubkey();
+    assert!(pubkey.to_file_contents(&at_limit).is_ok());
+    assert!(matches!(
+        pubkey.to_file_contents(&over_limit),
+        Err(Error::InvalidComment(_))
+    ));
+
+    let seckey = sample_seckey();
+    assert!(seckey.to_file_contents(&at_limit).is_ok());
+    assert!(matches!(
+        seckey.to_file_contents(&over_limit),
+        Err(Error::InvalidComment(_))
+    ));
+}
+
+#[test]
+fn test_key_serializers_accept_tab_and_unicode_comments() {
+    let comment = "tab\there — ünïcödé 🎉";
+    let contents = sample_pubkey().to_file_contents(comment).unwrap();
+    assert_eq!(contents.lines().count(), 2);
+    assert!(sample_seckey().to_file_contents(comment).is_ok());
+}
+
+// The parsers match C: the first line is ignored whatever it contains, and lines
+// after the data line are ignored.
+
+#[test]
+fn test_pubkey_parser_ignores_arbitrary_comment_and_trailing_lines() {
+    let pubkey = sample_pubkey();
+    let canonical = pubkey.to_file_contents("x").unwrap();
+    let data_line = canonical.lines().nth(1).unwrap();
+
+    for contents in [
+        format!("no prefix at all\n{data_line}\n"),
+        format!("untrusted comment: x\n{data_line}\ntrailing line\nmore\n"),
+        format!("untrusted comment: x\r\n{data_line}\r\n"),
+    ] {
+        let parsed = PubkeyStruct::from_file_contents(&contents).unwrap();
+        assert_eq!(parsed.keynum().as_bytes(), pubkey.keynum().as_bytes());
+        assert_eq!(
+            parsed.public_key().as_bytes(),
+            pubkey.public_key().as_bytes()
+        );
+    }
+}
+
+#[test]
+fn test_seckey_parser_ignores_arbitrary_comment_and_trailing_lines() {
+    let seckey = sample_seckey();
+    let canonical = seckey.to_file_contents("x").unwrap();
+    let data_line = canonical.lines().nth(1).unwrap();
+
+    for contents in [
+        format!("no prefix at all\n{data_line}\n"),
+        format!("untrusted comment: x\n{data_line}\ntrailing line\n"),
+        format!("untrusted comment: x\r\n{data_line}\r\n"),
+    ] {
+        let parsed = SeckeyStruct::from_file_contents(&contents).unwrap();
+        assert_eq!(parsed.to_bytes(), seckey.to_bytes());
+    }
 }

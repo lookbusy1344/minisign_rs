@@ -43,7 +43,7 @@ fn test_inspect_production_strength_encrypted_key() {
     )
     .unwrap();
 
-    let file_contents = seckey.to_file_contents("test key");
+    let file_contents = seckey.to_file_contents("test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions::new(temp_file.path());
@@ -87,7 +87,7 @@ fn test_inspect_medium_strength_fallback_key() {
     )
     .unwrap();
 
-    let file_contents = seckey.to_file_contents("test key");
+    let file_contents = seckey.to_file_contents("test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions::new(temp_file.path());
@@ -127,7 +127,7 @@ fn test_inspect_low_strength_fallback_key() {
     )
     .unwrap();
 
-    let file_contents = seckey.to_file_contents("test key");
+    let file_contents = seckey.to_file_contents("test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions::new(temp_file.path());
@@ -151,7 +151,7 @@ fn test_inspect_unencrypted_secret_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
-    let file_contents = seckey.to_file_contents("unencrypted test key");
+    let file_contents = seckey.to_file_contents("unencrypted test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions::new(temp_file.path());
@@ -223,7 +223,7 @@ fn test_security_level_classification() {
     )
     .unwrap();
 
-    let high_contents = high_key.to_file_contents("high");
+    let high_contents = high_key.to_file_contents("high").unwrap();
     let high_file = create_temp_key_file(&high_contents);
     let result = inspect(&InspectOptions::new(high_file.path())).unwrap();
     assert_eq!(result.security_level(), Some(SecurityLevel::High));
@@ -241,7 +241,7 @@ fn test_security_level_classification() {
     )
     .unwrap();
 
-    let medium_contents = medium_key.to_file_contents("medium");
+    let medium_contents = medium_key.to_file_contents("medium").unwrap();
     let medium_file = create_temp_key_file(&medium_contents);
     let result = inspect(&InspectOptions::new(medium_file.path())).unwrap();
     assert_eq!(result.security_level(), Some(SecurityLevel::Medium));
@@ -259,7 +259,7 @@ fn test_security_level_classification() {
     )
     .unwrap();
 
-    let low_contents = low_key.to_file_contents("low");
+    let low_contents = low_key.to_file_contents("low").unwrap();
     let low_file = create_temp_key_file(&low_contents);
     let result = inspect(&InspectOptions::new(low_file.path())).unwrap();
     assert_eq!(result.security_level(), Some(SecurityLevel::Low));
@@ -301,7 +301,7 @@ fn test_weakness_multiplier_calculation() {
         )
         .unwrap();
 
-        let contents = key.to_file_contents("test");
+        let contents = key.to_file_contents("test").unwrap();
         let file = create_temp_key_file(&contents);
 
         let result = inspect(&InspectOptions::new(file.path())).unwrap();
@@ -425,7 +425,7 @@ fn test_inspect_private_decrypts_and_shows_real_keyid() {
     )
     .unwrap();
 
-    let file_contents = seckey.to_file_contents("test encrypted key");
+    let file_contents = seckey.to_file_contents("test encrypted key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     // Decrypt and inspect
@@ -461,7 +461,7 @@ fn test_inspect_private_fails_with_wrong_password() {
     )
     .unwrap();
 
-    let file_contents = seckey.to_file_contents("test key");
+    let file_contents = seckey.to_file_contents("test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     // Try with wrong password
@@ -476,7 +476,7 @@ fn test_inspect_private_works_with_unencrypted_key() {
     let (secret_key, _public_key, keynum) = generate_keypair().unwrap();
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
-    let file_contents = seckey.to_file_contents("unencrypted test key");
+    let file_contents = seckey.to_file_contents("unencrypted test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     // Should work without password (password is ignored for unencrypted keys)
@@ -494,7 +494,7 @@ fn test_inspect_private_works_with_public_key() {
     let (_secret_key, public_key, keynum) = generate_keypair().unwrap();
     let pubkey = PubkeyStruct::new(keynum, public_key);
 
-    let file_contents = pubkey.to_file_contents("test public key");
+    let file_contents = pubkey.to_file_contents("test public key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     // Should work with public key (password is ignored)
@@ -599,7 +599,9 @@ fn test_inspect_truncated_secret_key_surfaces_specific_error() {
     .unwrap();
 
     // Produce a file with the standard "minisign encrypted secret key" comment.
-    let full_contents = seckey.to_file_contents("minisign encrypted secret key");
+    let full_contents = seckey
+        .to_file_contents("minisign encrypted secret key")
+        .unwrap();
 
     // Truncate the base64 line by removing its last character.
     let mut lines: Vec<&str> = full_contents.lines().collect();
@@ -680,7 +682,7 @@ fn test_inspect_with_credential_store_check_disabled() {
     )
     .unwrap();
 
-    let file_contents = seckey.to_file_contents("test key");
+    let file_contents = seckey.to_file_contents("test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
 
     let options = InspectOptions::new(temp_file.path()).skip_credential_store_check();
@@ -718,7 +720,7 @@ fn test_inspect_result_includes_credential_id() {
     )
     .unwrap();
 
-    let file_contents = seckey.to_file_contents("test key");
+    let file_contents = seckey.to_file_contents("test key").unwrap();
     let temp_file = create_temp_key_file(&file_contents);
     let options = InspectOptions::new(temp_file.path());
     let result = inspect(&options).unwrap();

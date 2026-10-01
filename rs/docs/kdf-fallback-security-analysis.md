@@ -9,7 +9,9 @@
 
 The C implementation of minisign contains an automatic KDF parameter fallback mechanism that silently creates permanently weaker secret keys on memory-constrained systems. Users have **no way to detect** if their existing keys were created with reduced security parameters, potentially leaving keys 8-64x more vulnerable to brute-force attacks than intended.
 
-The Rust rewrite addresses this by making fallback opt-in via the `--allow-kdf-fallback` flag, following a secure-by-default design principle.
+The Rust rewrite never falls back. It generates keys only at production strength. The `scrypt` crate allocates its working memory with `vec!`, so allocation failure aborts the process instead of returning an error; no reduced-parameter retry can run. `--allow-kdf-fallback` is accepted for compatibility, prints a deprecation warning, and has no effect. Sections below that describe an opt-in Rust fallback record the earlier design.
+
+Rust decrypts reduced-cost keys created by C's fallback, and rejects keys whose `memlimit` exceeds 1 GiB (see `COMPATIBILITY.md`).
 
 ---
 

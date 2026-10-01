@@ -35,7 +35,7 @@ use crate::crypto::{
     SECRET_KEY_BYTES, SecretKey, blake2b_256, derive_key_with_params,
 };
 use crate::errors::Error;
-use crate::formats::{decode_base64, encode_base64, read_u64_le};
+use crate::formats::{decode_base64, decode_base64_into, encode_base64, read_u64_le};
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
@@ -79,10 +79,14 @@ const SECKEY_CHK_ALG_OFFSET: usize = 4;
 const SECKEY_CHK_ALG_SIZE: usize = 2;
 const SECKEY_KDF_SALT_OFFSET: usize = 6;
 const SECKEY_KDF_SALT_SIZE: usize = KDF_SALT_BYTES;
-const SECKEY_KDF_OPSLIMIT_OFFSET: usize = 38;
-const SECKEY_KDF_OPSLIMIT_SIZE: usize = 8;
-const SECKEY_KDF_MEMLIMIT_OFFSET: usize = 46;
-const SECKEY_KDF_MEMLIMIT_SIZE: usize = 8;
+/// Byte offset of the little-endian KDF `opslimit` in a secret key structure
+pub const SECKEY_KDF_OPSLIMIT_OFFSET: usize = 38;
+/// Byte length of the KDF `opslimit` field
+pub const SECKEY_KDF_OPSLIMIT_SIZE: usize = 8;
+/// Byte offset of the little-endian KDF `memlimit` in a secret key structure
+pub const SECKEY_KDF_MEMLIMIT_OFFSET: usize = 46;
+/// Byte length of the KDF `memlimit` field
+pub const SECKEY_KDF_MEMLIMIT_SIZE: usize = 8;
 const SECKEY_KEYNUM_OFFSET: usize = 54;
 const SECKEY_KEYNUM_SIZE: usize = KEYNUM_BYTES;
 const SECKEY_SK_OFFSET: usize = 62;
@@ -227,11 +231,16 @@ impl PubkeyStruct {
     }
 
     /// Serialize to file format (comment + base64)
-    #[must_use]
-    pub fn to_file_contents(&self, comment: &str) -> String {
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::InvalidComment` if the comment fails
+    /// [`validate_untrusted_comment`](crate::validation::validate_untrusted_comment).
+    pub fn to_file_contents(&self, comment: &str) -> Result<String> {
+        crate::validation::validate_untrusted_comment(comment)?;
         let bytes = self.to_bytes();
         let base64 = encode_base64(bytes);
-        format!("untrusted comment: {comment}\n{base64}\n")
+        Ok(format!("untrusted comment: {comment}\n{base64}\n"))
     }
 }
 
@@ -343,11 +352,12 @@ impl SeckeyStruct {
     /// * `kdf_salt` - The salt for key derivation
     /// * `kdf_opslimit` - Operations limit (N * r * `OPSLIMIT_MULTIPLIER`)
     /// * `kdf_memlimit` - Memory limit (N * r * `MEMLIMIT_MULTIPLIER`)
-    /// * `allow_fallback` - If true, allow reduced parameters on failure (LESS SECURE, opt-in only)
+    /// * `_allow_fallback` - Ignored. scrypt aborts the process on allocation failure, so no
+    ///   reduced-parameter retry can run. Retained for source compatibility.
     ///
     /// # Errors
     ///
-    /// Returns an error if key derivation fails or if fallback would be needed but is not allowed
+    /// Returns an error if the KDF parameters are invalid or exceed the KDF budget
     pub fn new_encrypted(
         keynum: KeyNum,
         secret_key: &SecretKey,
@@ -355,64 +365,14 @@ impl SeckeyStruct {
         kdf_salt: [u8; KDF_SALT_BYTES],
         kdf_opslimit: u64,
         kdf_memlimit: u64,
-        allow_fallback: bool,
+        _allow_fallback: bool,
     ) -> Result<Self> {
-        use crate::crypto::{SCRYPT_MEMLIMIT_MIN, SCRYPT_OPSLIMIT_MIN};
-
         // Compute checksum of unencrypted keynum + secret_key (before encryption)
         let computed_checksum = Self::compute_checksum(keynum, secret_key.as_bytes());
 
-        // Implement scrypt parameter fallback (matches C minisign.c:419-427)
-        // Try derivation with initial parameters, halving on failure until minimum reached
-        // SECURITY: Fallback is opt-in only (allow_fallback must be true)
-        let mut current_opslimit = kdf_opslimit;
-        let mut current_memlimit = kdf_memlimit;
-        let mut fallback_used = false;
-
-        let derived_key = loop {
-            // Convert opslimit/memlimit to scrypt parameters
-            let (log_n, r, p) =
-                Self::opslimit_memlimit_to_params(current_opslimit, current_memlimit)?;
-
-            match derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE) {
-                Ok(key) => break key,
-                // scrypt() itself failed (memory pressure) — fall through to retry logic.
-                Err(Error::KdfMemoryError(_)) => {}
-                // Programmer/parameter bug or any other variant — never retry, propagate immediately.
-                Err(e) => return Err(e),
-            }
-
-            // Memory failure — check if we can fallback
-            if !allow_fallback {
-                return Err(Error::KdfMemoryError(
-                    "Key derivation failed — more memory needed (use --allow-kdf-fallback to reduce security parameters, not recommended)".to_string(),
-                ));
-            }
-
-            // Fallback is allowed — try with reduced parameters
-            current_opslimit /= 2;
-            current_memlimit /= 2;
-
-            // Check if we've fallen below minimum thresholds
-            if current_opslimit < SCRYPT_OPSLIMIT_MIN || current_memlimit < SCRYPT_MEMLIMIT_MIN {
-                return Err(Error::KdfMemoryError(
-                    "Unable to complete key derivation — more memory needed even with minimum parameters".to_string(),
-                ));
-            }
-
-            fallback_used = true;
-        };
-
-        // Display CLEAR WARNING if fallback was used
-        if fallback_used {
-            eprintln!("\n*** WARNING: REDUCED SECURITY PARAMETERS ***");
-            eprintln!("Key derivation used weaker parameters due to memory constraints:");
-            eprintln!("  Original: opslimit={kdf_opslimit}, memlimit={kdf_memlimit}");
-            eprintln!("  Reduced:  opslimit={current_opslimit}, memlimit={current_memlimit}");
-            eprintln!(
-                "This makes your key easier to brute-force. Consider using a system with more memory.\n"
-            );
-        }
+        let (log_n, r, p) = Self::opslimit_memlimit_to_params(kdf_opslimit, kdf_memlimit)?;
+        let derived_key =
+            derive_key_with_params(password, &kdf_salt, log_n, r, p, ENCRYPTED_BLOB_SIZE)?;
 
         let mut blob = Zeroizing::new([0u8; ENCRYPTED_BLOB_SIZE]);
         blob[0..KEYNUM_BYTES].copy_from_slice(keynum.as_bytes());
@@ -439,8 +399,8 @@ impl SeckeyStruct {
         Ok(Self {
             encrypted: true,
             kdf_salt,
-            kdf_opslimit: current_opslimit, // Store actual parameters that worked
-            kdf_memlimit: current_memlimit,
+            kdf_opslimit,
+            kdf_memlimit,
             keynum,
             encrypted_keynum,
             secret_key_encrypted,
@@ -464,6 +424,7 @@ impl SeckeyStruct {
         if !self.encrypted {
             return Err(Error::Other("key is not encrypted".to_string()));
         }
+        crate::crypto::check_kdf_budget(self.kdf_memlimit)?;
 
         // Warn if key was created with weak KDF parameters (fallback)
         if self.is_weak_kdf() {
@@ -499,20 +460,23 @@ impl SeckeyStruct {
         decrypted_keynum_bytes.copy_from_slice(&decrypted_blob[0..KEYNUM_BYTES]);
         let decrypted_keynum = KeyNum::from_bytes(decrypted_keynum_bytes);
 
-        let mut secret_key_bytes = [0u8; SECRET_KEY_BYTES];
+        // Guarded before filling: wiped on drop on both the success and checksum-failure
+        // paths.
+        let mut secret_key_bytes = Zeroizing::new([0u8; SECRET_KEY_BYTES]);
         secret_key_bytes
             .copy_from_slice(&decrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
 
-        let mut decrypted_checksum = [0u8; CHECKSUM_BYTES];
+        let mut decrypted_checksum = Zeroizing::new([0u8; CHECKSUM_BYTES]);
         decrypted_checksum.copy_from_slice(&decrypted_blob[(KEYNUM_BYTES + SECRET_KEY_BYTES)..]);
 
         // Recompute checksum from decrypted keynum + secret_key
-        let computed_checksum = Self::compute_checksum(decrypted_keynum, &secret_key_bytes);
+        let computed_checksum =
+            Zeroizing::new(Self::compute_checksum(decrypted_keynum, &secret_key_bytes));
 
         // Verify decrypted checksum matches recomputed checksum
         // Use constant-time comparison to prevent timing side-channel attacks
-        if computed_checksum.ct_eq(&decrypted_checksum).into() {
-            Ok((SecretKey::from_bytes(secret_key_bytes), decrypted_keynum))
+        if computed_checksum.ct_eq(&*decrypted_checksum).into() {
+            Ok((SecretKey::from_bytes(*secret_key_bytes), decrypted_keynum))
         } else {
             Err(Error::ChecksumFailed)
         }
@@ -567,8 +531,9 @@ impl SeckeyStruct {
     /// Check if this key was created with weak KDF parameters (fallback parameters)
     ///
     /// Returns `true` if the key's KDF parameters are below production strength,
-    /// indicating it was created with `--allow-kdf-fallback` or on a memory-constrained
-    /// system using the C implementation's automatic fallback.
+    /// indicating it was created by the C implementation's automatic fallback on a
+    /// memory-constrained system, by an older minisign-rs with `--allow-kdf-fallback`,
+    /// or with debug-only weak parameters.
     ///
     /// Production strength parameters:
     /// - `opslimit` = 33,554,432 (N=2^20, r=8, p=1)
@@ -599,6 +564,23 @@ impl SeckeyStruct {
         // Key is weak if either parameter is below production strength
         self.kdf_opslimit < crate::constants::PRODUCTION_OPSLIMIT
             || self.kdf_memlimit < crate::constants::PRODUCTION_MEMLIMIT
+    }
+
+    /// Reject an encrypted key whose KDF parameters exceed the decryption budget.
+    ///
+    /// Call before retrieving a password so an unusable key fails without a prompt
+    /// or credential-store access. [`decrypt`](Self::decrypt) applies the same check.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::KdfOverBudget` if the key is encrypted and its `memlimit`
+    /// exceeds [`MAX_KDF_MEMLIMIT`](crate::crypto::MAX_KDF_MEMLIMIT).
+    pub const fn check_kdf_budget(&self) -> Result<()> {
+        if self.encrypted {
+            crate::crypto::check_kdf_budget(self.kdf_memlimit)
+        } else {
+            Ok(())
+        }
     }
 
     /// Compute the checksum (Blake2b-256 of keynum + `secret_key`)
@@ -820,22 +802,25 @@ impl SeckeyStruct {
 
         let keynum = KeyNum::from_bytes(keynum);
 
-        let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
-        secret_key_encrypted.copy_from_slice(&bytes[SECKEY_SK_OFFSET..sk_end]);
-
-        let mut checksum = [0u8; CHECKSUM_BYTES];
-        checksum.copy_from_slice(&bytes[SECKEY_CHECKSUM_OFFSET..checksum_end]);
-
-        Ok(Self {
+        // Copy key material straight into the zeroize-on-drop struct rather than through
+        // local arrays: for unencrypted keys `secret_key_encrypted` is the plaintext key.
+        let mut seckey = Self {
             encrypted,
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
             keynum, // Zeroed if encrypted (real keynum recovered on decrypt), plaintext if not
             encrypted_keynum, // Stores encrypted keynum for roundtrip serialization
-            secret_key_encrypted,
-            checksum,
-        })
+            secret_key_encrypted: [0u8; SECRET_KEY_BYTES],
+            checksum: [0u8; CHECKSUM_BYTES],
+        };
+        seckey
+            .secret_key_encrypted
+            .copy_from_slice(&bytes[SECKEY_SK_OFFSET..sk_end]);
+        seckey
+            .checksum
+            .copy_from_slice(&bytes[SECKEY_CHECKSUM_OFFSET..checksum_end]);
+        Ok(seckey)
     }
 
     /// Parse from a secret key file (comment + base64)
@@ -852,20 +837,40 @@ impl SeckeyStruct {
         }
 
         // First line is the untrusted comment (ignored for parsing)
-        // Second line is base64-encoded SeckeyStruct
-        let data = decode_base64(lines[1])?;
-        Self::from_bytes(&data)
+        // Second line is base64-encoded SeckeyStruct, decoded straight into guarded
+        // storage: for unencrypted keys it is the plaintext secret key.
+        let mut data = Zeroizing::new([0u8; SECKEY_STRUCT_SIZE]);
+        let len = decode_base64_into(lines[1], &mut *data).map_err(|e| match e {
+            Error::InvalidBase64(_) => e,
+            _ => Error::InvalidSecretKey(format!("expected {SECKEY_STRUCT_SIZE} bytes, got more")),
+        })?;
+        Self::from_bytes(&data[..len])
     }
 
     /// Serialize to file format (comment + base64)
-    #[must_use]
-    pub fn to_file_contents(&self, comment: &str) -> Zeroizing<String> {
-        // Zeroize the raw bytes, base64 string, and the final formatted string:
-        // each is a reversible encoding of secret key material in memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::InvalidComment` if the comment fails
+    /// [`validate_untrusted_comment`](crate::validation::validate_untrusted_comment).
+    pub fn to_file_contents(&self, comment: &str) -> Result<Zeroizing<String>> {
+        const COMMENT_PREFIX: &str = "untrusted comment: ";
+        crate::validation::validate_untrusted_comment(comment)?;
+
+        // Zeroize the raw bytes, base64 string, and the final string: each is a
+        // reversible encoding of secret key material. Bytes are encoded by reference,
+        // and the output is allocated at its exact length so it never reallocates and
+        // leaves no unwiped partial copy.
         let bytes = Zeroizing::new(self.to_bytes());
-        let base64 = Zeroizing::new(encode_base64(*bytes));
-        let base64_str: &str = &base64;
-        Zeroizing::new(format!("untrusted comment: {comment}\n{base64_str}\n"))
+        let base64 = Zeroizing::new(encode_base64(bytes.as_slice()));
+        let len = COMMENT_PREFIX.len() + comment.len() + 1 + base64.len() + 1;
+        let mut contents = Zeroizing::new(String::with_capacity(len));
+        contents.push_str(COMMENT_PREFIX);
+        contents.push_str(comment);
+        contents.push('\n');
+        contents.push_str(&base64);
+        contents.push('\n');
+        Ok(contents)
     }
 }
 

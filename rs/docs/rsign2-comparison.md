@@ -70,7 +70,7 @@ Focuses on **library-first design** with minimal dependencies:
 | **Unique to minisign-rs** |
 | Key Security Inspection | ✅ | ❌ | `-I/--inspect`: audits KDF strength, rates key security |
 | Weak Key Detection | ✅ | ❌ | Persistent warnings on every operation with weak keys |
-| KDF Fallback Control | ✅ | ❌ | `--allow-kdf-fallback`: fail-secure by default |
+| KDF Fallback Control | ✅ | ❌ | Never falls back to weaker parameters |
 | OS Credential Store | ✅ | ❌ | macOS Keychain, Windows Credential Manager, Linux Secret Service |
 | Multi-threaded Operations | ✅ | ❌ | Parallel multi-file signing and verification via `rayon` |
 | Public Key Recreation | ✅ | ❌ | `-R`: recover public key from secret key |
@@ -237,14 +237,10 @@ minisign_rs -I -s key.key
 - Provides actionable remediation recommendations
 - Works with both C and Rust-generated keys
 
-**2. Opt-In KDF Fallback**
-```bash
-minisign_rs -G --allow-kdf-fallback
-```
+**2. No KDF Fallback**
 
-**Philosophy:** Secure by default
-- Rust version **fails** if 128MB allocation fails
-- `--allow-kdf-fallback` permits weaker parameters only if necessary
+- Rust version generates keys only at production strength
+- `--allow-kdf-fallback` is deprecated and has no effect
 - C minisign automatically falls back (less secure default)
 
 **3. Weak Key Persistent Warnings**
@@ -747,7 +743,7 @@ trusted comment: <comment>
 1. **Audited cryptographic primitives** - All crypto delegated to the RustCrypto ecosystem (`ed25519-dalek`, `blake2`, `scrypt`, `subtle`), which receives independent audits and broad community scrutiny. The `minisign` crate used by rsign2 hand-rolls ~2,900 lines of Ed25519, Curve25519, SHA-512, and Blake2b that have not been independently audited.
 2. **Memory zeroization** - All secret types derive `Zeroize` and `ZeroizeOnDrop`, passwords are wrapped in `Zeroizing<String>`, and intermediate decrypted buffers use `Zeroizing<Vec<u8>>`. The `minisign` crate has no zeroization at all - secret key material persists in memory after use.
 3. **Safe Debug output** - `SecretKey` debug prints `[REDACTED]`. The `minisign` crate's `SecretKey` debug impl prints the raw secret key bytes as hex, meaning logging, panics, or `dbg!()` calls could leak key material to logs or crash reports.
-4. **Fail-secure KDF** - Refuses to generate weak keys by default; requires explicit `--allow-kdf-fallback` opt-in. The `minisign` crate silently falls back to weaker parameters.
+4. **Fail-secure KDF** - Never generates keys with reduced KDF parameters. The `minisign` crate silently falls back to weaker parameters.
 5. **Key security inspection** (`-I/--inspect`) - Audits KDF parameters, rates key strength (HIGH/MEDIUM/LOW/NONE), calculates brute-force resistance, provides remediation advice.
 6. **Weak key warnings** - Persistent warnings on every operation when using keys with weak KDF parameters.
 

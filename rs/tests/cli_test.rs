@@ -834,10 +834,9 @@ fn test_force_weak_kdf_creates_weak_key() {
         .stdout(predicate::str::contains("Fallback (reduced parameters)"));
 }
 
-// Exit code 3 signals "KDF fallback used — key has reduced security parameters".
-// It can only be triggered when scrypt fails with memory pressure AND --allow-kdf-fallback
-// is set, which we cannot reliably simulate in a unit test. This test covers the normal
-// (no-fallback) path and verifies it exits 0, acting as a regression guard.
+// Generation exits 0. Exit code 3 is reserved and never produced: scrypt aborts on
+// allocation failure, so no KDF fallback can run. --allow-kdf-fallback is a
+// deprecated no-op and must not change the exit code.
 #[test]
 fn test_generate_exits_zero_when_no_kdf_fallback() {
     let temp_dir = TempDir::new().unwrap();
@@ -3717,4 +3716,120 @@ fn test_verify_batch_failure_summary_visible_in_quiet_mode() {
         stderr.contains("bad"),
         "failed file name must appear in summary, got:\n{stderr}"
     );
+}
+
+// SA-02: a generation comment carrying a substitute key line is rejected.
+#[test]
+fn test_generate_rejects_multiline_comment() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-c")
+        .arg("synthetic metadata\nRWQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        .assert()
+        .failure();
+
+    assert!(!secret_key.exists(), "secret key file must not be created");
+    assert!(!public_key.exists(), "public key file must not be created");
+}
+
+#[test]
+fn key_comments_are_rejected_before_cli_password_retrieval() {
+    use minisign::{
+        crypto::{KDF_SALT_BYTES, calculate_kdf_params, generate_keypair},
+        keys::SeckeyStruct,
+        signature::COMMENTMAXBYTES,
+    };
+
+    const TEST_LOG_N: u8 = 10;
+    let dir = TempDir::new().unwrap();
+    let secret_path = dir.path().join("encrypted.key");
+    let public_path = dir.path().join("existing.pub");
+    let (secret, _, keynum) = generate_keypair().unwrap();
+    let (opslimit, memlimit) = calculate_kdf_params(TEST_LOG_N, false).unwrap();
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret,
+        b"synthetic password",
+        [0u8; KDF_SALT_BYTES],
+        opslimit,
+        memlimit,
+        false,
+    )
+    .unwrap();
+    let original = seckey.to_file_contents("synthetic encrypted key").unwrap();
+    fs::write(&secret_path, original.as_bytes()).unwrap();
+    fs::write(&public_path, b"existing public output").unwrap();
+
+    let overlong = "a".repeat(COMMENTMAXBYTES);
+    for action in ["-G", "-R"] {
+        for comment in ["line\nbreak", "carriage\rreturn", "", overlong.as_str()] {
+            minisign_cmd()
+                .args([action, "--force", "-q", "-s"])
+                .arg(&secret_path)
+                .arg("-p")
+                .arg(&public_path)
+                .arg("-c")
+                .arg(comment)
+                .arg("--password-file")
+                .arg(dir.path().join("missing-password"))
+                .assert()
+                .failure()
+                .stderr(predicate::str::contains("invalid comment"))
+                .stderr(predicate::str::contains("password file").not());
+
+            assert_eq!(fs::read(&secret_path).unwrap(), original.as_bytes());
+            assert_eq!(fs::read(&public_path).unwrap(), b"existing public output");
+        }
+    }
+}
+
+// --allow-kdf-fallback is a deprecated no-op: scrypt aborts on allocation failure,
+// so no fallback can run. Scripts that pass it keep working and see a warning.
+#[test]
+fn test_allow_kdf_fallback_is_deprecated_no_op() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .args(["-G", "-W", "--allow-kdf-fallback", "-s"])
+        .arg(&sk_path)
+        .arg("-p")
+        .arg(&pk_path)
+        .assert()
+        .success()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "--allow-kdf-fallback is deprecated",
+        ));
+
+    minisign_cmd()
+        .args(["-K", "-W", "--allow-kdf-fallback", "-s"])
+        .arg(&sk_path)
+        .assert()
+        .success()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "--allow-kdf-fallback is deprecated",
+        ));
+}
+
+#[test]
+fn test_help_marks_allow_kdf_fallback_deprecated() {
+    minisign_cmd()
+        .arg("-h")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "--allow-kdf-fallback            Deprecated; has no effect",
+        ));
 }

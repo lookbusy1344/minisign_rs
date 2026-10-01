@@ -17,6 +17,24 @@ pub fn decode_base64(data: impl AsRef<[u8]>) -> Result<Vec<u8>> {
     STANDARD.decode(data).map_err(Error::from)
 }
 
+/// Decode base64 into a caller-provided buffer, returning the decoded length
+///
+/// Use for secret material: the output goes into storage the caller guards (for
+/// example `Zeroizing<[u8; N]>`), and no intermediate buffer grows or reallocates.
+///
+/// # Errors
+///
+/// Returns `Error::InvalidBase64` if the input is not valid base64, or
+/// `Error::InvalidKeyFormat` if the decoded data does not fit in `output`.
+pub fn decode_base64_into(data: impl AsRef<[u8]>, output: &mut [u8]) -> Result<usize> {
+    STANDARD.decode_slice(data, output).map_err(|e| match e {
+        base64::DecodeSliceError::DecodeError(e) => Error::InvalidBase64(e),
+        base64::DecodeSliceError::OutputSliceTooSmall => {
+            Error::InvalidKeyFormat(format!("decoded data exceeds {} bytes", output.len()))
+        }
+    })
+}
+
 /// Read a little-endian u64 from bytes
 ///
 /// # Errors

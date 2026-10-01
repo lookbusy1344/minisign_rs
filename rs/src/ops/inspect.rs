@@ -6,10 +6,15 @@
 use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::credential_store::CredentialStatus;
 use crate::errors::{Error, Result};
+use crate::formats::decode_base64_into;
 use crate::keys::{PubkeyStruct, SeckeyStruct};
-use crate::ops::file_utils::{MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded};
+use crate::ops::file_utils::{
+    MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded, read_secret_file_bounded,
+    utf8_text,
+};
 use crate::signature::SignatureAlgorithm;
 use std::path::Path;
+use zeroize::Zeroizing;
 
 /// Security level classification for encrypted keys
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +27,8 @@ pub enum SecurityLevel {
     Low,
     /// Unencrypted key (no KDF protection)
     None,
+    /// KDF parameters exceed the decryption budget; the key cannot be used
+    Unsupported,
 }
 
 impl SecurityLevel {
@@ -37,7 +44,9 @@ impl SecurityLevel {
     /// The appropriate security level based on the parameters
     #[must_use]
     pub fn from_kdf_params(memlimit: u64, is_fallback: bool) -> Self {
-        if !is_fallback {
+        if crate::crypto::check_kdf_budget(memlimit).is_err() {
+            Self::Unsupported
+        } else if !is_fallback {
             Self::High
         } else if memlimit >= 256_000_000 {
             Self::Medium
@@ -214,6 +223,33 @@ fn sniff_key_file_type(contents: &str) -> Option<KeyFileType> {
     }
 }
 
+/// Read a key file into a guarded buffer: it may hold a secret key.
+fn read_key_file(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
+    read_secret_file_bounded(path, MAX_KEY_FILE_BYTES)
+        .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))
+}
+
+// The untrusted comment can mislabel a secret key as public, and malformed
+// secret keys can reach the public fallback. Guard decoding on both paths.
+fn decode_inspection_public_key(contents: &str) -> Result<Zeroizing<Vec<u8>>> {
+    let data_line = contents
+        .lines()
+        .nth(1)
+        .ok_or_else(|| Error::InvalidPublicKey("missing comment or data line".to_string()))?;
+    // Decoded base64 is never longer than its input. Allocate before filling and
+    // never grow the buffer; the file reader already bounds the input size.
+    let mut decoded = Zeroizing::new(vec![0u8; data_line.len()]);
+    let len = decode_base64_into(data_line, &mut decoded)?;
+    decoded.truncate(len);
+    Ok(decoded)
+}
+
+fn inspect_public_key_file(contents: &str) -> Result<InspectResult> {
+    let decoded = decode_inspection_public_key(contents)?;
+    let pubkey = PubkeyStruct::from_bytes(&decoded)?;
+    Ok(inspect_public_key(&pubkey))
+}
+
 /// Inspect a key file and return detailed information
 ///
 /// # Errors
@@ -223,25 +259,23 @@ fn sniff_key_file_type(contents: &str) -> Option<KeyFileType> {
 /// - The file format is invalid
 /// - The key structure cannot be parsed
 pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
-    let contents = read_file_bounded(options.key_file(), MAX_KEY_FILE_BYTES)
+    let bytes = read_key_file(options.key_file())?;
+    let contents = utf8_text(&bytes, options.key_file())
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
-    match sniff_key_file_type(&contents) {
+    match sniff_key_file_type(contents) {
         Some(KeyFileType::Secret) => {
-            let seckey = SeckeyStruct::from_file_contents(&contents)?;
+            let seckey = SeckeyStruct::from_file_contents(contents)?;
             inspect_secret_key(&seckey, options.check_credential_store)
         }
-        Some(KeyFileType::Public) => {
-            let pubkey = PubkeyStruct::from_file_contents(&contents)?;
-            Ok(inspect_public_key(&pubkey))
-        }
+        Some(KeyFileType::Public) => inspect_public_key_file(contents),
         None => {
             // Non-standard comment — try both parsers for backward compatibility.
-            if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
+            if let Ok(seckey) = SeckeyStruct::from_file_contents(contents) {
                 return inspect_secret_key(&seckey, options.check_credential_store);
             }
-            if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
-                return Ok(inspect_public_key(&pubkey));
+            if let Ok(result) = inspect_public_key_file(contents) {
+                return Ok(result);
             }
             Err(Error::InvalidKeyFormat(
                 "File is not a valid minisign key".to_string(),
@@ -333,25 +367,23 @@ pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
 /// - The file is not a valid key
 /// - For encrypted keys: password is incorrect or decryption fails
 pub fn inspect_private(key_file: &Path, password: &[u8]) -> Result<InspectResult> {
-    let contents = read_file_bounded(key_file, MAX_KEY_FILE_BYTES)
+    let bytes = read_key_file(key_file)?;
+    let contents = utf8_text(&bytes, key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
-    match sniff_key_file_type(&contents) {
+    match sniff_key_file_type(contents) {
         Some(KeyFileType::Secret) => {
-            let seckey = SeckeyStruct::from_file_contents(&contents)?;
+            let seckey = SeckeyStruct::from_file_contents(contents)?;
             inspect_private_with_key(&seckey, password)
         }
-        Some(KeyFileType::Public) => {
-            let pubkey = PubkeyStruct::from_file_contents(&contents)?;
-            Ok(inspect_public_key(&pubkey))
-        }
+        Some(KeyFileType::Public) => inspect_public_key_file(contents),
         None => {
             // Non-standard comment — try both parsers for backward compatibility.
-            if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
+            if let Ok(seckey) = SeckeyStruct::from_file_contents(contents) {
                 return inspect_private_with_key(&seckey, password);
             }
-            if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
-                return Ok(inspect_public_key(&pubkey));
+            if let Ok(result) = inspect_public_key_file(contents) {
+                return Ok(result);
             }
             Err(Error::InvalidKeyFormat(
                 "File is not a valid minisign key".to_string(),
@@ -365,6 +397,18 @@ fn inspect_secret_key(
     seckey: &SeckeyStruct,
     check_credential_store: bool,
 ) -> Result<InspectResult> {
+    inspect_secret_key_with_credentials(
+        seckey,
+        check_credential_store,
+        crate::credential_store::has_password,
+    )
+}
+
+fn inspect_secret_key_with_credentials(
+    seckey: &SeckeyStruct,
+    check_credential_store: bool,
+    credential_status: impl FnOnce(&str) -> CredentialStatus,
+) -> Result<InspectResult> {
     let key_id = seckey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(seckey.keynum());
     let credential_id = seckey.credential_id();
@@ -372,7 +416,7 @@ fn inspect_secret_key(
     if !seckey.is_encrypted() {
         // Unencrypted key
         let password_saved = if check_credential_store {
-            crate::credential_store::has_password(&credential_id)
+            credential_status(&credential_id)
         } else {
             CredentialStatus::NotSaved
         };
@@ -408,8 +452,10 @@ fn inspect_secret_key(
     // Classify security level
     let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
-    let password_saved = if check_credential_store {
-        crate::credential_store::has_password(&credential_id)
+    // Unsupported keys cannot be decrypted, so inspecting them must not request
+    // credential-store authorization even when the caller enables that lookup.
+    let password_saved = if check_credential_store && security_level != SecurityLevel::Unsupported {
+        credential_status(&credential_id)
     } else {
         CredentialStatus::NotSaved
     };
@@ -503,7 +549,90 @@ pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult
 
 /// Convert opslimit/memlimit to scrypt parameters (`log_n`, r, p)
 ///
-/// Delegates to the shared implementation in [`crate::crypto::opslimit_memlimit_to_params`].
+/// Delegates to [`crate::crypto::decode_kdf_params`]: inspection describes
+/// over-budget parameters instead of rejecting them.
 fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
-    crate::crypto::opslimit_memlimit_to_params(opslimit, memlimit)
+    crate::crypto::decode_kdf_params(opslimit, memlimit)
+}
+
+// Inline because these tests inject a credential lookup through a private seam;
+// tests of the public API live under tests/.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keys::{
+        SECKEY_KDF_MEMLIMIT_OFFSET, SECKEY_KDF_MEMLIMIT_SIZE, SECKEY_KDF_OPSLIMIT_OFFSET,
+        SECKEY_KDF_OPSLIMIT_SIZE, SECKEY_STRUCT_SIZE,
+    };
+    use std::cell::Cell;
+
+    const ALGORITHM_HEADER: &[u8] = b"EdScB2";
+
+    fn encrypted_key(memlimit: u64) -> SeckeyStruct {
+        let mut bytes = [0u8; SECKEY_STRUCT_SIZE];
+        bytes[..ALGORITHM_HEADER.len()].copy_from_slice(ALGORITHM_HEADER);
+        let opslimit = memlimit / crate::crypto::LIBSODIUM_MEMLIMIT_MULTIPLIER
+            * crate::crypto::LIBSODIUM_OPSLIMIT_MULTIPLIER;
+        bytes[SECKEY_KDF_OPSLIMIT_OFFSET..SECKEY_KDF_OPSLIMIT_OFFSET + SECKEY_KDF_OPSLIMIT_SIZE]
+            .copy_from_slice(&opslimit.to_le_bytes());
+        bytes[SECKEY_KDF_MEMLIMIT_OFFSET..SECKEY_KDF_MEMLIMIT_OFFSET + SECKEY_KDF_MEMLIMIT_SIZE]
+            .copy_from_slice(&memlimit.to_le_bytes());
+        SeckeyStruct::from_bytes(&bytes).unwrap()
+    }
+
+    #[test]
+    fn unsupported_key_inspection_never_queries_credentials() {
+        let key = encrypted_key(PRODUCTION_MEMLIMIT * 2);
+        let queried = Cell::new(false);
+        let result = inspect_secret_key_with_credentials(&key, true, |_| {
+            queried.set(true);
+            CredentialStatus::Saved
+        })
+        .unwrap();
+
+        assert_eq!(result.security_level(), Some(SecurityLevel::Unsupported));
+        assert!(
+            !queried.get(),
+            "unsupported keys must not access credentials"
+        );
+        assert_eq!(result.password_saved(), &CredentialStatus::NotSaved);
+    }
+
+    #[test]
+    fn supported_key_inspection_preserves_requested_credential_lookup() {
+        let key = encrypted_key(PRODUCTION_MEMLIMIT);
+        for requested in [false, true] {
+            let queried = Cell::new(false);
+            let result = inspect_secret_key_with_credentials(&key, requested, |id| {
+                assert_eq!(id, key.credential_id());
+                queried.set(true);
+                CredentialStatus::Saved
+            })
+            .unwrap();
+
+            assert_eq!(queried.get(), requested);
+            assert_eq!(
+                result.password_saved(),
+                &if requested {
+                    CredentialStatus::Saved
+                } else {
+                    CredentialStatus::NotSaved
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn inspection_public_decoder_guards_mislabelled_secret_material() {
+        let (secret, _, keynum) = crate::crypto::generate_keypair().unwrap();
+        let key = SeckeyStruct::new_unencrypted(keynum, &secret);
+        let contents = key.to_file_contents("minisign public key").unwrap();
+        let decoded: Zeroizing<Vec<u8>> = decode_inspection_public_key(&contents).unwrap();
+
+        assert_eq!(&decoded[..], &key.to_bytes());
+        assert!(matches!(
+            PubkeyStruct::from_bytes(&decoded),
+            Err(Error::InvalidPublicKey(_))
+        ));
+    }
 }

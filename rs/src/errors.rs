@@ -23,6 +23,12 @@ pub enum Error {
     #[error("file already exists: {0:?}")]
     FileExists(PathBuf),
 
+    #[error("output file {output:?} names the same file as {other:?}")]
+    OutputAlias { output: PathBuf, other: PathBuf },
+
+    #[error("refusing to replace symlink {0:?}")]
+    OutputIsSymlink(PathBuf),
+
     // Parsing errors
     #[error("invalid base64: {0}")]
     InvalidBase64(#[from] base64::DecodeError),
@@ -48,7 +54,7 @@ pub enum Error {
     #[error("invalid UTF-8 in {context}: {source}")]
     InvalidUtf8 {
         context: String,
-        source: std::string::FromUtf8Error,
+        source: std::str::Utf8Error,
     },
 
     // Cryptographic errors
@@ -72,15 +78,20 @@ pub enum Error {
     CredentialStoreError(String),
 
     // Key derivation errors
-    /// Programmer or parameter bug in KDF setup (invalid output length, bad scrypt params).
-    /// The fallback loop must NOT retry on this variant.
+    /// Invalid KDF setup or a `scrypt()` error (invalid output length or parameters).
     #[error("key derivation failed: {0}")]
     KdfError(String),
 
-    /// `scrypt()` call itself failed — typically insufficient memory.
-    /// The fallback loop may retry with reduced parameters on this variant.
+    /// Not produced. scrypt allocates with `vec!`, so allocation failure aborts the process
+    /// instead of returning an error. Retained for API compatibility.
     #[error("key derivation failed (insufficient memory): {0}")]
     KdfMemoryError(String),
+
+    /// A key file requests more scrypt memory than the decryption budget allows.
+    #[error(
+        "key file requests {memlimit} bytes of scrypt memory, which exceeds the supported maximum of {max} bytes"
+    )]
+    KdfOverBudget { memlimit: u64, max: u64 },
 
     #[error("random number generator failed: {0}")]
     RngError(String),

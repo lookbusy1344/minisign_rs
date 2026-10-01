@@ -17,8 +17,6 @@ pub struct ChangeOptions<'a> {
     secret_key_file: &'a Path,
     /// Target encryption state for the key after the change
     encryption: EncryptionMode,
-    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
-    allow_kdf_fallback: bool,
     /// Force weak KDF parameters for testing (DEBUG ONLY, must be false in release)
     #[cfg_attr(not(debug_assertions), allow(dead_code))]
     force_weak_kdf: bool,
@@ -30,7 +28,6 @@ impl<'a> ChangeOptions<'a> {
         Self {
             secret_key_file,
             encryption: EncryptionMode::Protected,
-            allow_kdf_fallback: false,
             force_weak_kdf: false,
         }
     }
@@ -50,14 +47,19 @@ impl<'a> ChangeOptions<'a> {
         self
     }
 
-    /// Allow KDF parameter fallback (LESS SECURE, opt-in only)
+    /// Has no effect. scrypt aborts the process on allocation failure, so no
+    /// reduced-parameter fallback can run.
+    #[deprecated(note = "KDF fallback cannot run; this option has no effect")]
     #[must_use]
-    pub const fn allow_kdf_fallback(mut self, allow: bool) -> Self {
-        self.allow_kdf_fallback = allow;
+    pub const fn allow_kdf_fallback(self, _allow: bool) -> Self {
         self
     }
 
     /// Force weak KDF parameters for testing (DEBUG ONLY)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `force` is `true` in a release build.
     #[must_use]
     pub const fn force_weak_kdf(mut self, force: bool) -> Self {
         #[cfg(not(debug_assertions))]
@@ -76,8 +78,9 @@ pub struct ChangeResult {
     encrypted: bool,
     /// New credential store lookup key (after password change)
     credential_id: String,
-    /// True when scrypt succeeded only after reducing KDF parameters due to memory pressure.
-    /// Callers should signal this to the user (exit code 3).
+    /// Always `false`: scrypt aborts the process on allocation failure, so no
+    /// reduced-parameter fallback can run.
+    #[deprecated(note = "KDF fallback cannot run; always false")]
     pub kdf_fallback_used: bool,
 }
 
@@ -153,9 +156,9 @@ pub fn change_with_log_n(
     let (secret_key, keynum) = seckey.extract_key(old_password)?;
 
     // Create new secret key structure with new password (or remove password)
-    let (new_seckey, kdf_fallback_used) = if options.encryption == EncryptionMode::Unprotected {
+    let new_seckey = if options.encryption == EncryptionMode::Unprotected {
         // Remove encryption
-        (SeckeyStruct::new_unencrypted(keynum, &secret_key), false)
+        SeckeyStruct::new_unencrypted(keynum, &secret_key)
     } else {
         use rand_core::{OsRng, RngCore};
 
@@ -169,18 +172,15 @@ pub fn change_with_log_n(
         // Calculate KDF parameters using libsodium formula
         let (kdf_opslimit, kdf_memlimit) = calculate_kdf_params(log_n, options.force_weak_kdf)?;
 
-        let seckey = SeckeyStruct::new_encrypted(
+        SeckeyStruct::new_encrypted(
             keynum,
             &secret_key,
             new_pwd,
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
-            options.allow_kdf_fallback,
-        )?;
-        // Detect fallback by comparing stored params against what was requested.
-        let fallback = seckey.kdf_opslimit() < kdf_opslimit || seckey.kdf_memlimit() < kdf_memlimit;
-        (seckey, fallback)
+            false,
+        )?
     };
 
     // Write the modified secret key back to file
@@ -190,16 +190,17 @@ pub fn change_with_log_n(
         "minisign encrypted secret key"
     };
 
-    let seckey_contents = new_seckey.to_file_contents(seckey_comment);
+    let seckey_contents = new_seckey.to_file_contents(seckey_comment)?;
     write_secret_key_file(options.secret_key_file, &seckey_contents, true)?;
 
     // Capture new credential ID for credential store
     let credential_id = new_seckey.credential_id();
 
+    #[allow(deprecated)]
     Ok(ChangeResult {
         secret_key_file: options.secret_key_file.to_path_buf(),
         encrypted: options.encryption == EncryptionMode::Protected,
         credential_id,
-        kdf_fallback_used,
+        kdf_fallback_used: false,
     })
 }

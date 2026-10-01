@@ -10,6 +10,7 @@ use minisign::{
         verify::verify_message_signature,
     },
 };
+#[cfg(debug_assertions)]
 use rand::Rng;
 use std::fs;
 use tempfile::TempDir;
@@ -25,7 +26,7 @@ fn test_change_password_fast() {
 
     let seckey = make_fast_encrypted_seckey(keynum, &secret_key, old_password);
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path()).build();
@@ -56,7 +57,7 @@ fn test_remove_password_from_encrypted_key() {
 
     let seckey = make_fast_encrypted_seckey(keynum, &secret_key, password);
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let options = ChangeOptions::builder(sk_path.as_path())
         .remove_password(true)
@@ -84,7 +85,7 @@ fn test_add_password_to_unencrypted_key() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path()).build();
@@ -111,7 +112,7 @@ fn test_change_without_old_password_fails() {
 
     let seckey = make_fast_encrypted_seckey(keynum, &secret_key, password);
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let options = ChangeOptions::builder(&sk_path).build();
 
@@ -129,7 +130,7 @@ fn test_change_with_wrong_old_password_fails() {
 
     let seckey = make_fast_encrypted_seckey(keynum, &secret_key, password);
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let options = ChangeOptions::builder(&sk_path).build();
 
@@ -154,7 +155,7 @@ fn test_encrypt_without_new_password_fails() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let options = ChangeOptions::builder(&sk_path).build();
 
@@ -174,7 +175,7 @@ fn test_change_preserves_file_permissions() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let metadata = fs::metadata(&sk_path).unwrap();
     let mut permissions = metadata.permissions();
@@ -217,7 +218,7 @@ fn test_change_password_with_force_weak_kdf() {
     .unwrap();
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let new_password = b"newpassword";
     let options = ChangeOptions::builder(sk_path.as_path())
@@ -253,7 +254,7 @@ fn test_change_password_then_sign_verify_roundtrip() {
 
     let seckey = make_fast_encrypted_seckey(keynum, &secret_key, old_password);
     let sk_path = temp_dir.path().join("key.key");
-    fs::write(&sk_path, seckey.to_file_contents("roundtrip test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("roundtrip test").unwrap()).unwrap();
 
     let new_password = b"changed-password";
     let change_options = ChangeOptions::builder(sk_path.as_path()).build();

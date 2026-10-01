@@ -142,10 +142,21 @@ fn test_verify_with_wrong_keynum() {
     let pubkey2 = PubkeyStruct::new(keynum2, public_key2);
 
     // Save keys
-    std::fs::write(&secret_key_file, seckey1.to_file_contents("test key 1")).expect("write failed");
-    std::fs::write(&public_key_file, pubkey1.to_file_contents("test key 1")).expect("write failed");
-    std::fs::write(&wrong_pubkey_file, pubkey2.to_file_contents("test key 2"))
-        .expect("write failed");
+    std::fs::write(
+        &secret_key_file,
+        seckey1.to_file_contents("test key 1").unwrap(),
+    )
+    .expect("write failed");
+    std::fs::write(
+        &public_key_file,
+        pubkey1.to_file_contents("test key 1").unwrap(),
+    )
+    .expect("write failed");
+    std::fs::write(
+        &wrong_pubkey_file,
+        pubkey2.to_file_contents("test key 2").unwrap(),
+    )
+    .expect("write failed");
 
     // Sign with key 1
     let sign_opts = SignOptions::builder(secret_key_file.as_path(), message_file.as_path())
@@ -185,8 +196,8 @@ fn test_verify_small_file_succeeds() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     let message_path = temp_dir.path().join("message.txt");
     std::fs::write(&message_path, b"small message").unwrap();
@@ -218,8 +229,8 @@ fn test_verify_prehashed_mode_no_size_limit() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create a 10 MB file (would be too large for non-prehashed in practice,
     // but prehashed mode streams it)
@@ -258,8 +269,8 @@ fn test_verify_multiple_files_sequential() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create and sign multiple files
     let file1 = temp_dir.path().join("file1.txt");
@@ -309,8 +320,8 @@ fn test_verify_multiple_files_parallel() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create 10 test files to better test parallelism
     let mut paths = Vec::new();
@@ -361,8 +372,8 @@ fn test_verify_multiple_files_partial_failure() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create and sign files
     let file1 = temp_dir.path().join("file1.txt");
@@ -417,8 +428,8 @@ fn test_verify_multiple_files_all_attempted() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create mix of valid and files that will fail
     let file1 = temp_dir.path().join("file1.txt");
@@ -485,8 +496,8 @@ fn test_verify_multiple_files_quiet_mode() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create and sign files
     let file1 = temp_dir.path().join("file1.txt");
@@ -568,8 +579,8 @@ fn test_verify_rejects_legacy_with_force_prehashed() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create message and sign in LEGACY mode (non-prehashed, "Ed")
     let message_path = temp_dir.path().join("message.txt");
@@ -618,8 +629,8 @@ fn test_verify_accepts_legacy_without_force_prehashed() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create message and sign in LEGACY mode (non-prehashed, "Ed")
     let message_path = temp_dir.path().join("message.txt");
@@ -659,8 +670,8 @@ fn test_verify_accepts_prehashed_with_force_prehashed() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     // Create message and sign in PREHASHED mode (default, "ED")
     let message_path = temp_dir.path().join("message.txt");
@@ -709,8 +720,8 @@ fn test_output_uses_content_captured_at_verify_time() {
     let (secret_key, public_key, keynum) = generate_keypair().unwrap();
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
     let pubkey = PubkeyStruct::new(keynum, public_key);
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     sign(
         &SignOptions::builder(sk_path.as_path(), message_path.as_path())
@@ -772,8 +783,8 @@ fn test_prehashed_output_captures_content_at_verify_time() {
     let (secret_key, public_key, keynum) = generate_keypair().unwrap();
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
     let pubkey = PubkeyStruct::new(keynum, public_key);
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     sign(
         &SignOptions::builder(sk_path.as_path(), message_path.as_path())
@@ -825,8 +836,8 @@ fn test_prehashed_without_output_still_works() {
     let (secret_key, public_key, keynum) = generate_keypair().unwrap();
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
     let pubkey = PubkeyStruct::new(keynum, public_key);
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     sign(
         &SignOptions::builder(sk_path.as_path(), message_path.as_path())
@@ -862,8 +873,8 @@ fn test_verify_multiple_files_single_file_uses_header_format() {
 
     let sk_path = temp_dir.path().join("test.key");
     let pk_path = temp_dir.path().join("test.pub");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
-    std::fs::write(&pk_path, pubkey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+    std::fs::write(&pk_path, pubkey.to_file_contents("test").unwrap()).unwrap();
 
     let file1 = temp_dir.path().join("only.txt");
     fs::write(&file1, b"solo").unwrap();

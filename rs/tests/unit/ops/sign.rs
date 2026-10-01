@@ -119,7 +119,7 @@ fn test_sign_encrypted_key_fast() {
 
     // Write the test key file
     let sk_path = temp_dir.path().join("fast_test.key");
-    let sk_contents = seckey.to_file_contents("test key");
+    let sk_contents = seckey.to_file_contents("test key").unwrap();
     fs::write(&sk_path, sk_contents).unwrap();
 
     // Now test signing with it
@@ -531,7 +531,7 @@ fn test_sign_small_file_succeeds() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let message_path = temp_dir.path().join("message.txt");
     std::fs::write(&message_path, b"small message").unwrap();
@@ -571,7 +571,7 @@ fn test_prehashed_mode_no_size_limit() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    std::fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     // Create a 10 MB file (larger than we'd want for non-prehashed, but fine for prehashed)
     let message_path = temp_dir.path().join("large.bin");
@@ -620,7 +620,7 @@ fn test_sign_with_weak_kdf_key() {
 
     // Write the key file
     let sk_path = temp_dir.path().join("weak.key");
-    std::fs::write(&sk_path, seckey.to_file_contents("weak key")).unwrap();
+    std::fs::write(&sk_path, seckey.to_file_contents("weak key").unwrap()).unwrap();
 
     // Create a message to sign
     let message_path = temp_dir.path().join("message.txt");

@@ -2,12 +2,13 @@
 //!
 //! This module implements recreating a public key file from a secret key file.
 
-use super::file_utils::{load_secret_key, write_public_key_file};
+use super::file_utils::{load_secret_key, reject_output_alias, write_public_key_file};
 use crate::{
     Result,
     crypto::PublicKey,
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
+    validation::validate_key_comment,
 };
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
@@ -132,6 +133,12 @@ pub fn recreate_with_key(
     options: &RecreateOptions<'_>,
     password: Option<&[u8]>,
 ) -> Result<RecreateResult> {
+    // Validate the comment and output path before decryption or any write
+    if let Some(comment) = options.comment() {
+        validate_key_comment(comment)?;
+    }
+    reject_output_alias(options.public_key_file(), &[options.secret_key_file()])?;
+
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = seckey.extract_key(password)?;
 
@@ -143,18 +150,10 @@ pub fn recreate_with_key(
     // Generate comment
     let keynum_hex = keynum.to_key_id();
     let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = match options.comment() {
-        Some("") => {
-            return Err(Error::InvalidComment(
-                "comment must not be empty; omit --comment to use the default".to_string(),
-            ));
-        }
-        Some(c) => c,
-        None => &default_comment,
-    };
+    let comment = options.comment().unwrap_or(&default_comment);
 
     // Write the public key file with atomic creation
-    let pubkey_contents = pubkey.to_file_contents(comment);
+    let pubkey_contents = pubkey.to_file_contents(comment)?;
     write_public_key_file(options.public_key_file(), &pubkey_contents, options.force())?;
 
     Ok(RecreateResult {

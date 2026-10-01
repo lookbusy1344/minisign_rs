@@ -47,10 +47,23 @@ fn main() {
 fn run() -> Result<i32> {
     let cli = Cli::parse()?;
 
+    if cli.allow_kdf_fallback {
+        eprintln!(
+            "Warning: --allow-kdf-fallback is deprecated and has no effect: \
+             scrypt cannot recover from a failed memory allocation."
+        );
+    }
+
     // Determine which action to perform
     let action = cli
         .action()
         .ok_or_else(|| Error::Usage("No action specified. Use -G, -S, -V, -R, -K, or -I".into()))?;
+
+    if matches!(action, Action::Generate | Action::Recreate)
+        && let Some(comment) = cli.untrusted_comment.as_deref()
+    {
+        minisign::validation::validate_key_comment(comment)?;
+    }
 
     match action {
         Action::Generate => handle_generate(&cli),
@@ -96,7 +109,6 @@ fn handle_generate(cli: &Cli) -> Result<i32> {
     let mut builder = GenerateOptions::builder(secret_key_file, public_key_file)
         .force(cli.force)
         .no_password(cli.no_password)
-        .allow_kdf_fallback(cli.allow_kdf_fallback)
         .force_weak_kdf(resolve_force_weak_kdf(cli));
 
     if let Some(comment) = comment {
@@ -152,8 +164,7 @@ fn handle_generate(cli: &Cli) -> Result<i32> {
         println!("minisign_rs -Vm <file> -P {}", result.public_key_base64());
     }
 
-    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
-    Ok(if result.kdf_fallback_used { 3 } else { 0 })
+    Ok(0)
 }
 
 /// Get password for a key: check credential store first, then prompt
@@ -282,6 +293,7 @@ fn handle_sign(cli: &Cli) -> Result<i32> {
 
     // Load secret key to get credential ID for credential store lookup
     let seckey = load_secret_key(secret_key_file)?;
+    seckey.check_kdf_budget()?;
     let credential_id = seckey.credential_id();
 
     // Try to get password from credential store first, then prompt if needed
@@ -548,6 +560,7 @@ fn handle_recreate(cli: &Cli) -> Result<i32> {
 
     // Load the key to check if it's encrypted
     let seckey = load_secret_key(secret_key_file)?;
+    seckey.check_kdf_budget()?;
     let credential_id = seckey.credential_id();
 
     // Get password: check credential store first, then prompt if needed
@@ -599,6 +612,8 @@ fn handle_change(cli: &Cli) -> Result<i32> {
         return forget_password_with_feedback(&old_credential_id, cli.quiet).map(|()| 0);
     }
 
+    seckey.check_kdf_budget()?;
+
     // Get current password: check credential store first, then prompt if needed
     let current_password = if seckey.is_encrypted() {
         Some(get_password_with_credential_store(
@@ -627,7 +642,6 @@ fn handle_change(cli: &Cli) -> Result<i32> {
     );
     let options = ChangeOptions::builder(secret_key_file)
         .remove_password(cli.no_password)
-        .allow_kdf_fallback(cli.allow_kdf_fallback)
         .force_weak_kdf(resolve_force_weak_kdf(cli))
         .build();
 
@@ -657,8 +671,7 @@ fn handle_change(cli: &Cli) -> Result<i32> {
         );
     }
 
-    // Exit 3 signals "success but with reduced KDF security" — machine-readable fallback indicator.
-    Ok(if result.kdf_fallback_used { 3 } else { 0 })
+    Ok(0)
 }
 
 /// Display the signature inspection result
@@ -698,6 +711,9 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
             SecurityLevel::Medium => println!("Security Level: MEDIUM [WARNING]\n"),
             SecurityLevel::Low => println!("Security Level: LOW [CRITICAL]\n"),
             SecurityLevel::None => println!("Security Level: NONE (UNENCRYPTED) [WARNING]\n"),
+            SecurityLevel::Unsupported => {
+                println!("Security Level: UNSUPPORTED (exceeds KDF memory budget) [ERROR]\n");
+            }
         }
     }
 
@@ -743,7 +759,11 @@ fn display_inspect_result(result: &InspectResult, key_id_known: bool) {
                     kdf.memlimit() / 1_048_576
                 );
 
-                if kdf.is_fallback() {
+                if result.security_level() == Some(SecurityLevel::Unsupported) {
+                    println!(
+                        "   └─ Creation: Exceeds the supported KDF memory budget; this key cannot be decrypted"
+                    );
+                } else if kdf.is_fallback() {
                     println!("   ├─ Creation: Fallback (reduced parameters)");
                     if let Some(multiplier) = kdf.weakness_multiplier() {
                         println!(
@@ -866,6 +886,7 @@ fn handle_inspect(cli: &Cli) -> Result<i32> {
     {
         // Load secret key to get credential ID for credential store lookup
         let seckey = load_secret_key(path)?;
+        seckey.check_kdf_budget()?;
         let credential_id = seckey.credential_id();
 
         // Try credential store first, then prompt if needed
@@ -917,6 +938,23 @@ fn resolve_force_weak_kdf(cli: &Cli) -> bool {
     cfg!(debug_assertions) && cli.force_weak_kdf
 }
 
+/// Open a password file for reading without blocking on special files.
+///
+/// On Unix, `O_NONBLOCK` makes opening a FIFO return at once instead of waiting for a
+/// writer, so the caller's regular-file check on the handle runs. It does not affect
+/// reads from a regular file. Symlinks are followed: container secret mounts present
+/// password files as symlinks.
+fn open_password_file(path: &std::path::Path) -> io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    options.open(path)
+}
+
 /// Prompt for password using rpassword or read from file
 ///
 /// Returns a `Zeroizing<String>` that automatically clears the password from memory when dropped.
@@ -930,7 +968,7 @@ fn prompt_password(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
         // Open once; derive metadata from the fd to avoid TOCTOU races.
-        let file = File::open(path)
+        let file = open_password_file(path)
             .map_err(|e| Error::Io(format!("Failed to open password file: {e}")))?;
         let metadata = file
             .metadata()

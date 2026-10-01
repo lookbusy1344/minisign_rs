@@ -15,7 +15,7 @@ fn test_recreate_from_unencrypted_key() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    let sk_contents = seckey.to_file_contents("test secret key");
+    let sk_contents = seckey.to_file_contents("test secret key").unwrap();
     fs::write(&sk_path, sk_contents).unwrap();
 
     // Recreate public key
@@ -71,7 +71,7 @@ fn test_recreate_from_encrypted_key_fast() {
     .unwrap();
 
     let sk_path = temp_dir.path().join("encrypted.key");
-    let sk_contents = seckey.to_file_contents("encrypted secret key");
+    let sk_contents = seckey.to_file_contents("encrypted secret key").unwrap();
     fs::write(&sk_path, sk_contents).unwrap();
 
     // Recreate public key
@@ -112,7 +112,7 @@ fn test_recreate_without_password_fails() {
     .unwrap();
 
     let sk_path = temp_dir.path().join("encrypted.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     // Try to recreate without password
     let pk_path = temp_dir.path().join("test.pub");
@@ -149,7 +149,7 @@ fn test_recreate_wrong_password_fails() {
     .unwrap();
 
     let sk_path = temp_dir.path().join("encrypted.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     // Try with wrong password
     let pk_path = temp_dir.path().join("test.pub");
@@ -169,7 +169,7 @@ fn test_recreate_file_exists_without_force() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let pk_path = temp_dir.path().join("test.pub");
     fs::write(&pk_path, "existing content").unwrap();
@@ -189,7 +189,7 @@ fn test_recreate_force_overwrite() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     let pk_path = temp_dir.path().join("test.pub");
     fs::write(&pk_path, "existing content").unwrap();
@@ -240,7 +240,7 @@ fn test_recreate_matches_original_public_key() {
     let pubkey_original = PubkeyStruct::new(keynum, public_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     // Recreate public key
     let pk_path = temp_dir.path().join("recreated.pub");
@@ -268,7 +268,7 @@ fn test_recreate_atomic_file_creation() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test")).unwrap();
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
 
     // Create existing public key file
     let pk_path = temp_dir.path().join("existing.pub");
@@ -295,7 +295,11 @@ fn test_recreate_empty_comment_is_rejected() {
     let seckey = SeckeyStruct::new_unencrypted(keynum, &secret_key);
 
     let sk_path = temp_dir.path().join("test.key");
-    fs::write(&sk_path, seckey.to_file_contents("test secret key")).unwrap();
+    fs::write(
+        &sk_path,
+        seckey.to_file_contents("test secret key").unwrap(),
+    )
+    .unwrap();
 
     let pk_path = temp_dir.path().join("test.pub");
     let options = RecreateOptions::new(sk_path.as_path(), pk_path.as_path(), Some(""), false);
@@ -305,6 +309,42 @@ fn test_recreate_empty_comment_is_rejected() {
     assert!(
         matches!(result.unwrap_err(), Error::InvalidComment(_)),
         "expected InvalidComment variant"
+    );
+    assert!(!pk_path.exists(), "public key file must not be created");
+}
+
+// SA-02: comment validation precedes decryption and any write.
+#[test]
+fn test_recreate_rejects_injected_comment_before_decryption() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let (secret_key, _public_key, keynum) = generate_keypair().expect("RNG should work");
+    let mut kdf_salt = [0u8; 32];
+    rand::rng().fill(&mut kdf_salt);
+    let n = 1u64 << 10;
+    let r = 8u64;
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret_key,
+        b"correctpassword",
+        kdf_salt,
+        4 * n * r,
+        128 * n * r,
+        false,
+    )
+    .unwrap();
+
+    let sk_path = temp_dir.path().join("encrypted.key");
+    fs::write(&sk_path, seckey.to_file_contents("test").unwrap()).unwrap();
+
+    let pk_path = temp_dir.path().join("test.pub");
+    let options = RecreateOptions::new(&sk_path, &pk_path, Some("a\nb"), false);
+
+    // A wrong password would fail with ChecksumFailed if decryption ran first.
+    let result = recreate(&options, Some(b"wrongpassword"));
+    assert!(
+        matches!(result, Err(Error::InvalidComment(_))),
+        "expected InvalidComment before decryption, got {result:?}"
     );
     assert!(!pk_path.exists(), "public key file must not be created");
 }

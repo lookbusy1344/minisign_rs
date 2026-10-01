@@ -3,13 +3,14 @@
 use minisign::ops::file_utils::{write_public_key_file, write_secret_key_file};
 #[cfg(all(debug_assertions, unix))]
 use minisign::ops::generate::set_force_overwrite_lock_timeout_for_tests;
+#[cfg(debug_assertions)]
+use minisign::ops::generate::{
+    inject_commit_failure_before_public_rename, inject_commit_failure_before_secret_rename,
+};
 use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    ops::generate::{
-        GenerateOptions, ensure_parent_directory, generate, generate_with_log_n,
-        inject_commit_failure_before_public_rename, inject_commit_failure_before_secret_rename,
-    },
+    ops::generate::{GenerateOptions, ensure_parent_directory, generate, generate_with_log_n},
 };
 use std::fs;
 #[cfg(all(debug_assertions, unix))]
@@ -674,4 +675,61 @@ fn test_no_force_pubkey_fail_removes_secret_key() {
         !sk_path.exists(),
         "orphaned secret key should be removed on pubkey write failure in non-force mode"
     );
+}
+
+// SA-02: a comment carrying a second line must not substitute the public key.
+#[test]
+fn test_generate_rejects_injected_key_line_without_writing() {
+    let (_sk, attacker_pk, attacker_keynum) = minisign::crypto::generate_keypair().unwrap();
+    let attacker_line = PubkeyStruct::new(attacker_keynum, attacker_pk)
+        .to_file_contents("attacker")
+        .unwrap()
+        .lines()
+        .nth(1)
+        .unwrap()
+        .to_string();
+    let comment = format!("synthetic metadata\n{attacker_line}");
+
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("nested/test.key");
+    let pk_path = temp_dir.path().join("nested/test.pub");
+
+    for no_password in [true, false] {
+        let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+            .comment(&comment)
+            .no_password(no_password)
+            .build();
+        let password = (!no_password).then_some(b"password".as_slice());
+
+        let result = generate_with_log_n(&options, password, 10);
+        assert!(
+            matches!(result, Err(Error::InvalidComment(_))),
+            "injected comment must be rejected, got {result:?}"
+        );
+        assert!(!sk_path.exists(), "secret key file must not be created");
+        assert!(!pk_path.exists(), "public key file must not be created");
+        assert!(
+            !temp_dir.path().join("nested").exists(),
+            "validation must precede directory creation"
+        );
+    }
+}
+
+// The KDF fallback cannot run: requesting it changes nothing and the result field
+// stays false.
+#[test]
+#[allow(deprecated)]
+fn test_allow_kdf_fallback_has_no_effect() {
+    let temp_dir = TempDir::new().unwrap();
+    let sk_path = temp_dir.path().join("test.key");
+    let pk_path = temp_dir.path().join("test.pub");
+
+    let options = GenerateOptions::builder(sk_path.as_path(), pk_path.as_path())
+        .allow_kdf_fallback(true)
+        .build();
+    let result = generate_with_log_n(&options, Some(b"password"), 10).unwrap();
+
+    assert!(!result.kdf_fallback_used);
+    let seckey = SeckeyStruct::from_file_contents(&fs::read_to_string(&sk_path).unwrap()).unwrap();
+    assert_eq!(seckey.kdf_memlimit(), 128 * (1 << 10) * 8);
 }

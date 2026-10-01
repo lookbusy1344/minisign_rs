@@ -88,15 +88,17 @@ cfg_select! {
             let entry = Entry::new(SERVICE_NAME, credential_id)
                 .map_err(|e| Error::CredentialStoreError(format!("failed to create entry: {e}")))?;
             match entry.get_secret() {
-                Ok(raw) => {
-                    let raw = Zeroizing::new(raw);
-                    let password = std::str::from_utf8(&raw).map_err(|e| {
-                        Error::CredentialStoreError(format!(
-                            "stored secret is not valid UTF-8: {e}"
-                        ))
-                    })?;
-                    Ok(Some(Zeroizing::new(password.to_owned())))
-                }
+                // Convert in place: the bytes move into the String without a copy.
+                Ok(raw) => match String::from_utf8(raw) {
+                    Ok(password) => Ok(Some(Zeroizing::new(password))),
+                    Err(e) => {
+                        let reason = e.utf8_error();
+                        drop(Zeroizing::new(e.into_bytes()));
+                        Err(Error::CredentialStoreError(format!(
+                            "stored secret is not valid UTF-8: {reason}"
+                        )))
+                    }
+                },
                 Err(keyring::Error::NoEntry) => Ok(None),
                 Err(e) => Err(Error::CredentialStoreError(format!("failed to get password: {e}"))),
             }
