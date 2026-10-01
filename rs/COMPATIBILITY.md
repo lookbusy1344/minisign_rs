@@ -66,6 +66,16 @@ scrypt fails for lack of memory. Rust never does: its scrypt aborts on allocatio
 failure. `--allow-kdf-fallback` is accepted, prints a deprecation warning, and has
 no effect. Exit code 3 is reserved and not produced.
 
+**Output replacement:** force-writing a public key or signature stages a sibling
+file and replaces the destination with `std::fs::rename`, preserving bytes through
+distinct hard-link names. Signing checks every output against every batch input
+before writing. Resolved pathname aliases to inputs and final-component output
+symlinks are rejected. Generation rejects equivalent public/secret destinations
+before KDF work. Pathname comparison does not unify case aliases on case-insensitive
+filesystems and cannot protect against concurrent swaps of writable parent
+directories. Existing Windows secret-key generation outputs still refuse `--force`;
+that operation is separate from public-key/signature replacement.
+
 ### ✅ Operations - All Compatible
 
 | Operation | Status | Notes |

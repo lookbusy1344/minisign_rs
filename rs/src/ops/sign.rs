@@ -184,7 +184,7 @@ fn load_and_decrypt_key(
     seckey.extract_key(password)
 }
 
-/// Sign a single file with an already-loaded secret key
+/// Resolve the explicit signature path or append `.minisig` without losing non-UTF8 bytes.
 fn signature_path(message_file: &Path, options: &SignOptions<'_>) -> PathBuf {
     options.signature_file.map_or_else(
         || {
@@ -196,6 +196,7 @@ fn signature_path(message_file: &Path, options: &SignOptions<'_>) -> PathBuf {
     )
 }
 
+/// Sign a single file with an already-loaded secret key.
 fn sign_file_with_key(
     message_file: &Path,
     secret_key: &SecretKey,

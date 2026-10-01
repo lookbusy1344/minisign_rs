@@ -485,3 +485,47 @@ for these targeted fixes.
   verification forgery, comment-based key substitution, or destructive
   hard-link writes. The hard-link command may succeed by safely replacing only
   the output directory entry.
+
+## Post-implementation review remediation
+
+The review found and corrected four remaining implementation gaps:
+
+- Batch signing now checks each output against every message and the secret-key
+  input before any write, preventing `message.minisig` inputs from being replaced.
+- Inspection does not query credentials for unsupported KDF parameters, including
+  default library inspection and the CLI's preliminary inspection.
+- Public-labelled and fallback inspection paths decode into guarded storage, since
+  untrusted comments cannot establish that the decoded bytes contain no secrets.
+- The CLI validates generation and recreation comments before loading a key or
+  retrieving a password. The library retains its own validation.
+
+Release validation required matching debug-only imports to their gated tests and
+documenting the release-only weak-KDF builder assertions. No test assertions were
+removed or weakened.
+
+Local macOS validation after these fixes:
+
+- `./run_all_tests.sh`: 589 tests passed.
+- Default features: 594 tests passed.
+- `--no-default-features --features parallel`: 593 tests passed.
+- Release with `--no-default-features`: 575 tests passed.
+- Debug and release all-targets/all-features pedantic Clippy: passed.
+- `cargo audit`: passed.
+- Windows all-targets/all-features cross-compilation and pedantic Clippy: passed.
+
+Windows runtime validation remains outstanding. The aliasing suite includes
+replacement of existing public output, preservation through distinct hard-link
+names, direct input/output aliases, and a Windows-only locked-file failure case
+that checks preservation of existing regular output and cleanup of staged files.
+Run on Windows from `rs/`:
+
+```powershell
+cargo test --no-default-features --test output_aliasing
+cargo test --release --no-default-features --test output_aliasing
+cargo clippy --all-targets --all-features -- -D clippy::all -D clippy::pedantic
+```
+
+Cross-compilation does not establish Windows rename behavior. The repository's
+existing Rust CI workflow does not trigger on PRs targeting `lb_rust`; changing
+its triggers is outside the `rs/` working boundary. No commits were pushed to
+trigger hosted CI during this remediation.

@@ -284,6 +284,31 @@ fn sign_force_failure_before_replacement_preserves_destination() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn sign_force_locked_destination_preserves_existing_bytes() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let fx = Fixture::new();
+    let message = fx.message();
+    let output = fx.path("locked.minisig");
+    fs::write(&output, b"existing output").unwrap();
+    // Deny sharing, including delete/rename, so replacing this regular file fails.
+    let locked = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&output)
+        .unwrap();
+
+    let result = fx.sign_to(&message, &output);
+    assert!(matches!(result, Err(Error::FileWrite { .. })), "{result:?}");
+    drop(locked);
+
+    assert_eq!(fs::read(&output).unwrap(), b"existing output");
+    assert_eq!(fs::read(&message).unwrap(), b"message content");
+    assert!(fx.staged_files().is_empty());
+}
+
 // ----------------------------------------------------------------------------
 // generate
 // ----------------------------------------------------------------------------
