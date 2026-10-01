@@ -7,6 +7,7 @@ use crate::{
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use zeroize::Zeroizing;
 
 /// Maximum file size accepted for key files (secret key and public key).
 ///
@@ -246,7 +247,62 @@ pub fn read_bounded_string_from_reader<R: Read>(
     }
     String::from_utf8(buf).map_err(|e| Error::InvalidUtf8 {
         context: path.display().to_string(),
-        source: e,
+        source: e.utf8_error(),
+    })
+}
+
+/// Read a secret-key file into a guarded buffer, rejecting files over `max_bytes`.
+///
+/// The buffer is allocated once at `max_bytes + 1` and filled in place, so it never
+/// reallocates and leaves no unwiped copy behind. The extra byte detects files that
+/// grow past the limit after the metadata check.
+///
+/// # Errors
+///
+/// Returns `Error::Other` if the file exceeds `max_bytes`, or `Error::FileRead`
+/// on any I/O failure.
+pub fn read_secret_file_bounded(path: &Path, max_bytes: u64) -> Result<Zeroizing<Vec<u8>>> {
+    let mut file = File::open(path).map_err(|e| Error::file_read(path, e))?;
+    let size = file
+        .metadata()
+        .map_err(|e| Error::file_read(path, e))?
+        .len();
+    let too_large = |size| {
+        Error::Other(format!(
+            "File too large: {size} bytes exceeds maximum {max_bytes} bytes"
+        ))
+    };
+    if size > max_bytes {
+        return Err(too_large(size));
+    }
+
+    let max = usize::try_from(max_bytes).map_err(|_| too_large(size))?;
+    let mut buf = Zeroizing::new(vec![0u8; max + 1]);
+    let mut len = 0;
+    while len < buf.len() {
+        match file.read(&mut buf[len..]) {
+            Ok(0) => break,
+            Ok(n) => len += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(Error::file_read(path, e)),
+        }
+    }
+    if len > max {
+        return Err(too_large(len as u64));
+    }
+    buf.truncate(len);
+    Ok(buf)
+}
+
+/// Borrow `bytes` as UTF-8 text without copying them.
+///
+/// # Errors
+///
+/// Returns `Error::InvalidUtf8` naming `path`. The error holds no file content.
+pub fn utf8_text<'a>(bytes: &'a [u8], path: &Path) -> Result<&'a str> {
+    std::str::from_utf8(bytes).map_err(|source| Error::InvalidUtf8 {
+        context: path.display().to_string(),
+        source,
     })
 }
 
@@ -265,8 +321,8 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
     let path = path.as_ref();
     #[cfg(unix)]
     check_secret_key_permissions(path);
-    let contents = read_file_bounded(path, MAX_KEY_FILE_BYTES)?;
-    SeckeyStruct::from_file_contents(&contents)
+    let bytes = read_secret_file_bounded(path, MAX_KEY_FILE_BYTES)?;
+    SeckeyStruct::from_file_contents(utf8_text(&bytes, path)?)
 }
 
 /// Write a public key or signature file.

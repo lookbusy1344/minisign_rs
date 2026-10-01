@@ -7,9 +7,13 @@ use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::credential_store::CredentialStatus;
 use crate::errors::{Error, Result};
 use crate::keys::{PubkeyStruct, SeckeyStruct};
-use crate::ops::file_utils::{MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded};
+use crate::ops::file_utils::{
+    MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded, read_secret_file_bounded,
+    utf8_text,
+};
 use crate::signature::SignatureAlgorithm;
 use std::path::Path;
+use zeroize::Zeroizing;
 
 /// Security level classification for encrypted keys
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,6 +222,12 @@ fn sniff_key_file_type(contents: &str) -> Option<KeyFileType> {
     }
 }
 
+/// Read a key file into a guarded buffer: it may hold a secret key.
+fn read_key_file(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
+    read_secret_file_bounded(path, MAX_KEY_FILE_BYTES)
+        .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))
+}
+
 /// Inspect a key file and return detailed information
 ///
 /// # Errors
@@ -227,24 +237,25 @@ fn sniff_key_file_type(contents: &str) -> Option<KeyFileType> {
 /// - The file format is invalid
 /// - The key structure cannot be parsed
 pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
-    let contents = read_file_bounded(options.key_file(), MAX_KEY_FILE_BYTES)
+    let bytes = read_key_file(options.key_file())?;
+    let contents = utf8_text(&bytes, options.key_file())
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
-    match sniff_key_file_type(&contents) {
+    match sniff_key_file_type(contents) {
         Some(KeyFileType::Secret) => {
-            let seckey = SeckeyStruct::from_file_contents(&contents)?;
+            let seckey = SeckeyStruct::from_file_contents(contents)?;
             inspect_secret_key(&seckey, options.check_credential_store)
         }
         Some(KeyFileType::Public) => {
-            let pubkey = PubkeyStruct::from_file_contents(&contents)?;
+            let pubkey = PubkeyStruct::from_file_contents(contents)?;
             Ok(inspect_public_key(&pubkey))
         }
         None => {
             // Non-standard comment — try both parsers for backward compatibility.
-            if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
+            if let Ok(seckey) = SeckeyStruct::from_file_contents(contents) {
                 return inspect_secret_key(&seckey, options.check_credential_store);
             }
-            if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
+            if let Ok(pubkey) = PubkeyStruct::from_file_contents(contents) {
                 return Ok(inspect_public_key(&pubkey));
             }
             Err(Error::InvalidKeyFormat(
@@ -337,24 +348,25 @@ pub fn inspect_base64(base64_str: &str) -> Result<InspectResult> {
 /// - The file is not a valid key
 /// - For encrypted keys: password is incorrect or decryption fails
 pub fn inspect_private(key_file: &Path, password: &[u8]) -> Result<InspectResult> {
-    let contents = read_file_bounded(key_file, MAX_KEY_FILE_BYTES)
+    let bytes = read_key_file(key_file)?;
+    let contents = utf8_text(&bytes, key_file)
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))?;
 
-    match sniff_key_file_type(&contents) {
+    match sniff_key_file_type(contents) {
         Some(KeyFileType::Secret) => {
-            let seckey = SeckeyStruct::from_file_contents(&contents)?;
+            let seckey = SeckeyStruct::from_file_contents(contents)?;
             inspect_private_with_key(&seckey, password)
         }
         Some(KeyFileType::Public) => {
-            let pubkey = PubkeyStruct::from_file_contents(&contents)?;
+            let pubkey = PubkeyStruct::from_file_contents(contents)?;
             Ok(inspect_public_key(&pubkey))
         }
         None => {
             // Non-standard comment — try both parsers for backward compatibility.
-            if let Ok(seckey) = SeckeyStruct::from_file_contents(&contents) {
+            if let Ok(seckey) = SeckeyStruct::from_file_contents(contents) {
                 return inspect_private_with_key(&seckey, password);
             }
-            if let Ok(pubkey) = PubkeyStruct::from_file_contents(&contents) {
+            if let Ok(pubkey) = PubkeyStruct::from_file_contents(contents) {
                 return Ok(inspect_public_key(&pubkey));
             }
             Err(Error::InvalidKeyFormat(

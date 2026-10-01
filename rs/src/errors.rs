@@ -54,7 +54,7 @@ pub enum Error {
     #[error("invalid UTF-8 in {context}: {source}")]
     InvalidUtf8 {
         context: String,
-        source: std::string::FromUtf8Error,
+        source: std::str::Utf8Error,
     },
 
     // Cryptographic errors

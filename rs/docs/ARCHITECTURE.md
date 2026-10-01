@@ -67,6 +67,22 @@ pub struct KeyNum([u8; 8]);
 
 These newtypes prevent accidental misuse (e.g., passing a signature where a public key is expected) and enable implementing trait-based security controls.
 
+### Zeroization Boundary
+
+Zeroization covers the buffers this crate owns and dalek's signing state:
+
+- `SecretKey`, `SeckeyStruct` and passwords (`Zeroizing<String>`) wipe on drop.
+- Secret-key files are read into a `Zeroizing<Vec<u8>>` allocated once at its maximum
+  size, parsed by borrowing, and base64-decoded into a `Zeroizing` fixed-size array.
+- Decrypted key bytes and checksums in `SeckeyStruct::decrypt()` are `Zeroizing` on
+  both the success and checksum-failure paths.
+- `ed25519-dalek` is built with its `zeroize` feature, so `SigningKey` and its
+  expanded state wipe on drop. A compile-time assertion in `crypto.rs` enforces this.
+
+It does not cover scrypt's internal working memory, copies made by the compiler or
+allocator, swap, or core dumps. Locking memory would need unsafe code and is out of
+scope.
+
 ### Binary Format Types
 
 File format structures mirror the on-disk binary layout:

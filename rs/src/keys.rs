@@ -35,7 +35,7 @@ use crate::crypto::{
     SECRET_KEY_BYTES, SecretKey, blake2b_256, derive_key_with_params,
 };
 use crate::errors::Error;
-use crate::formats::{decode_base64, encode_base64, read_u64_le};
+use crate::formats::{decode_base64, decode_base64_into, encode_base64, read_u64_le};
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
@@ -505,20 +505,23 @@ impl SeckeyStruct {
         decrypted_keynum_bytes.copy_from_slice(&decrypted_blob[0..KEYNUM_BYTES]);
         let decrypted_keynum = KeyNum::from_bytes(decrypted_keynum_bytes);
 
-        let mut secret_key_bytes = [0u8; SECRET_KEY_BYTES];
+        // Guarded before filling: wiped on drop on both the success and checksum-failure
+        // paths.
+        let mut secret_key_bytes = Zeroizing::new([0u8; SECRET_KEY_BYTES]);
         secret_key_bytes
             .copy_from_slice(&decrypted_blob[KEYNUM_BYTES..(KEYNUM_BYTES + SECRET_KEY_BYTES)]);
 
-        let mut decrypted_checksum = [0u8; CHECKSUM_BYTES];
+        let mut decrypted_checksum = Zeroizing::new([0u8; CHECKSUM_BYTES]);
         decrypted_checksum.copy_from_slice(&decrypted_blob[(KEYNUM_BYTES + SECRET_KEY_BYTES)..]);
 
         // Recompute checksum from decrypted keynum + secret_key
-        let computed_checksum = Self::compute_checksum(decrypted_keynum, &secret_key_bytes);
+        let computed_checksum =
+            Zeroizing::new(Self::compute_checksum(decrypted_keynum, &secret_key_bytes));
 
         // Verify decrypted checksum matches recomputed checksum
         // Use constant-time comparison to prevent timing side-channel attacks
-        if computed_checksum.ct_eq(&decrypted_checksum).into() {
-            Ok((SecretKey::from_bytes(secret_key_bytes), decrypted_keynum))
+        if computed_checksum.ct_eq(&*decrypted_checksum).into() {
+            Ok((SecretKey::from_bytes(*secret_key_bytes), decrypted_keynum))
         } else {
             Err(Error::ChecksumFailed)
         }
@@ -843,22 +846,25 @@ impl SeckeyStruct {
 
         let keynum = KeyNum::from_bytes(keynum);
 
-        let mut secret_key_encrypted = [0u8; SECRET_KEY_BYTES];
-        secret_key_encrypted.copy_from_slice(&bytes[SECKEY_SK_OFFSET..sk_end]);
-
-        let mut checksum = [0u8; CHECKSUM_BYTES];
-        checksum.copy_from_slice(&bytes[SECKEY_CHECKSUM_OFFSET..checksum_end]);
-
-        Ok(Self {
+        // Copy key material straight into the zeroize-on-drop struct rather than through
+        // local arrays: for unencrypted keys `secret_key_encrypted` is the plaintext key.
+        let mut seckey = Self {
             encrypted,
             kdf_salt,
             kdf_opslimit,
             kdf_memlimit,
             keynum, // Zeroed if encrypted (real keynum recovered on decrypt), plaintext if not
             encrypted_keynum, // Stores encrypted keynum for roundtrip serialization
-            secret_key_encrypted,
-            checksum,
-        })
+            secret_key_encrypted: [0u8; SECRET_KEY_BYTES],
+            checksum: [0u8; CHECKSUM_BYTES],
+        };
+        seckey
+            .secret_key_encrypted
+            .copy_from_slice(&bytes[SECKEY_SK_OFFSET..sk_end]);
+        seckey
+            .checksum
+            .copy_from_slice(&bytes[SECKEY_CHECKSUM_OFFSET..checksum_end]);
+        Ok(seckey)
     }
 
     /// Parse from a secret key file (comment + base64)
@@ -875,9 +881,14 @@ impl SeckeyStruct {
         }
 
         // First line is the untrusted comment (ignored for parsing)
-        // Second line is base64-encoded SeckeyStruct
-        let data = decode_base64(lines[1])?;
-        Self::from_bytes(&data)
+        // Second line is base64-encoded SeckeyStruct, decoded straight into guarded
+        // storage: for unencrypted keys it is the plaintext secret key.
+        let mut data = Zeroizing::new([0u8; SECKEY_STRUCT_SIZE]);
+        let len = decode_base64_into(lines[1], &mut *data).map_err(|e| match e {
+            Error::InvalidBase64(_) => e,
+            _ => Error::InvalidSecretKey(format!("expected {SECKEY_STRUCT_SIZE} bytes, got more")),
+        })?;
+        Self::from_bytes(&data[..len])
     }
 
     /// Serialize to file format (comment + base64)
