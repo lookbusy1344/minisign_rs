@@ -2,7 +2,9 @@
 //!
 //! This module implements the core signing logic for minisign.
 
-use super::file_utils::{load_secret_key, read_message_file, sanitised_path_display};
+use super::file_utils::{
+    load_secret_key, read_message_file, reject_output_alias, sanitised_path_display,
+};
 use crate::{
     Result,
     crypto::{
@@ -198,6 +200,8 @@ fn sign_file_with_key(
         },
         Path::to_path_buf,
     );
+
+    reject_output_alias(&sig_file_path, &[message_file, options.secret_key_file])?;
 
     let sig_box = create_signature(
         secret_key,

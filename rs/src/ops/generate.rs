@@ -2,7 +2,7 @@
 //!
 //! This module implements keypair generation for minisign.
 
-use super::file_utils::sync_parent_directory;
+use super::file_utils::{reject_output_alias, sync_parent_directory};
 use super::{EncryptionMode, OverwritePolicy};
 use crate::{
     Result,
@@ -254,10 +254,12 @@ pub fn generate_with_log_n(
         return Err(Error::PasswordRequired);
     }
 
-    // Validate the comment before key generation, KDF work, or any filesystem change
+    // Validate the comment and output paths before key generation, KDF work, or any
+    // filesystem change
     if let Some(comment) = options.comment {
         validate_key_comment(comment)?;
     }
+    reject_output_alias(options.public_key_file, &[options.secret_key_file])?;
 
     // Generate the keypair
     let (secret_key, public_key, keynum) = generate_keypair()?;

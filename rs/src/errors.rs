@@ -23,6 +23,12 @@ pub enum Error {
     #[error("file already exists: {0:?}")]
     FileExists(PathBuf),
 
+    #[error("output file {output:?} names the same file as {other:?}")]
+    OutputAlias { output: PathBuf, other: PathBuf },
+
+    #[error("refusing to replace symlink {0:?}")]
+    OutputIsSymlink(PathBuf),
+
     // Parsing errors
     #[error("invalid base64: {0}")]
     InvalidBase64(#[from] base64::DecodeError),

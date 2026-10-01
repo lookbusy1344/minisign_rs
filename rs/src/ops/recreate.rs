@@ -2,7 +2,7 @@
 //!
 //! This module implements recreating a public key file from a secret key file.
 
-use super::file_utils::{load_secret_key, write_public_key_file};
+use super::file_utils::{load_secret_key, reject_output_alias, write_public_key_file};
 use crate::{
     Result,
     crypto::PublicKey,
@@ -133,10 +133,11 @@ pub fn recreate_with_key(
     options: &RecreateOptions<'_>,
     password: Option<&[u8]>,
 ) -> Result<RecreateResult> {
-    // Validate the comment before decryption or any write
+    // Validate the comment and output path before decryption or any write
     if let Some(comment) = options.comment() {
         validate_key_comment(comment)?;
     }
+    reject_output_alias(options.public_key_file(), &[options.secret_key_file()])?;
 
     // Decrypt if necessary and get the keynum
     let (secret_key, keynum) = seckey.extract_key(password)?;

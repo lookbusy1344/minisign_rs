@@ -88,37 +88,32 @@ pub(super) fn sync_parent_directory(_path: &Path) -> Result<()> {
 
 cfg_select! {
     unix => {
-        fn configure_write_options(options: &mut OpenOptions, force: bool, unix_mode: Option<u32>) {
+        /// Apply `unix_mode` and `O_NOFOLLOW` to a `create_new` open.
+        fn configure_write_options(options: &mut OpenOptions, unix_mode: Option<u32>) {
             use std::os::unix::fs::OpenOptionsExt;
 
             if let Some(mode) = unix_mode {
                 options.mode(mode);
             }
-            if force {
-                // O_NOFOLLOW prevents following symlinks in the final path component.
-                // Without this, create(true).truncate(true) would silently clobber a
-                // symlink's target. The non-force path uses create_new(true) which
-                // implies O_EXCL, so symlinks are already rejected there.
-                options.custom_flags(libc::O_NOFOLLOW);
-            }
+            options.custom_flags(libc::O_NOFOLLOW);
         }
 
         fn write_secret_key_file_impl(path: &Path, contents: &[u8], force: bool) -> Result<()> {
             if force {
-                atomic_overwrite_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS)
+                atomic_replace_file(path, contents, Some(SECRET_KEY_FILE_PERMISSIONS))
             } else {
                 atomic_create_secret_key(path, contents, SECRET_KEY_FILE_PERMISSIONS)
             }
         }
     }
     _ => {
-        fn configure_write_options(_options: &mut OpenOptions, _force: bool, _unix_mode: Option<u32>) {}
+        fn configure_write_options(_options: &mut OpenOptions, _unix_mode: Option<u32>) {}
 
         fn write_secret_key_file_impl(path: &Path, contents: &[u8], force: bool) -> Result<()> {
             if force {
                 overwrite_secret_key_via_backup(path, contents)
             } else {
-                write_file(path, contents, false, None)
+                write_file(path, contents, false)
             }
         }
     }
@@ -274,24 +269,23 @@ pub fn load_secret_key(path: impl AsRef<Path>) -> Result<SeckeyStruct> {
     SeckeyStruct::from_file_contents(&contents)
 }
 
-/// Write a file, optionally setting Unix permissions on creation.
+/// Write a public key or signature file.
 ///
-/// Used for non-secret files (public keys, signatures) and for new secret key creation.
-/// The `unix_mode` parameter is `Some(mode)` only for secret key files (0600).
-///
-/// For force-overwriting secret key files, use [`atomic_overwrite_secret_key`] instead.
-fn write_file(path: &Path, contents: &[u8], force: bool, unix_mode: Option<u32>) -> Result<()> {
+/// Without `force`, the file is created with `create_new` and an existing path fails
+/// with [`Error::FileExists`]. With `force`, an existing symlink is rejected and the
+/// file is replaced through [`atomic_replace_file`], so the old inode — and every
+/// hard-link name for it — keeps its bytes.
+fn write_file(path: &Path, contents: &[u8], force: bool) -> Result<()> {
     validate_windows_path(path)?;
 
-    let mut options = OpenOptions::new();
-    options.write(true);
     if force {
-        options.create(true).truncate(true);
-    } else {
-        options.create_new(true);
+        reject_symlink(path)?;
+        return atomic_replace_file(path, contents, None);
     }
 
-    configure_write_options(&mut options, force, unix_mode);
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    configure_write_options(&mut options, None);
 
     let mut file = options.open(path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
@@ -307,65 +301,66 @@ fn write_file(path: &Path, contents: &[u8], force: bool, unix_mode: Option<u32>)
     Ok(())
 }
 
-/// Atomically overwrite a secret key file by writing to a temp sibling, then renaming.
+/// Fail with [`Error::OutputIsSymlink`] if `path` is a symlink.
+fn reject_symlink(path: &Path) -> Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err(Error::OutputIsSymlink(path.into()))
+        }
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(Error::file_write(path, e)),
+    }
+}
+
+/// Replace `path` with `contents` by staging a sibling file and renaming it over `path`.
 ///
-/// Protects against two hazards:
-/// - **Data loss (O1):** A crash mid-write on the original file would corrupt it. Here,
-///   the original is only replaced after the new content is fully fsynced.
-/// - **TOCTOU on permissions (S4):** `std::fs::set_permissions(path, perms)` (free
-///   function) operates on the path; between open and chmod an attacker could swap the
-///   file. `File::set_permissions` operates on the open fd and is immune.
+/// 1. Open `.{name}.{nonce}.tmp` exclusively (`create_new`, plus `O_NOFOLLOW` on Unix)
+/// 2. On Unix with `unix_mode`, set permissions on the open handle (`fchmod`), which a
+///    path swap cannot redirect
+/// 3. Write all content and `fsync`
+/// 4. `rename` over `path` and sync the parent directory
 ///
-/// Algorithm:
-/// 1. Open `.{name}.{nonce}.tmp` exclusively (`O_CREAT|O_EXCL`) with mode 0600 and `O_NOFOLLOW`
-/// 2. `File::set_permissions` — sets permissions on the fd, not the path
-/// 3. Write all content
-/// 4. `fsync` — flush to disk before rename
-/// 5. `rename` — POSIX guarantees this is atomic; the destination is never half-written
+/// `rename` replaces the directory entry: the previous inode is never truncated or
+/// written, and a crash leaves either the old or the new file. On Windows,
+/// `std::fs::rename` replaces an existing file in the same directory.
 ///
-/// The temp file name uses a CSPRNG 8-byte nonce (16 hex chars) so it is
-/// unpredictable and collision-resistant. `create_new(true)` (`O_EXCL`) ensures
-/// a pre-existing path with the same name is a hard error, not a silent truncation.
-///
-/// The temp file is removed on any failure.
+/// The temp name uses a CSPRNG 8-byte nonce. The temp file is removed on any failure.
 ///
 /// # Errors
 ///
 /// Returns [`Error::FileWrite`] on any I/O failure.
-#[cfg(unix)]
-fn atomic_overwrite_secret_key(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
-    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-
+fn atomic_replace_file(path: &Path, contents: &[u8], unix_mode: Option<u32>) -> Result<()> {
     validate_windows_path(path)?;
     let tmp_path = sibling_temp_path(path, "tmp");
 
     let result = (|| -> Result<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true) // O_EXCL: fails if path exists — no silent truncation
-            .mode(mode)
-            .custom_flags(libc::O_NOFOLLOW)
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        configure_write_options(&mut options, unix_mode);
+        let mut file = options
             .open(&tmp_path)
             .map_err(|e| Error::file_write(&tmp_path, e))?;
 
-        // File::set_permissions operates on the open fd — immune to path-based TOCTOU races.
-        file.set_permissions(std::fs::Permissions::from_mode(mode))
-            .map_err(|e| Error::file_write(path, e))?;
+        #[cfg(unix)]
+        if let Some(mode) = unix_mode {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(std::fs::Permissions::from_mode(mode))
+                .map_err(|e| Error::file_write(&tmp_path, e))?;
+        }
 
         file.write_all(contents)
             .map_err(|e| Error::file_write(&tmp_path, e))?;
-
-        // Flush data to disk before the rename so a crash after rename doesn't
-        // leave the destination file with the old (or empty) content.
         file.sync_all()
             .map_err(|e| Error::file_write(&tmp_path, e))?;
+        drop(file);
 
-        std::fs::rename(&tmp_path, path).map_err(|e| Error::file_write(path, e))?;
-        sync_parent_directory(path)
+        std::fs::rename(&tmp_path, path).map_err(|e| Error::file_write(path, e))
     })();
 
     if result.is_err()
         && let Err(e) = std::fs::remove_file(&tmp_path)
+        && e.kind() != std::io::ErrorKind::NotFound
     {
         eprintln!(
             "Warning: could not remove '{}': {e}; delete manually",
@@ -373,12 +368,81 @@ fn atomic_overwrite_secret_key(path: &Path, contents: &[u8], mode: u32) -> Resul
         );
     }
 
-    result
+    result?;
+    sync_parent_directory(path)
+}
+
+/// Resolve `path` to the location its directory entry occupies, without following
+/// the final component.
+///
+/// The nearest existing ancestor is canonicalised (resolving symlinks, `.` and `..`)
+/// and the remaining components are applied to it, so the result is defined whether
+/// or not `path` exists. Case aliases on case-insensitive filesystems are not
+/// unified.
+///
+/// # Errors
+///
+/// Returns [`Error::FileWrite`] if an existing ancestor cannot be canonicalised.
+pub fn resolve_destination(path: &Path) -> Result<PathBuf> {
+    fn resolve(path: &Path) -> std::io::Result<PathBuf> {
+        use std::path::Component;
+
+        let Some(parent) = path.parent() else {
+            return Ok(path.to_path_buf());
+        };
+        let parent = match parent.canonicalize() {
+            Ok(canonical) => canonical,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => resolve(parent)?,
+            Err(e) => return Err(e),
+        };
+        Ok(match path.components().next_back() {
+            Some(Component::ParentDir) => parent
+                .parent()
+                .map_or_else(|| parent.clone(), Path::to_path_buf),
+            Some(Component::CurDir) | None => parent,
+            Some(last) => parent.join(last),
+        })
+    }
+
+    std::path::absolute(path)
+        .and_then(|absolute| resolve(&absolute))
+        .map_err(|e| Error::file_write(path, e))
+}
+
+/// Fail with [`Error::OutputAlias`] if `output` names the same file as any of `others`.
+///
+/// `output` is resolved with [`resolve_destination`]. Each existing entry in `others`
+/// is fully canonicalised, following a final symlink to the file it reads; a missing
+/// entry is resolved like `output`. Relative forms, `.`/`..` components and
+/// symlinked directories are therefore detected. A distinct hard-link name is a
+/// different destination and is allowed: replacing it through
+/// [`atomic_replace_file`] leaves the other name's inode untouched.
+///
+/// # Errors
+///
+/// Returns [`Error::OutputAlias`] on a match, or [`Error::FileWrite`] if a path
+/// cannot be resolved.
+pub fn reject_output_alias(output: &Path, others: &[&Path]) -> Result<()> {
+    let destination = resolve_destination(output)?;
+    for &other in others {
+        let resolved = match other.canonicalize() {
+            Ok(canonical) => canonical,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => resolve_destination(other)?,
+            Err(e) => return Err(Error::file_write(other, e)),
+        };
+        if resolved == destination {
+            return Err(Error::OutputAlias {
+                output: output.into(),
+                other: other.into(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Atomically create a new secret key file using write-temp-then-link.
 ///
-/// Identical to [`atomic_overwrite_secret_key`] except it uses `hard_link(2)` instead of
+/// Identical to [`atomic_replace_file`] except it uses `hard_link(2)` instead of
 /// `rename(2)`. `link(2)` fails atomically with `EEXIST` if the destination already
 /// exists, giving `create_new` semantics while still guaranteeing that a partial write
 /// never reaches the final path.
@@ -461,7 +525,7 @@ pub fn write_secret_key_file(
 /// Returns [`Error::FileExists`] if the file exists and `force` is false.
 /// Returns [`Error::FileWrite`] on I/O failure.
 pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool) -> Result<()> {
-    write_file(path.as_ref(), contents.as_bytes(), force, None)
+    write_file(path.as_ref(), contents.as_bytes(), force)
 }
 
 /// Write a signature file.
@@ -473,7 +537,7 @@ pub fn write_public_key_file(path: impl AsRef<Path>, contents: &str, force: bool
 /// Returns [`Error::FileExists`] if the file exists and `force` is false.
 /// Returns [`Error::FileWrite`] on I/O failure.
 pub fn write_signature_file(path: &Path, contents: &str, force: bool) -> Result<()> {
-    write_file(path, contents.as_bytes(), force, None)
+    write_file(path, contents.as_bytes(), force)
 }
 
 /// Check that a file doesn't exceed the maximum size for non-prehashed mode
