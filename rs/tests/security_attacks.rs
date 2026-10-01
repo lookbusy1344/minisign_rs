@@ -379,3 +379,145 @@ fn t1_reject_valid_global_with_forged_primary() {
          even though the global signature is internally consistent"
     );
 }
+
+// ============================================================================
+// T1.12: Weak public keys — universal forgery under the identity key
+// ============================================================================
+
+/// Canonical encodings of the eight Ed25519 points of small order (the 8-torsion
+/// subgroup). libsodium rejects all of them as public keys.
+const SMALL_ORDER_POINTS: [[u8; 32]; 8] = [
+    // identity (order 1)
+    hex_32("0100000000000000000000000000000000000000000000000000000000000000"),
+    // order 2
+    hex_32("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"),
+    // order 4
+    hex_32("0000000000000000000000000000000000000000000000000000000000000000"),
+    hex_32("0000000000000000000000000000000000000000000000000000000000000080"),
+    // order 8
+    hex_32("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"),
+    hex_32("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa"),
+    hex_32("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"),
+    hex_32("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85"),
+];
+
+const IDENTITY_POINT: [u8; 32] = SMALL_ORDER_POINTS[0];
+
+const fn hex_32(s: &str) -> [u8; 32] {
+    const fn nibble(c: u8) -> u8 {
+        match c {
+            b'0'..=b'9' => c - b'0',
+            b'a'..=b'f' => c - b'a' + 10,
+            _ => panic!("invalid hex digit"),
+        }
+    }
+    let s = s.as_bytes();
+    let mut out = [0u8; 32];
+    let mut i = 0;
+    while i < 32 {
+        out[i] = (nibble(s[2 * i]) << 4) | nibble(s[2 * i + 1]);
+        i += 1;
+    }
+    out
+}
+
+/// Signature `(R, S)` with `R` = identity and `S` = 0. Under the identity public
+/// key the cofactorless equation `[S]B = R + [k]A` holds for every message.
+fn identity_forgery_signature() -> Signature {
+    let mut bytes = [0u8; SIGNATURE_BYTES];
+    bytes[..32].copy_from_slice(&IDENTITY_POINT);
+    Signature::from_bytes(bytes)
+}
+
+#[test]
+fn t1_reject_identity_key_universal_forgery() {
+    let identity_pk = PublicKey::from_bytes(IDENTITY_POINT);
+    let forged = identity_forgery_signature();
+
+    for message in [&b"first"[..], b"second", b"", &[0xffu8; 4096]] {
+        let result = verify(&identity_pk, message, &forged);
+        assert!(
+            matches!(result, Err(Error::InvalidPublicKey(_))),
+            "identity public key must be rejected as weak, got {result:?}"
+        );
+    }
+}
+
+#[test]
+fn t1_reject_all_small_order_public_keys_as_invalid() {
+    let forged = identity_forgery_signature();
+    let (secret_key, _pk, _keynum) = generate_keypair().unwrap();
+    let honest_sig = sign(&secret_key, b"message").unwrap();
+
+    for point in SMALL_ORDER_POINTS {
+        let weak_pk = PublicKey::from_bytes(point);
+        for sig in [&forged, &honest_sig] {
+            let result = verify(&weak_pk, b"message", sig);
+            assert!(
+                matches!(result, Err(Error::InvalidPublicKey(_))),
+                "small-order public key {point:02x?} must be rejected, got {result:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn t1_cli_rejects_forged_minisig_under_identity_key() {
+    use assert_cmd::Command;
+    use base64::{Engine, engine::general_purpose::STANDARD};
+
+    const KEYNUM: [u8; 8] = [0x42; 8];
+    const TRUSTED_COMMENT: &str = "forged trusted comment";
+
+    let temp_dir = TempDir::new().unwrap();
+    let pk_path = temp_dir.path().join("weak.pub");
+    let msg_path = temp_dir.path().join("message.txt");
+    let sig_path = temp_dir.path().join("message.txt.minisig");
+
+    let pk_blob = [b"Ed".as_slice(), &KEYNUM, &IDENTITY_POINT].concat();
+    std::fs::write(
+        &pk_path,
+        format!(
+            "untrusted comment: synthetic weak key\n{}\n",
+            STANDARD.encode(pk_blob)
+        ),
+    )
+    .unwrap();
+    std::fs::write(&msg_path, b"arbitrary attacker-chosen content").unwrap();
+
+    let forged = identity_forgery_signature();
+    let sig_blob = [b"ED".as_slice(), &KEYNUM, forged.as_bytes()].concat();
+    std::fs::write(
+        &sig_path,
+        format!(
+            "untrusted comment: synthetic forgery\n{}\ntrusted comment: {TRUSTED_COMMENT}\n{}\n",
+            STANDARD.encode(sig_blob),
+            STANDARD.encode(forged.as_bytes())
+        ),
+    )
+    .unwrap();
+
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("minisign_rs"))
+        .arg("-V")
+        .arg("-p")
+        .arg(&pk_path)
+        .arg("-m")
+        .arg(&msg_path)
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "forged signature must fail verification; stdout: {stdout}"
+    );
+    assert!(
+        !stdout.contains(TRUSTED_COMMENT) && !stderr.contains(TRUSTED_COMMENT),
+        "trusted comment must not be printed for a forged signature"
+    );
+    assert!(
+        !stdout.contains("verified"),
+        "no success message for a forged signature"
+    );
+}

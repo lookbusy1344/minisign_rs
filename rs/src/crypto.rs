@@ -6,7 +6,7 @@
 use crate::errors::{Error, Result};
 use blake2::digest::consts::U32;
 use blake2::{Blake2b, Blake2b512, Digest};
-use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, VerifyingKey};
 use rand_core::OsRng;
 use scrypt::{Params as ScryptParams, scrypt};
 use std::io::Read;
@@ -267,15 +267,25 @@ pub fn sign(secret_key: &SecretKey, message: &[u8]) -> Result<Signature> {
 ///
 /// # Errors
 ///
-/// Returns `Error::VerificationFailed` if the signature is invalid or malformed
+/// Returns `Error::InvalidPublicKey` if the public key is not a valid curve point
+/// or has small order, and `Error::VerificationFailed` if the signature is invalid
+/// or malformed.
+///
+/// Verification uses dalek's strict mode, which rejects small-order public keys and
+/// small-order `R`, matching libsodium as used by C minisign.
 pub fn verify(public_key: &PublicKey, message: &[u8], signature: &Signature) -> Result<()> {
-    let verifying_key =
-        VerifyingKey::from_bytes(public_key.as_bytes()).map_err(|_| Error::InvalidSignature)?;
+    let verifying_key = VerifyingKey::from_bytes(public_key.as_bytes())
+        .map_err(|_| Error::InvalidPublicKey("not a valid Ed25519 point".to_string()))?;
+    if verifying_key.is_weak() {
+        return Err(Error::InvalidPublicKey(
+            "small-order Ed25519 point".to_string(),
+        ));
+    }
 
     let sig = DalekSignature::from_bytes(signature.as_bytes());
 
     verifying_key
-        .verify(message, &sig)
+        .verify_strict(message, &sig)
         .map_err(|_| Error::VerificationFailed)
 }
 
