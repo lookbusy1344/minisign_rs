@@ -929,6 +929,23 @@ fn resolve_force_weak_kdf(cli: &Cli) -> bool {
     cfg!(debug_assertions) && cli.force_weak_kdf
 }
 
+/// Open a password file for reading without blocking on special files.
+///
+/// On Unix, `O_NONBLOCK` makes opening a FIFO return at once instead of waiting for a
+/// writer, so the caller's regular-file check on the handle runs. It does not affect
+/// reads from a regular file. Symlinks are followed: container secret mounts present
+/// password files as symlinks.
+fn open_password_file(path: &std::path::Path) -> io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    options.open(path)
+}
+
 /// Prompt for password using rpassword or read from file
 ///
 /// Returns a `Zeroizing<String>` that automatically clears the password from memory when dropped.
@@ -942,7 +959,7 @@ fn prompt_password(
             "Warning: --password-file is insecure and should only be used for testing purposes."
         );
         // Open once; derive metadata from the fd to avoid TOCTOU races.
-        let file = File::open(path)
+        let file = open_password_file(path)
             .map_err(|e| Error::Io(format!("Failed to open password file: {e}")))?;
         let metadata = file
             .metadata()
