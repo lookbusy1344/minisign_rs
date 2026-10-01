@@ -59,6 +59,12 @@ fn run() -> Result<i32> {
         .action()
         .ok_or_else(|| Error::Usage("No action specified. Use -G, -S, -V, -R, -K, or -I".into()))?;
 
+    if matches!(action, Action::Generate | Action::Recreate)
+        && let Some(comment) = cli.untrusted_comment.as_deref()
+    {
+        minisign::validation::validate_key_comment(comment)?;
+    }
+
     match action {
         Action::Generate => handle_generate(&cli),
         Action::Sign => handle_sign(&cli),

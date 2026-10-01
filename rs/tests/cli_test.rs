@@ -3742,6 +3742,57 @@ fn test_generate_rejects_multiline_comment() {
     assert!(!public_key.exists(), "public key file must not be created");
 }
 
+#[test]
+fn key_comments_are_rejected_before_cli_password_retrieval() {
+    use minisign::{
+        crypto::{KDF_SALT_BYTES, calculate_kdf_params, generate_keypair},
+        keys::SeckeyStruct,
+        signature::COMMENTMAXBYTES,
+    };
+
+    const TEST_LOG_N: u8 = 10;
+    let dir = TempDir::new().unwrap();
+    let secret_path = dir.path().join("encrypted.key");
+    let public_path = dir.path().join("existing.pub");
+    let (secret, _, keynum) = generate_keypair().unwrap();
+    let (opslimit, memlimit) = calculate_kdf_params(TEST_LOG_N, false).unwrap();
+    let seckey = SeckeyStruct::new_encrypted(
+        keynum,
+        &secret,
+        b"synthetic password",
+        [0u8; KDF_SALT_BYTES],
+        opslimit,
+        memlimit,
+        false,
+    )
+    .unwrap();
+    let original = seckey.to_file_contents("synthetic encrypted key").unwrap();
+    fs::write(&secret_path, original.as_bytes()).unwrap();
+    fs::write(&public_path, b"existing public output").unwrap();
+
+    let overlong = "a".repeat(COMMENTMAXBYTES);
+    for action in ["-G", "-R"] {
+        for comment in ["line\nbreak", "carriage\rreturn", "", overlong.as_str()] {
+            minisign_cmd()
+                .args([action, "--force", "-q", "-s"])
+                .arg(&secret_path)
+                .arg("-p")
+                .arg(&public_path)
+                .arg("-c")
+                .arg(comment)
+                .arg("--password-file")
+                .arg(dir.path().join("missing-password"))
+                .assert()
+                .failure()
+                .stderr(predicate::str::contains("invalid comment"))
+                .stderr(predicate::str::contains("password file").not());
+
+            assert_eq!(fs::read(&secret_path).unwrap(), original.as_bytes());
+            assert_eq!(fs::read(&public_path).unwrap(), b"existing public output");
+        }
+    }
+}
+
 // --allow-kdf-fallback is a deprecated no-op: scrypt aborts on allocation failure,
 // so no fallback can run. Scripts that pass it keep working and see a warning.
 #[test]
