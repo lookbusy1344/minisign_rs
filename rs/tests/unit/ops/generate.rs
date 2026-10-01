@@ -3,13 +3,14 @@
 use minisign::ops::file_utils::{write_public_key_file, write_secret_key_file};
 #[cfg(all(debug_assertions, unix))]
 use minisign::ops::generate::set_force_overwrite_lock_timeout_for_tests;
+#[cfg(debug_assertions)]
+use minisign::ops::generate::{
+    inject_commit_failure_before_public_rename, inject_commit_failure_before_secret_rename,
+};
 use minisign::{
     errors::Error,
     keys::{PubkeyStruct, SeckeyStruct},
-    ops::generate::{
-        GenerateOptions, ensure_parent_directory, generate, generate_with_log_n,
-        inject_commit_failure_before_public_rename, inject_commit_failure_before_secret_rename,
-    },
+    ops::generate::{GenerateOptions, ensure_parent_directory, generate, generate_with_log_n},
 };
 use std::fs;
 #[cfg(all(debug_assertions, unix))]

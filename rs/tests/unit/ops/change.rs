@@ -10,6 +10,7 @@ use minisign::{
         verify::verify_message_signature,
     },
 };
+#[cfg(debug_assertions)]
 use rand::Rng;
 use std::fs;
 use tempfile::TempDir;

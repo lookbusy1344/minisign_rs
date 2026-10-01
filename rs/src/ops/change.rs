@@ -56,6 +56,10 @@ impl<'a> ChangeOptions<'a> {
     }
 
     /// Force weak KDF parameters for testing (DEBUG ONLY)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `force` is `true` in a release build.
     #[must_use]
     pub const fn force_weak_kdf(mut self, force: bool) -> Self {
         #[cfg(not(debug_assertions))]
