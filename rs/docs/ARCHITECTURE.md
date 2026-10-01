@@ -82,7 +82,9 @@ Zeroization covers the buffers this crate owns and dalek's signing state:
   expanded state wipe on drop. A compile-time assertion in `crypto.rs` enforces this.
 
 It does not cover scrypt's internal working memory, copies made by the compiler or
-allocator, swap, or core dumps. Locking memory would need unsafe code and is out of
+allocator, swap, or core dumps. Public-key loading for verification (`-V -p`) uses
+unguarded buffers: pointing `-p` at a secret-key file leaves its decoded bytes in
+freed memory. Inspection (`-I`) decodes every key file into guarded storage. Locking memory would need unsafe code and is out of
 scope.
 
 ### Binary Format Types

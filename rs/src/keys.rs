@@ -850,15 +850,23 @@ impl SeckeyStruct {
     /// Returns `Error::InvalidComment` if the comment fails
     /// [`validate_untrusted_comment`](crate::validation::validate_untrusted_comment).
     pub fn to_file_contents(&self, comment: &str) -> Result<Zeroizing<String>> {
+        const COMMENT_PREFIX: &str = "untrusted comment: ";
         crate::validation::validate_untrusted_comment(comment)?;
-        // Zeroize the raw bytes, base64 string, and the final formatted string:
-        // each is a reversible encoding of secret key material in memory.
+
+        // Zeroize the raw bytes, base64 string, and the final string: each is a
+        // reversible encoding of secret key material. Bytes are encoded by reference,
+        // and the output is allocated at its exact length so it never reallocates and
+        // leaves no unwiped partial copy.
         let bytes = Zeroizing::new(self.to_bytes());
-        let base64 = Zeroizing::new(encode_base64(*bytes));
-        let base64_str: &str = &base64;
-        Ok(Zeroizing::new(format!(
-            "untrusted comment: {comment}\n{base64_str}\n"
-        )))
+        let base64 = Zeroizing::new(encode_base64(bytes.as_slice()));
+        let len = COMMENT_PREFIX.len() + comment.len() + 1 + base64.len() + 1;
+        let mut contents = Zeroizing::new(String::with_capacity(len));
+        contents.push_str(COMMENT_PREFIX);
+        contents.push_str(comment);
+        contents.push('\n');
+        contents.push_str(&base64);
+        contents.push('\n');
+        Ok(contents)
     }
 }
 

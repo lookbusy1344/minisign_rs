@@ -247,7 +247,11 @@ pub fn generate_keypair() -> Result<(SecretKey, PublicKey, KeyNum)> {
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key = signing_key.verifying_key();
 
-    let secret_key = SecretKey::from_bytes(signing_key.to_keypair_bytes());
+    // Copy the keypair bytes into the zeroizing key in place; the dalek temporary is
+    // guarded so it is wiped on drop rather than passed by value.
+    let keypair_bytes = Zeroizing::new(signing_key.to_keypair_bytes());
+    let mut secret_key = SecretKey([0u8; SECRET_KEY_BYTES]);
+    secret_key.0.copy_from_slice(&*keypair_bytes);
     let public_key = PublicKey::from_bytes(verifying_key.to_bytes());
     let keynum = KeyNum::generate()?;
 

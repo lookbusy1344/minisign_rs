@@ -256,3 +256,13 @@ fn change_password_round_trips_through_guarded_loader() {
         expected
     );
 }
+
+// The serialized secret key is allocated at its exact length, so building it never
+// reallocates and leaves no unwiped partial copy behind.
+#[test]
+fn secret_key_serialization_allocates_exact_length() {
+    for comment in ["x", "minisign encrypted secret key", &"c".repeat(1000)] {
+        let contents = encrypted_key().to_file_contents(comment).unwrap();
+        assert_eq!(contents.capacity(), contents.len(), "{comment}");
+    }
+}
