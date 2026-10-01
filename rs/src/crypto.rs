@@ -13,6 +13,13 @@ use std::io::Read;
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
+// dalek wipes `SigningKey` and its expanded signing state only with its `zeroize`
+// feature. Fail the build if the dependency graph loses that feature.
+const _: () = {
+    const fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
+    assert_zeroize_on_drop::<SigningKey>();
+};
+
 // Constants from the minisign specification
 pub const SIGNATURE_BYTES: usize = 64;
 pub const PUBLIC_KEY_BYTES: usize = 32;
