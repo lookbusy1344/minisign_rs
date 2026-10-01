@@ -11,6 +11,7 @@ use crate::{
     errors::Error,
     formats::encode_base64,
     keys::{PubkeyStruct, SeckeyStruct},
+    validation::validate_key_comment,
 };
 use rand_core::RngCore;
 use std::{
@@ -253,6 +254,11 @@ pub fn generate_with_log_n(
         return Err(Error::PasswordRequired);
     }
 
+    // Validate the comment before key generation, KDF work, or any filesystem change
+    if let Some(comment) = options.comment {
+        validate_key_comment(comment)?;
+    }
+
     // Generate the keypair
     let (secret_key, public_key, keynum) = generate_keypair()?;
 
@@ -296,15 +302,7 @@ pub fn generate_with_log_n(
     let keynum_hex = keynum.to_key_id();
     let keynum_words = crate::wordlist::keynum_to_words(&keynum);
     let default_comment = format!("minisign public key {keynum_hex}");
-    let comment = match options.comment {
-        Some("") => {
-            return Err(Error::InvalidComment(
-                "comment must not be empty; omit --comment to use the default".to_string(),
-            ));
-        }
-        Some(c) => c,
-        None => &default_comment,
-    };
+    let comment = options.comment.unwrap_or(&default_comment);
 
     // Ensure parent directories exist
     ensure_parent_directory(options.secret_key_file)?;
@@ -329,8 +327,8 @@ pub fn generate_with_log_n(
         ));
     }
 
-    let seckey_contents = seckey.to_file_contents(seckey_comment);
-    let pubkey_contents = pubkey.to_file_contents(comment);
+    let seckey_contents = seckey.to_file_contents(seckey_comment)?;
+    let pubkey_contents = pubkey.to_file_contents(comment)?;
     if force {
         write_keypair_files_with_overwrite(
             options.secret_key_file,

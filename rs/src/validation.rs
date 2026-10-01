@@ -15,6 +15,7 @@
 //! - Extracting them would scatter the algorithm across multiple definitions
 
 use crate::errors::{Error, Result};
+use crate::signature::{COMMENT_PREFIX_SIZE, COMMENTMAXBYTES};
 
 /// Validate that a string contains only printable characters
 ///
@@ -288,4 +289,40 @@ pub fn validate_windows_path(path: &std::path::Path) -> Result<()> {
 #[inline]
 pub fn validate_windows_path(_path: &std::path::Path) -> Result<()> {
     Ok(())
+}
+
+/// Validate an untrusted comment for a signature or key file
+///
+/// The comment must be printable (no line breaks or other control characters) so it
+/// cannot change the file's line structure, and short enough that the full
+/// `untrusted comment: <comment>` line fits C minisign's `COMMENTMAXBYTES` line read.
+///
+/// # Errors
+///
+/// Returns `Error::InvalidComment` if the comment contains a control character
+/// other than tab, or is `COMMENTMAXBYTES - COMMENT_PREFIX_SIZE` bytes or longer.
+pub fn validate_untrusted_comment(comment: &str) -> Result<()> {
+    validate_comment(comment)?;
+    if comment.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
+        return Err(Error::InvalidComment(format!(
+            "untrusted comment exceeds maximum length of {} bytes",
+            COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1
+        )));
+    }
+    Ok(())
+}
+
+/// Validate a user-supplied public key comment (`-c`)
+///
+/// # Errors
+///
+/// Returns `Error::InvalidComment` if the comment is empty or fails
+/// [`validate_untrusted_comment`].
+pub fn validate_key_comment(comment: &str) -> Result<()> {
+    if comment.is_empty() {
+        return Err(Error::InvalidComment(
+            "comment must not be empty; omit --comment to use the default".to_string(),
+        ));
+    }
+    validate_untrusted_comment(comment)
 }

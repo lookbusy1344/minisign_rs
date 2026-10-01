@@ -190,7 +190,7 @@ pub fn change_with_log_n(
         "minisign encrypted secret key"
     };
 
-    let seckey_contents = new_seckey.to_file_contents(seckey_comment);
+    let seckey_contents = new_seckey.to_file_contents(seckey_comment)?;
     write_secret_key_file(options.secret_key_file, &seckey_contents, true)?;
 
     // Capture new credential ID for credential store

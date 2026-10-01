@@ -3718,3 +3718,26 @@ fn test_verify_batch_failure_summary_visible_in_quiet_mode() {
         "failed file name must appear in summary, got:\n{stderr}"
     );
 }
+
+// SA-02: a generation comment carrying a substitute key line is rejected.
+#[test]
+fn test_generate_rejects_multiline_comment() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let secret_key = temp_dir.path().join("test.key");
+    let public_key = temp_dir.path().join("test.pub");
+
+    minisign_cmd()
+        .arg("-G")
+        .arg("-W")
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-p")
+        .arg(&public_key)
+        .arg("-c")
+        .arg("synthetic metadata\nRWQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        .assert()
+        .failure();
+
+    assert!(!secret_key.exists(), "secret key file must not be created");
+    assert!(!public_key.exists(), "public key file must not be created");
+}

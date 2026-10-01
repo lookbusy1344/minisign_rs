@@ -9,7 +9,7 @@ use crate::crypto::{
 };
 use crate::errors::Error;
 use crate::formats::{decode_base64, encode_base64};
-use crate::validation::validate_comment;
+use crate::validation::{validate_comment, validate_untrusted_comment};
 
 /// Size of the signature structure in bytes
 pub const SIG_STRUCT_SIZE: usize = 2 + KEYNUM_BYTES + SIGNATURE_BYTES; // 74 bytes
@@ -222,17 +222,6 @@ pub struct SignatureBox {
     sig_struct: SigStruct,
     trusted_comment: String,
     global_signature: Signature,
-}
-
-fn validate_untrusted_comment(untrusted: &str) -> Result<()> {
-    validate_comment(untrusted)?;
-    if untrusted.len() >= COMMENTMAXBYTES - COMMENT_PREFIX_SIZE {
-        return Err(Error::InvalidComment(format!(
-            "untrusted comment exceeds maximum length of {} bytes",
-            COMMENTMAXBYTES - COMMENT_PREFIX_SIZE - 1
-        )));
-    }
-    Ok(())
 }
 
 fn validate_trusted_comment(trusted: &str) -> Result<()> {

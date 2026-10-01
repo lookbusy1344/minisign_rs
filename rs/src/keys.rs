@@ -227,11 +227,16 @@ impl PubkeyStruct {
     }
 
     /// Serialize to file format (comment + base64)
-    #[must_use]
-    pub fn to_file_contents(&self, comment: &str) -> String {
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::InvalidComment` if the comment fails
+    /// [`validate_untrusted_comment`](crate::validation::validate_untrusted_comment).
+    pub fn to_file_contents(&self, comment: &str) -> Result<String> {
+        crate::validation::validate_untrusted_comment(comment)?;
         let bytes = self.to_bytes();
         let base64 = encode_base64(bytes);
-        format!("untrusted comment: {comment}\n{base64}\n")
+        Ok(format!("untrusted comment: {comment}\n{base64}\n"))
     }
 }
 
@@ -858,14 +863,21 @@ impl SeckeyStruct {
     }
 
     /// Serialize to file format (comment + base64)
-    #[must_use]
-    pub fn to_file_contents(&self, comment: &str) -> Zeroizing<String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::InvalidComment` if the comment fails
+    /// [`validate_untrusted_comment`](crate::validation::validate_untrusted_comment).
+    pub fn to_file_contents(&self, comment: &str) -> Result<Zeroizing<String>> {
+        crate::validation::validate_untrusted_comment(comment)?;
         // Zeroize the raw bytes, base64 string, and the final formatted string:
         // each is a reversible encoding of secret key material in memory.
         let bytes = Zeroizing::new(self.to_bytes());
         let base64 = Zeroizing::new(encode_base64(*bytes));
         let base64_str: &str = &base64;
-        Zeroizing::new(format!("untrusted comment: {comment}\n{base64_str}\n"))
+        Ok(Zeroizing::new(format!(
+            "untrusted comment: {comment}\n{base64_str}\n"
+        )))
     }
 }
 
