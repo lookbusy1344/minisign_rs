@@ -9,7 +9,14 @@ Before the first VCS command, run `jj --ignore-working-copy root`. This may be a
 jj has no commit hooks. Run the pre-commit checks before `jj commit`, `jj describe` (when finalising a change) and `jj squash`.
 If a change touches only non-code files (`*.md`), skip the cargo steps.
 
-Before pushing or moving a shared bookmark, run `rs/scripts/pre-push.sh`. By default it checks the tip only. In a jj repo the tip is the newest non-empty mutable revision; the script formats it with `jj fix`, then runs fmt check, build, pedantic clippy, the `unsafe_code` clippy pass and nextest. In a plain Git repo the tip is HEAD; the script refuses uncommitted changes under `rs/`, runs `cargo fmt` and fails if it changed files, then runs the same checks. Install it as a Git hook with `ln -sf ../../rs/scripts/pre-push.sh .git/hooks/pre-push`; jj does not run Git hooks. `rs/scripts/agent-pre-push-hook.sh` runs the tip check on every push command (`jj git push`, `jj pmain`, `git push`) and blocks the push on failure. Claude Code (`.claude/settings.json`) and Codex (`.codex/hooks.json`) call it as a `PreToolUse` hook. The hook checks the tip of `@` (HEAD in Git), not the ref being pushed. Push only the bookmark or branch you are working on, with `@` on top of it. CI runs build, clippy and tests on every push to `master` and `lb_rust`.
+Before pushing or moving a shared bookmark, run `rs/scripts/pre-push.sh`. It checks the tip only:
+
+- jj: the tip is the newest non-empty mutable revision. The script formats it with `jj fix`, then runs fmt check, build, pedantic clippy, the `unsafe_code` clippy pass and nextest.
+- Git: the tip is HEAD. The script refuses uncommitted changes under `rs/`, runs `cargo fmt` and fails if that changed files, then runs the same checks. Install it as a hook with `ln -sf ../../rs/scripts/pre-push.sh .git/hooks/pre-push`. jj does not run Git hooks.
+
+`rs/scripts/agent-pre-push-hook.sh` runs the script before every `jj git push` and `git push`, and blocks the push on failure. Claude Code (`.claude/settings.json`) and Codex (`.codex/hooks.json`) call it as a `PreToolUse` hook. It checks the tip, not the ref being pushed, so push only the branch you are working on. In jj, that is the bookmark on `@-`, with an empty `@` above it.
+
+CI runs build, clippy and tests on every push to `master` and `lb_rust`.
 
 Push only on explicit request. "Push this" means: if `@` is non-empty, `jj commit` it (after the pre-commit checks). Move the bookmark to `@-` with `jj bookmark set <name> -r @-`, then `jj git push --bookmark <name>`. Use the feature bookmark already on the stack; otherwise `lb_rust`. Do not use `jj git push -c`.
 
