@@ -178,8 +178,8 @@ fn test_inspect_public_key() {
     assert_eq!(result.key_type(), KeyType::Public);
     assert_eq!(result.security_level(), None);
     assert!(result.kdf_info().is_none());
-    assert!(!result.key_id().is_empty());
-    assert!(!result.key_id_words().is_empty());
+    assert_ne!(result.key_id(), "");
+    assert_ne!(result.key_id_words(), "");
     // Should have exactly 8 words (one per byte in keynum)
     assert_eq!(result.key_id_words().split_whitespace().count(), 8);
 }
@@ -375,11 +375,11 @@ fn test_inspect_base64_public_key() {
     assert_eq!(result.key_type(), KeyType::Public);
     assert_eq!(result.security_level(), None);
     assert!(result.kdf_info().is_none());
-    assert!(!result.key_id().is_empty());
+    assert_ne!(result.key_id(), "");
     // Key ID should be 16 uppercase hex characters (matches C minisign format)
     assert_eq!(result.key_id().len(), 16);
     assert!(result.key_id().chars().all(|c| c.is_ascii_hexdigit()));
-    assert!(!result.key_id_words().is_empty());
+    assert_ne!(result.key_id_words(), "");
     // Should have exactly 8 words (one per byte in keynum)
     assert_eq!(result.key_id_words().split_whitespace().count(), 8);
 }
@@ -554,7 +554,7 @@ fn test_inspect_signature_prehashed() {
         inspect_signature(Path::new("tests/fixtures/signatures/hello.txt.minisig")).unwrap();
 
     // Should extract key ID
-    assert!(!result.key_id().is_empty());
+    assert_ne!(result.key_id(), "");
     assert_eq!(result.key_id().len(), 16); // 16 hex chars
     assert!(result.key_id().chars().all(|c| c.is_ascii_hexdigit()));
     assert!(
@@ -565,7 +565,7 @@ fn test_inspect_signature_prehashed() {
     );
 
     // Should have word list
-    assert!(!result.key_id_words().is_empty());
+    assert_ne!(result.key_id_words(), "");
     assert_eq!(result.key_id_words().split_whitespace().count(), 8);
 
     // Should detect prehashed algorithm

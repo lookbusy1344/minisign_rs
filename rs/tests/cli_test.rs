@@ -287,7 +287,7 @@ fn test_quiet_mode() {
         .clone();
 
     // Quiet mode should produce no output
-    assert!(output.is_empty());
+    assert_eq!(output, b"");
 
     // Sign with quiet mode (use -W since key is unencrypted)
     let output = minisign_cmd()
@@ -304,7 +304,7 @@ fn test_quiet_mode() {
         .stdout
         .clone();
 
-    assert!(output.is_empty());
+    assert_eq!(output, b"");
 
     // Verify with quiet mode
     let output = minisign_cmd()
@@ -320,7 +320,7 @@ fn test_quiet_mode() {
         .stdout
         .clone();
 
-    assert!(output.is_empty());
+    assert_eq!(output, b"");
 }
 
 #[test]
@@ -1180,7 +1180,7 @@ fn test_quiet_long_name() {
         .stdout
         .clone();
 
-    assert!(output.is_empty());
+    assert_eq!(output, b"");
 }
 
 #[test]

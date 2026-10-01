@@ -149,7 +149,7 @@ fn recreate_force_replaces_existing_public_key() {
     fx.recreate_to(&fx.public_key).unwrap();
 
     PubkeyStruct::from_file_contents(&fs::read_to_string(&fx.public_key).unwrap()).unwrap();
-    assert!(fx.staged_files().is_empty());
+    assert_eq!(fx.staged_files(), Vec::<PathBuf>::new());
 }
 
 // ----------------------------------------------------------------------------
@@ -238,7 +238,7 @@ fn batch_sign_rejects_outputs_aliasing_any_input_before_writing() {
         assert_eq!(fs::read(&first).unwrap(), b"message content");
         assert_eq!(fs::read(&second).unwrap(), b"second input");
         assert!(!fx.path("message.txt.minisig.minisig").exists());
-        assert!(fx.staged_files().is_empty());
+        assert_eq!(fx.staged_files(), Vec::<PathBuf>::new());
     }
 }
 
@@ -306,7 +306,7 @@ fn sign_force_locked_destination_preserves_existing_bytes() {
 
     assert_eq!(fs::read(&output).unwrap(), b"existing output");
     assert_eq!(fs::read(&message).unwrap(), b"message content");
-    assert!(fx.staged_files().is_empty());
+    assert_eq!(fx.staged_files(), Vec::<PathBuf>::new());
 }
 
 // ----------------------------------------------------------------------------
