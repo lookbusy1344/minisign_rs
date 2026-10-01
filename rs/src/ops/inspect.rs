@@ -6,6 +6,7 @@
 use crate::constants::{PRODUCTION_MEMLIMIT, PRODUCTION_OPSLIMIT};
 use crate::credential_store::CredentialStatus;
 use crate::errors::{Error, Result};
+use crate::formats::decode_base64_into;
 use crate::keys::{PubkeyStruct, SeckeyStruct};
 use crate::ops::file_utils::{
     MAX_KEY_FILE_BYTES, MAX_SIGNATURE_FILE_BYTES, read_file_bounded, read_secret_file_bounded,
@@ -228,6 +229,27 @@ fn read_key_file(path: &Path) -> Result<Zeroizing<Vec<u8>>> {
         .map_err(|e| Error::Io(format!("Failed to read key file: {e}")))
 }
 
+// The untrusted comment can mislabel a secret key as public, and malformed
+// secret keys can reach the public fallback. Guard decoding on both paths.
+fn decode_inspection_public_key(contents: &str) -> Result<Zeroizing<Vec<u8>>> {
+    let data_line = contents
+        .lines()
+        .nth(1)
+        .ok_or_else(|| Error::InvalidPublicKey("missing comment or data line".to_string()))?;
+    // Decoded base64 is never longer than its input. Allocate before filling and
+    // never grow the buffer; the file reader already bounds the input size.
+    let mut decoded = Zeroizing::new(vec![0u8; data_line.len()]);
+    let len = decode_base64_into(data_line, &mut decoded)?;
+    decoded.truncate(len);
+    Ok(decoded)
+}
+
+fn inspect_public_key_file(contents: &str) -> Result<InspectResult> {
+    let decoded = decode_inspection_public_key(contents)?;
+    let pubkey = PubkeyStruct::from_bytes(&decoded)?;
+    Ok(inspect_public_key(&pubkey))
+}
+
 /// Inspect a key file and return detailed information
 ///
 /// # Errors
@@ -246,17 +268,14 @@ pub fn inspect(options: &InspectOptions<'_>) -> Result<InspectResult> {
             let seckey = SeckeyStruct::from_file_contents(contents)?;
             inspect_secret_key(&seckey, options.check_credential_store)
         }
-        Some(KeyFileType::Public) => {
-            let pubkey = PubkeyStruct::from_file_contents(contents)?;
-            Ok(inspect_public_key(&pubkey))
-        }
+        Some(KeyFileType::Public) => inspect_public_key_file(contents),
         None => {
             // Non-standard comment — try both parsers for backward compatibility.
             if let Ok(seckey) = SeckeyStruct::from_file_contents(contents) {
                 return inspect_secret_key(&seckey, options.check_credential_store);
             }
-            if let Ok(pubkey) = PubkeyStruct::from_file_contents(contents) {
-                return Ok(inspect_public_key(&pubkey));
+            if let Ok(result) = inspect_public_key_file(contents) {
+                return Ok(result);
             }
             Err(Error::InvalidKeyFormat(
                 "File is not a valid minisign key".to_string(),
@@ -357,17 +376,14 @@ pub fn inspect_private(key_file: &Path, password: &[u8]) -> Result<InspectResult
             let seckey = SeckeyStruct::from_file_contents(contents)?;
             inspect_private_with_key(&seckey, password)
         }
-        Some(KeyFileType::Public) => {
-            let pubkey = PubkeyStruct::from_file_contents(contents)?;
-            Ok(inspect_public_key(&pubkey))
-        }
+        Some(KeyFileType::Public) => inspect_public_key_file(contents),
         None => {
             // Non-standard comment — try both parsers for backward compatibility.
             if let Ok(seckey) = SeckeyStruct::from_file_contents(contents) {
                 return inspect_private_with_key(&seckey, password);
             }
-            if let Ok(pubkey) = PubkeyStruct::from_file_contents(contents) {
-                return Ok(inspect_public_key(&pubkey));
+            if let Ok(result) = inspect_public_key_file(contents) {
+                return Ok(result);
             }
             Err(Error::InvalidKeyFormat(
                 "File is not a valid minisign key".to_string(),
@@ -600,5 +616,19 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn inspection_public_decoder_guards_mislabelled_secret_material() {
+        let (secret, _, keynum) = crate::crypto::generate_keypair().unwrap();
+        let key = SeckeyStruct::new_unencrypted(keynum, &secret);
+        let contents = key.to_file_contents("minisign public key").unwrap();
+        let decoded: Zeroizing<Vec<u8>> = decode_inspection_public_key(&contents).unwrap();
+
+        assert_eq!(&decoded[..], &key.to_bytes());
+        assert!(matches!(
+            PubkeyStruct::from_bytes(&decoded),
+            Err(Error::InvalidPublicKey(_))
+        ));
     }
 }

@@ -74,6 +74,8 @@ Zeroization covers the buffers this crate owns and dalek's signing state:
 - `SecretKey`, `SeckeyStruct` and passwords (`Zeroizing<String>`) wipe on drop.
 - Secret-key files are read into a `Zeroizing<Vec<u8>>` allocated once at its maximum
   size, parsed by borrowing, and base64-decoded into a `Zeroizing` fixed-size array.
+- Inspection also guards public-parser decoding: untrusted comments may mislabel
+  secret keys, and malformed secret keys can reach the public-parser fallback.
 - Decrypted key bytes and checksums in `SeckeyStruct::decrypt()` are `Zeroizing` on
   both the success and checksum-failure paths.
 - `ed25519-dalek` is built with its `zeroize` feature, so `SigningKey` and its

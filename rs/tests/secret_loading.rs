@@ -173,6 +173,37 @@ fn malformed_data_line_is_rejected_by_every_loader() {
 }
 
 #[test]
+fn inspection_rejects_mislabelled_and_malformed_plaintext_secret_keys() {
+    let dir = TempDir::new().unwrap();
+    let key = unencrypted_key();
+    let mislabelled = write(
+        dir.path(),
+        "mislabelled.key",
+        key.to_file_contents("minisign public key").unwrap(),
+    );
+    for err in [
+        inspect(&InspectOptions::new(&mislabelled).skip_credential_store_check()).unwrap_err(),
+        inspect_private(&mislabelled, PASSWORD).unwrap_err(),
+    ] {
+        assert!(matches!(err, Error::InvalidPublicKey(_)), "{err}");
+    }
+
+    let mut malformed = Zeroizing::new(key.to_bytes());
+    malformed[0] = b'X';
+    let encoded = Zeroizing::new(minisign::formats::encode_base64(malformed.as_slice()));
+    let encoded_text: &str = &encoded;
+    let contents = Zeroizing::new(format!("arbitrary comment\n{encoded_text}\n"));
+    let path = write(dir.path(), "malformed.key", contents.as_bytes());
+    for err in [
+        inspect(&InspectOptions::new(&path).skip_credential_store_check()).unwrap_err(),
+        inspect_private(&path, PASSWORD).unwrap_err(),
+    ] {
+        assert!(matches!(err, Error::InvalidKeyFormat(_)), "{err}");
+        assert!(!err.to_string().contains(&*encoded));
+    }
+}
+
+#[test]
 fn nonstandard_comment_secret_key_loads_through_every_path() {
     let dir = TempDir::new().unwrap();
     let seckey = encrypted_key();
