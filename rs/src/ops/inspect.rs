@@ -381,6 +381,18 @@ fn inspect_secret_key(
     seckey: &SeckeyStruct,
     check_credential_store: bool,
 ) -> Result<InspectResult> {
+    inspect_secret_key_with_credentials(
+        seckey,
+        check_credential_store,
+        crate::credential_store::has_password,
+    )
+}
+
+fn inspect_secret_key_with_credentials(
+    seckey: &SeckeyStruct,
+    check_credential_store: bool,
+    credential_status: impl FnOnce(&str) -> CredentialStatus,
+) -> Result<InspectResult> {
     let key_id = seckey.keynum().to_key_id();
     let key_id_words = crate::wordlist::keynum_to_words(seckey.keynum());
     let credential_id = seckey.credential_id();
@@ -388,7 +400,7 @@ fn inspect_secret_key(
     if !seckey.is_encrypted() {
         // Unencrypted key
         let password_saved = if check_credential_store {
-            crate::credential_store::has_password(&credential_id)
+            credential_status(&credential_id)
         } else {
             CredentialStatus::NotSaved
         };
@@ -424,8 +436,10 @@ fn inspect_secret_key(
     // Classify security level
     let security_level = SecurityLevel::from_kdf_params(memlimit, is_fallback);
 
-    let password_saved = if check_credential_store {
-        crate::credential_store::has_password(&credential_id)
+    // Unsupported keys cannot be decrypted, so inspecting them must not request
+    // credential-store authorization even when the caller enables that lookup.
+    let password_saved = if check_credential_store && security_level != SecurityLevel::Unsupported {
+        credential_status(&credential_id)
     } else {
         CredentialStatus::NotSaved
     };
@@ -523,4 +537,68 @@ pub fn inspect_signature(signature_file: &Path) -> Result<SignatureInspectResult
 /// over-budget parameters instead of rejecting them.
 fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32, u32)> {
     crate::crypto::decode_kdf_params(opslimit, memlimit)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keys::SECKEY_STRUCT_SIZE;
+    use std::cell::Cell;
+
+    const OPSLIMIT_OFFSET: usize = 38;
+    const MEMLIMIT_OFFSET: usize = 46;
+    const ALGORITHM_HEADER: &[u8] = b"EdScB2";
+
+    fn encrypted_key(memlimit: u64) -> SeckeyStruct {
+        let mut bytes = [0u8; SECKEY_STRUCT_SIZE];
+        bytes[..ALGORITHM_HEADER.len()].copy_from_slice(ALGORITHM_HEADER);
+        let opslimit = memlimit / crate::crypto::LIBSODIUM_MEMLIMIT_MULTIPLIER
+            * crate::crypto::LIBSODIUM_OPSLIMIT_MULTIPLIER;
+        bytes[OPSLIMIT_OFFSET..MEMLIMIT_OFFSET].copy_from_slice(&opslimit.to_le_bytes());
+        bytes[MEMLIMIT_OFFSET..MEMLIMIT_OFFSET + size_of::<u64>()]
+            .copy_from_slice(&memlimit.to_le_bytes());
+        SeckeyStruct::from_bytes(&bytes).unwrap()
+    }
+
+    #[test]
+    fn unsupported_key_inspection_never_queries_credentials() {
+        let key = encrypted_key(PRODUCTION_MEMLIMIT * 2);
+        let queried = Cell::new(false);
+        let result = inspect_secret_key_with_credentials(&key, true, |_| {
+            queried.set(true);
+            CredentialStatus::Saved
+        })
+        .unwrap();
+
+        assert_eq!(result.security_level(), Some(SecurityLevel::Unsupported));
+        assert!(
+            !queried.get(),
+            "unsupported keys must not access credentials"
+        );
+        assert_eq!(result.password_saved(), &CredentialStatus::NotSaved);
+    }
+
+    #[test]
+    fn supported_key_inspection_preserves_requested_credential_lookup() {
+        let key = encrypted_key(PRODUCTION_MEMLIMIT);
+        for requested in [false, true] {
+            let queried = Cell::new(false);
+            let result = inspect_secret_key_with_credentials(&key, requested, |id| {
+                assert_eq!(id, key.credential_id());
+                queried.set(true);
+                CredentialStatus::Saved
+            })
+            .unwrap();
+
+            assert_eq!(queried.get(), requested);
+            assert_eq!(
+                result.password_saved(),
+                &if requested {
+                    CredentialStatus::Saved
+                } else {
+                    CredentialStatus::NotSaved
+                }
+            );
+        }
+    }
 }
