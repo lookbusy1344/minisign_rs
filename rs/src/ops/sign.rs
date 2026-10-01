@@ -185,21 +185,24 @@ fn load_and_decrypt_key(
 }
 
 /// Sign a single file with an already-loaded secret key
+fn signature_path(message_file: &Path, options: &SignOptions<'_>) -> PathBuf {
+    options.signature_file.map_or_else(
+        || {
+            let mut path = message_file.as_os_str().to_os_string();
+            path.push(".minisig");
+            PathBuf::from(path)
+        },
+        Path::to_path_buf,
+    )
+}
+
 fn sign_file_with_key(
     message_file: &Path,
     secret_key: &SecretKey,
     keynum: crate::crypto::KeyNum,
     options: &SignOptions<'_>,
 ) -> Result<SignResult> {
-    let sig_file_path = options.signature_file.map_or_else(
-        || {
-            // Append .minisig extension using OsString to handle non-UTF8 paths correctly
-            let mut path = message_file.as_os_str().to_os_string();
-            path.push(".minisig");
-            PathBuf::from(path)
-        },
-        Path::to_path_buf,
-    );
+    let sig_file_path = signature_path(message_file, options);
 
     reject_output_alias(&sig_file_path, &[message_file, options.secret_key_file])?;
 
@@ -428,6 +431,14 @@ pub fn sign_multiple_files(
         return Err(Error::Usage(
             "Custom signature file (-x) not supported with multiple message files".into(),
         ));
+    }
+
+    // Validate the entire batch before any write: one message's default signature
+    // path may name another message, including through a resolved pathname alias.
+    let mut protected_inputs: Vec<&Path> = files.iter().map(PathBuf::as_path).collect();
+    protected_inputs.push(options.secret_key_file());
+    for file in &files {
+        reject_output_alias(&signature_path(file, options), &protected_inputs)?;
     }
 
     // Fast path for single file

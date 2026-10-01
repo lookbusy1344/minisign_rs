@@ -215,6 +215,56 @@ fn sign_force_through_hard_links_preserves_inputs() {
 }
 
 #[test]
+fn batch_sign_rejects_outputs_aliasing_any_input_before_writing() {
+    use minisign::ops::sign::sign_multiple_files;
+
+    for sequential in [true, false] {
+        let fx = Fixture::new();
+        let first = fx.message();
+        let second = fx.path("message.txt.minisig");
+        fs::write(&second, b"second input").unwrap();
+        let options = SignOptions::builder(&fx.secret_key, &first)
+            .force(true)
+            .quiet(true)
+            .build();
+
+        let result =
+            sign_multiple_files(&[first.clone(), second.clone()], &options, None, sequential);
+
+        assert!(
+            matches!(result, Err(Error::OutputAlias { .. })),
+            "{result:?}"
+        );
+        assert_eq!(fs::read(&first).unwrap(), b"message content");
+        assert_eq!(fs::read(&second).unwrap(), b"second input");
+        assert!(!fx.path("message.txt.minisig.minisig").exists());
+        assert!(fx.staged_files().is_empty());
+    }
+}
+
+#[test]
+fn cli_batch_sign_rejects_output_alias_before_writing() {
+    let fx = Fixture::new();
+    let first = fx.message();
+    let second = fx.path("message.txt.minisig");
+    fs::write(&second, b"second input").unwrap();
+
+    assert_cmd::Command::new(assert_cmd::cargo::cargo_bin!("minisign_rs"))
+        .args(["-S", "-W", "--force", "-q", "-s"])
+        .arg(&fx.secret_key)
+        .arg("-m")
+        .arg(&first)
+        .arg(&second)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("names the same file"));
+
+    assert_eq!(fs::read(&first).unwrap(), b"message content");
+    assert_eq!(fs::read(&second).unwrap(), b"second input");
+    assert!(!fx.path("message.txt.minisig.minisig").exists());
+}
+
+#[test]
 fn sign_force_failure_before_replacement_preserves_destination() {
     let fx = Fixture::new();
     let message = fx.message();
