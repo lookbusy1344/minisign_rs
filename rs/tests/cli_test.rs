@@ -834,10 +834,9 @@ fn test_force_weak_kdf_creates_weak_key() {
         .stdout(predicate::str::contains("Fallback (reduced parameters)"));
 }
 
-// Exit code 3 signals "KDF fallback used — key has reduced security parameters".
-// It can only be triggered when scrypt fails with memory pressure AND --allow-kdf-fallback
-// is set, which we cannot reliably simulate in a unit test. This test covers the normal
-// (no-fallback) path and verifies it exits 0, acting as a regression guard.
+// Generation exits 0. Exit code 3 is reserved and never produced: scrypt aborts on
+// allocation failure, so no KDF fallback can run. --allow-kdf-fallback is a
+// deprecated no-op and must not change the exit code.
 #[test]
 fn test_generate_exits_zero_when_no_kdf_fallback() {
     let temp_dir = TempDir::new().unwrap();

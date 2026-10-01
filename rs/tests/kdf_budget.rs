@@ -11,7 +11,10 @@ use minisign::{
         LIBSODIUM_MEMLIMIT_MULTIPLIER, LIBSODIUM_OPSLIMIT_MULTIPLIER, MAX_KDF_MEMLIMIT, SCRYPT_R,
         check_kdf_budget, decode_kdf_params, generate_keypair, opslimit_memlimit_to_params,
     },
-    keys::SeckeyStruct,
+    keys::{
+        SECKEY_KDF_MEMLIMIT_OFFSET, SECKEY_KDF_MEMLIMIT_SIZE, SECKEY_KDF_OPSLIMIT_OFFSET,
+        SECKEY_KDF_OPSLIMIT_SIZE, SeckeyStruct,
+    },
     ops::inspect::{InspectOptions, SecurityLevel, inspect, inspect_private_with_key},
 };
 use std::fs;
@@ -23,8 +26,10 @@ const PASSWORD: &[u8] = b"synthetic password";
 const CHEAP_LOG_N: u8 = 10;
 /// One doubling above the production budget (N = 2^21).
 const OVER_BUDGET_LOG_N: u8 = 21;
-const OPSLIMIT_RANGE: std::ops::Range<usize> = 38..46;
-const MEMLIMIT_RANGE: std::ops::Range<usize> = 46..54;
+const OPSLIMIT_RANGE: std::ops::Range<usize> =
+    SECKEY_KDF_OPSLIMIT_OFFSET..SECKEY_KDF_OPSLIMIT_OFFSET + SECKEY_KDF_OPSLIMIT_SIZE;
+const MEMLIMIT_RANGE: std::ops::Range<usize> =
+    SECKEY_KDF_MEMLIMIT_OFFSET..SECKEY_KDF_MEMLIMIT_OFFSET + SECKEY_KDF_MEMLIMIT_SIZE;
 
 fn limits_for(log_n: u8) -> (u64, u64) {
     let n_r = (1u64 << log_n) * u64::from(SCRYPT_R);

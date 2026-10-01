@@ -79,10 +79,14 @@ const SECKEY_CHK_ALG_OFFSET: usize = 4;
 const SECKEY_CHK_ALG_SIZE: usize = 2;
 const SECKEY_KDF_SALT_OFFSET: usize = 6;
 const SECKEY_KDF_SALT_SIZE: usize = KDF_SALT_BYTES;
-const SECKEY_KDF_OPSLIMIT_OFFSET: usize = 38;
-const SECKEY_KDF_OPSLIMIT_SIZE: usize = 8;
-const SECKEY_KDF_MEMLIMIT_OFFSET: usize = 46;
-const SECKEY_KDF_MEMLIMIT_SIZE: usize = 8;
+/// Byte offset of the little-endian KDF `opslimit` in a secret key structure
+pub const SECKEY_KDF_OPSLIMIT_OFFSET: usize = 38;
+/// Byte length of the KDF `opslimit` field
+pub const SECKEY_KDF_OPSLIMIT_SIZE: usize = 8;
+/// Byte offset of the little-endian KDF `memlimit` in a secret key structure
+pub const SECKEY_KDF_MEMLIMIT_OFFSET: usize = 46;
+/// Byte length of the KDF `memlimit` field
+pub const SECKEY_KDF_MEMLIMIT_SIZE: usize = 8;
 const SECKEY_KEYNUM_OFFSET: usize = 54;
 const SECKEY_KEYNUM_SIZE: usize = KEYNUM_BYTES;
 const SECKEY_SK_OFFSET: usize = 62;

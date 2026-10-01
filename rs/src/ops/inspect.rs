@@ -555,14 +555,17 @@ fn opslimit_memlimit_to_params(opslimit: u64, memlimit: u64) -> Result<(u8, u32,
     crate::crypto::decode_kdf_params(opslimit, memlimit)
 }
 
+// Inline because these tests inject a credential lookup through a private seam;
+// tests of the public API live under tests/.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::keys::SECKEY_STRUCT_SIZE;
+    use crate::keys::{
+        SECKEY_KDF_MEMLIMIT_OFFSET, SECKEY_KDF_MEMLIMIT_SIZE, SECKEY_KDF_OPSLIMIT_OFFSET,
+        SECKEY_KDF_OPSLIMIT_SIZE, SECKEY_STRUCT_SIZE,
+    };
     use std::cell::Cell;
 
-    const OPSLIMIT_OFFSET: usize = 38;
-    const MEMLIMIT_OFFSET: usize = 46;
     const ALGORITHM_HEADER: &[u8] = b"EdScB2";
 
     fn encrypted_key(memlimit: u64) -> SeckeyStruct {
@@ -570,8 +573,9 @@ mod tests {
         bytes[..ALGORITHM_HEADER.len()].copy_from_slice(ALGORITHM_HEADER);
         let opslimit = memlimit / crate::crypto::LIBSODIUM_MEMLIMIT_MULTIPLIER
             * crate::crypto::LIBSODIUM_OPSLIMIT_MULTIPLIER;
-        bytes[OPSLIMIT_OFFSET..MEMLIMIT_OFFSET].copy_from_slice(&opslimit.to_le_bytes());
-        bytes[MEMLIMIT_OFFSET..MEMLIMIT_OFFSET + size_of::<u64>()]
+        bytes[SECKEY_KDF_OPSLIMIT_OFFSET..SECKEY_KDF_OPSLIMIT_OFFSET + SECKEY_KDF_OPSLIMIT_SIZE]
+            .copy_from_slice(&opslimit.to_le_bytes());
+        bytes[SECKEY_KDF_MEMLIMIT_OFFSET..SECKEY_KDF_MEMLIMIT_OFFSET + SECKEY_KDF_MEMLIMIT_SIZE]
             .copy_from_slice(&memlimit.to_le_bytes());
         SeckeyStruct::from_bytes(&bytes).unwrap()
     }
