@@ -26,6 +26,11 @@ const FORCE_OVERWRITE_LOCK_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 const FORCE_OVERWRITE_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Mode for secret key directories that `generate` creates, matching C
+/// minisign's `basedir_create_useronly`.
+#[cfg(unix)]
+const SECRET_KEY_DIR_MODE: u32 = 0o700;
+
 fn warn_cleanup_failure(path: &Path, result: std::io::Result<()>) {
     if let Err(e) = result {
         eprintln!(
@@ -306,7 +311,7 @@ pub fn generate_with_log_n(
     let comment = options.comment.unwrap_or(&default_comment);
 
     // Ensure parent directories exist
-    ensure_parent_directory(options.secret_key_file)?;
+    ensure_secret_key_directory(options.secret_key_file)?;
     ensure_parent_directory(options.public_key_file)?;
 
     // Write the secret key file with appropriate comment
@@ -373,6 +378,28 @@ pub fn generate_with_log_n(
 pub fn ensure_parent_directory(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent().filter(|p| !p.exists()) {
         std::fs::create_dir_all(parent).map_err(|e| Error::file_write(parent, e))?;
+    }
+    Ok(())
+}
+
+/// Ensure the secret key's parent directory exists. Directories this call
+/// creates are owner-only (`0700` on Unix); existing ones keep their mode.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be created.
+pub fn ensure_secret_key_directory(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent().filter(|p| !p.exists()) {
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(SECRET_KEY_DIR_MODE);
+        }
+        builder
+            .create(parent)
+            .map_err(|e| Error::file_write(parent, e))?;
     }
     Ok(())
 }
