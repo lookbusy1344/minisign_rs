@@ -213,3 +213,49 @@ fn test_untrusted_comment_with_carriage_return() {
     // The error message should mention either "carriage return" or just "invalid comment"
     assert!(err_msg.contains("carriage return") || err_msg.contains("invalid comment"));
 }
+
+fn sig_struct_bytes_with_alg(alg: [u8; 2]) -> [u8; SIG_STRUCT_SIZE] {
+    let mut bytes = SigStruct::new(
+        KeyNum::from_bytes([1; 8]),
+        Signature::from_bytes([0; SIGNATURE_BYTES]),
+        false,
+    )
+    .to_bytes();
+    bytes[..2].copy_from_slice(&alg);
+    bytes
+}
+
+fn sig_alg_error(alg: [u8; 2]) -> String {
+    SigStruct::from_bytes(&sig_struct_bytes_with_alg(alg))
+        .unwrap_err()
+        .to_string()
+}
+
+#[test]
+fn test_sig_alg_error_escapes_terminal_control_bytes() {
+    // ESC c resets most terminals
+    assert_eq!(
+        sig_alg_error([0x1B, b'c']),
+        "invalid signature format: invalid signature algorithm: \
+         expected 'Ed' or 'ED', got '\\x1bc'"
+    );
+}
+
+#[test]
+fn test_sig_alg_error_escapes_c1_control_sequence() {
+    // UTF-8 for U+009B, the single-byte CSI introducer
+    assert_eq!(
+        sig_alg_error([0xC2, 0x9B]),
+        "invalid signature format: invalid signature algorithm: \
+         expected 'Ed' or 'ED', got '\\xc2\\x9b'"
+    );
+}
+
+#[test]
+fn test_sig_alg_error_keeps_printable_ascii() {
+    assert_eq!(
+        sig_alg_error(*b"Xy"),
+        "invalid signature format: invalid signature algorithm: \
+         expected 'Ed' or 'ED', got 'Xy'"
+    );
+}

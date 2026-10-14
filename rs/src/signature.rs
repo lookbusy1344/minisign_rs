@@ -175,7 +175,7 @@ impl SigStruct {
         } else {
             return Err(Error::InvalidSignatureFormat(format!(
                 "invalid signature algorithm: expected 'Ed' or 'ED', got '{}'",
-                String::from_utf8_lossy(sig_alg)
+                sig_alg.escape_ascii()
             )));
         };
 
