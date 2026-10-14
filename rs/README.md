@@ -296,6 +296,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and guid
 
 ## Documentation
 
+- **[SECURITY.md](SECURITY.md)** - Security model, threat model and audit history
 - **[docs/USAGE.md](docs/USAGE.md)** - Complete usage guide and CLI reference
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Internal design and structure
 - **[docs/TESTING.md](docs/TESTING.md)** - Testing guide
