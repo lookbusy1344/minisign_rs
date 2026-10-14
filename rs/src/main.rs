@@ -461,6 +461,13 @@ fn handle_verify(cli: &Cli) -> Result<i32> {
     } else if let Some(ref pk_base64) = cli.public_key_base64 {
         PublicKeySource::Base64(pk_base64)
     } else if default_pk.exists() {
+        // The current directory may come from the same source as the message.
+        if !cli.quiet {
+            eprintln!(
+                "Warning: no public key given (-p or -P); using ./minisign.pub \
+                 from the current directory"
+            );
+        }
         PublicKeySource::File(&default_pk)
     } else {
         return Err(Error::Usage(
