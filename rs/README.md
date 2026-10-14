@@ -309,7 +309,9 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and guid
 
 ### Security Audits
 
-Both audits were conducted on 2026-02-20 by static analysis against the `lb_rust` branch (commit `5f75f2c`), with all actionable findings remediated in the `security_audit` branch (merged at commit `679958e`).
+[SECURITY.md](SECURITY.md) describes the current security model and links every audit. The latest is the [2026-10-14 security review](docs/2026-10-14-security-review.md).
+
+The 2026-02-20 audits were conducted by static analysis against the `lb_rust` branch (commit `5f75f2c`), with all actionable findings remediated in the `security_audit` branch (merged at commit `679958e`).
 
 - [docs/2026-02-20-rust-security-audit.md](docs/2026-02-20-rust-security-audit.md) — Rust implementation audit with full C/Zig comparison (9 findings; all actioned)
 - [docs/2026-02-20-c-zig-security-audit.md](docs/2026-02-20-c-zig-security-audit.md) — C/Zig implementation audit (20 findings; 1 Critical, 4 High)
