@@ -5,6 +5,7 @@
 //! execute both binaries and compare their behavior.
 
 use assert_cmd::Command;
+use predicates::prelude::*;
 use std::fs;
 use std::process::Command as StdCommand;
 use tempfile::TempDir;
@@ -1049,12 +1050,12 @@ fn test_cross_encrypted_change_password_c_to_rust() {
         .arg(&secret_key)
         .arg("--password-file")
         .arg(&old_password_file)
+        .arg("--new-password-file")
+        .arg(&new_password_file)
         .assert()
         .success();
 
-    // For the new password, we need to use the same file since --password-file
-    // is used for both current and new password in this implementation
-    // So let's sign with the same password to test the change worked
+    // The old password no longer decrypts the key
     rust_minisign()
         .arg("-S")
         .arg("-m")
@@ -1065,6 +1066,21 @@ fn test_cross_encrypted_change_password_c_to_rust() {
         .arg(&sig_file)
         .arg("--password-file")
         .arg(&old_password_file)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("checksum"));
+
+    // Sign with the new password
+    rust_minisign()
+        .arg("-S")
+        .arg("-m")
+        .arg(&message_file)
+        .arg("-s")
+        .arg(&secret_key)
+        .arg("-x")
+        .arg(&sig_file)
+        .arg("--password-file")
+        .arg(&new_password_file)
         .assert()
         .success();
 

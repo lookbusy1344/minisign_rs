@@ -16,7 +16,7 @@ Usage: minisign_rs -G [-f] [-p pubkey] [-s seckey] [-W] [-c comment]
        minisign_rs -S [-H | -l] [-x sigfile] [-s seckey] [-c comment] [-t comment] -m file [files...]
        minisign_rs -V [-x sigfile] [-p pubkey | -P key] [-o] [-q|-Q] -m file [files...]
        minisign_rs -R [-s seckey] [-p pubkey]
-       minisign_rs -K [-s seckey] [-W]
+       minisign_rs -K [-s seckey] [-W] [--password-file file] [--new-password-file file]
        minisign_rs -I [-s seckey | -p pubkey | -P key | -x sigfile]
 
 ACTIONS:
@@ -48,7 +48,9 @@ OPTIONS:
         --allow-kdf-fallback            Deprecated; has no effect
         --forget-password, --fp         Remove saved password from credential store
         --no-decrypt                    Skip decryption of encrypted keys
-        --password-file <FILE>          Read password from file (testing only - insecure)
+        --password-file <FILE>          Read password from file (testing only - insecure);
+                                        with -K, the current password only
+        --new-password-file <FILE>      Read the new password for -K from file (testing only - insecure)
         --save-password, --sp           Save password to OS credential store
 ";
 
@@ -82,6 +84,7 @@ pub struct Cli {
     pub untrusted_comment: Option<String>,
     pub signature_file: Option<PathBuf>,
     pub password_file: Option<PathBuf>,
+    pub new_password_file: Option<PathBuf>,
 
     #[cfg(feature = "parallel")]
     pub sequential: bool,
@@ -240,6 +243,9 @@ impl Cli {
             password_file: args
                 .opt_value_from_str("--password-file")
                 .map_err(|e| Error::Usage(e.to_string()))?,
+            new_password_file: args
+                .opt_value_from_str("--new-password-file")
+                .map_err(|e| Error::Usage(e.to_string()))?,
 
             #[cfg(feature = "parallel")]
             sequential: args.contains("--sequential"),
@@ -256,6 +262,19 @@ impl Cli {
         // Reject conflicting quiet-mode flags.
         if cli.quiet && cli.pretty_quiet {
             return Err(Error::Usage("-q and -Q are mutually exclusive".to_string()));
+        }
+
+        if cli.new_password_file.is_some() {
+            if cli.action != Some(Action::Change) {
+                return Err(Error::Usage(
+                    "--new-password-file is only valid with -K".to_string(),
+                ));
+            }
+            if cli.no_password {
+                return Err(Error::Usage(
+                    "--new-password-file and -W are mutually exclusive".to_string(),
+                ));
+            }
         }
 
         // --save-password / --sp requires the credential_store feature to be compiled in.

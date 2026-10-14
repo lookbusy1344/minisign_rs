@@ -156,7 +156,8 @@ Additional flags not in C minisign:
 - **`--no-decrypt`** - Skip password prompt for encrypted keys during inspection (non-interactive mode)
 - **`--save-password/--sp`** - Save password to OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service) after successful use
 - **`--forget-password/--fp`** - Remove saved password from OS credential store (see [Password Storage in OS Keychain](#password-storage-in-os-keychain))
-- **`--password-file <FILE>`** - Read password from file (testing only, insecure)
+- **`--password-file <FILE>`** - Read password from file (testing only, insecure). With `-K` it holds the current password only
+- **`--new-password-file <FILE>`** - Read the new password for `-K` from file (testing only, insecure)
 - **`--allow-kdf-fallback`** - Deprecated; has no effect. scrypt aborts on a failed memory allocation, so no fallback can run
 - **`--force-weak-kdf`** - Create intentionally weak keys (debug builds only, testing)
 - **`--sequential`** - Disable parallel processing for multi-file operations (`parallel` feature only)

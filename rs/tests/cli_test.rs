@@ -3135,12 +3135,12 @@ fn test_change_password_with_credential_store() {
 
     // Change password with --save-password for new password
     // The old password will be retrieved from credential store
-    // The new password will be read from --password-file
+    // The new password will be read from --new-password-file
     minisign_cmd()
         .arg("-K")
         .arg("-s")
         .arg(&sk_path)
-        .arg("--password-file")
+        .arg("--new-password-file")
         .arg(&new_password_file)
         .arg("--save-password")
         .arg("--force-weak-kdf")

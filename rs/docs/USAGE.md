@@ -357,6 +357,14 @@ See [scripts/README.md](scripts/README.md) for complete documentation.
 
 > **Warning:** A password file is only as secure as the filesystem it lives on. An interactive password is never written to disk; a password file is.
 
+### Changing a password from files
+
+With `-K`, `--password-file` holds the current password and `--new-password-file` holds the new one. `-K --password-file` alone fails; pass `-W` instead to remove the password.
+
+```bash
+minisign_rs -K -s mykey.key --password-file old.pass --new-password-file new.pass
+```
+
 ### Security checklist
 
 1. **Restrict file permissions to `0600`**

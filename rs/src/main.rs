@@ -614,6 +614,25 @@ fn handle_change(cli: &Cli) -> Result<i32> {
 
     seckey.check_kdf_budget()?;
 
+    // --password-file holds the current password only; the new one comes from
+    // --new-password-file or the prompt.
+    if cli.password_file.is_some() {
+        if !seckey.is_encrypted() {
+            return Err(Error::Usage(
+                "the key is not encrypted, so -K takes no --password-file; \
+                 use --new-password-file to set a password"
+                    .into(),
+            ));
+        }
+        if !cli.no_password && cli.new_password_file.is_none() {
+            return Err(Error::Usage(
+                "--password-file supplies the current password only; \
+                 pass --new-password-file for the new password, or -W to remove it"
+                    .into(),
+            ));
+        }
+    }
+
     // Get current password: check credential store first, then prompt if needed
     let current_password = if seckey.is_encrypted() {
         Some(get_password_with_credential_store(
@@ -632,7 +651,7 @@ fn handle_change(cli: &Cli) -> Result<i32> {
         None
     } else {
         Some(prompt_password_with_confirmation(
-            cli.password_file.as_deref(),
+            cli.new_password_file.as_deref(),
         )?)
     };
 
