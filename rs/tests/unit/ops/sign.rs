@@ -1019,3 +1019,67 @@ fn test_create_signature_output_verifies_against_derived_public_key() {
     crypto_verify(&public_key, &global_sig_data, sig_box.global_signature())
         .expect("global signature must verify against derived public key");
 }
+
+/// Signs `count` files with `held` while the options name a key file that holds
+/// a different key, then checks every signature against `held`.
+fn assert_batch_signs_with_held_key(count: usize, sequential: bool) {
+    use minisign::ops::sign::sign_multiple_files_with_key;
+    use minisign::ops::verify::{load_signature, verify_message_signature};
+
+    let temp_dir = TempDir::new().unwrap();
+    let (held_secret, held_public, held_keynum) = generate_keypair().unwrap();
+    let held = SeckeyStruct::new_unencrypted(held_keynum, &held_secret);
+    let held_pubkey = PubkeyStruct::new(held_keynum, held_public);
+
+    // The key file on disk is a different key: re-reading it would sign with it.
+    let (other_sk, _, other_keynum) = generate_keypair().unwrap();
+    let key_path = temp_dir.path().join("swapped.key");
+    fs::write(
+        &key_path,
+        SeckeyStruct::new_unencrypted(other_keynum, &other_sk)
+            .to_file_contents("minisign secret key")
+            .unwrap(),
+    )
+    .unwrap();
+
+    let paths: Vec<PathBuf> = (0..count)
+        .map(|i| {
+            let path = temp_dir.path().join(format!("file{i}.txt"));
+            fs::write(&path, format!("message {i}")).unwrap();
+            path
+        })
+        .collect();
+
+    let opts = SignOptions::builder(&key_path, Path::new(""))
+        .quiet(true)
+        .build();
+    sign_multiple_files_with_key(&paths, &held, &opts, None, sequential)
+        .expect("signing should succeed");
+
+    for path in &paths {
+        let mut sig_path = path.clone().into_os_string();
+        sig_path.push(".minisig");
+        let sig_box = load_signature(PathBuf::from(sig_path)).unwrap();
+        assert_eq!(sig_box.sig_struct().keynum(), &held_keynum);
+        verify_message_signature(&held_pubkey, &sig_box, path, false, false)
+            .expect("message signature must verify with the held key");
+        sig_box
+            .verify_global_signature(held_pubkey.public_key())
+            .expect("global signature must verify with the held key");
+    }
+}
+
+#[test]
+fn test_sign_multiple_files_with_key_single_file_uses_held_key() {
+    assert_batch_signs_with_held_key(1, true);
+}
+
+#[test]
+fn test_sign_multiple_files_with_key_sequential_uses_held_key() {
+    assert_batch_signs_with_held_key(3, true);
+}
+
+#[test]
+fn test_sign_multiple_files_with_key_parallel_uses_held_key() {
+    assert_batch_signs_with_held_key(3, false);
+}

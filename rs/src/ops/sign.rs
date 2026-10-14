@@ -414,6 +414,25 @@ pub fn sign_multiple_files(
     password: Option<&[u8]>,
     sequential: bool,
 ) -> Result<()> {
+    let seckey = load_secret_key(options.secret_key_file())?;
+    sign_multiple_files_with_key(files, &seckey, options, password, sequential)
+}
+
+/// Sign multiple files with a pre-loaded secret key (parallel or sequential)
+///
+/// Signs with `seckey` and never reads `options.secret_key_file()`; that path
+/// only guards against a signature overwriting the key file.
+///
+/// # Errors
+///
+/// As [`sign_multiple_files`].
+pub fn sign_multiple_files_with_key(
+    files: &[PathBuf],
+    seckey: &SeckeyStruct,
+    options: &SignOptions<'_>,
+    password: Option<&[u8]>,
+    sequential: bool,
+) -> Result<()> {
     // Deduplicate files to prevent race conditions when signing the same file multiple times.
     // Canonicalize to catch ./foo vs foo aliases; fail immediately if a file does not exist.
     let mut seen = std::collections::HashSet::new();
@@ -444,14 +463,14 @@ pub fn sign_multiple_files(
 
     // Fast path for single file
     if files.len() == 1 {
-        sign_single_file(&files[0], options, password)?;
+        sign_with_key(&files[0], seckey, options, password)?;
         let s = sanitised_path_display(&files[0]);
         println!("Signed: {s} → {s}.minisig");
         return Ok(());
     }
 
-    // Load and decrypt key once — avoids N-1 redundant scrypt derivations
-    let (secret_key, keynum) = load_and_decrypt_key(options.secret_key_file(), password)?;
+    // Decrypt once — avoids N-1 redundant scrypt derivations
+    let (secret_key, keynum) = seckey.extract_key(password)?;
 
     // Show key ID once at the top (like verification does)
     if !options.quiet {

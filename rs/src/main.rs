@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use minisign::ops::file_utils::{MAX_PASSWORD_FILE_BYTES, load_secret_key, sanitised_path_display};
-use minisign::ops::sign::sign_multiple_files;
+use minisign::ops::sign::sign_multiple_files_with_key;
 use minisign::ops::verify::verify_multiple_files;
 use minisign::{
     Error, Result,
@@ -329,6 +329,7 @@ fn handle_sign(cli: &Cli) -> Result<i32> {
             message_files.as_ref(),
             secret_key_file,
             prehashed,
+            &seckey,
             &credential_id,
             password.as_ref(),
         )?;
@@ -404,6 +405,7 @@ fn handle_sign_multiple(
     message_files: &[std::path::PathBuf],
     secret_key_file: &std::path::Path,
     prehashed: bool,
+    seckey: &minisign::keys::SeckeyStruct,
     credential_id: &str,
     password: Option<&Zeroizing<String>>,
 ) -> Result<()> {
@@ -419,8 +421,9 @@ fn handle_sign_multiple(
     )
     .build();
 
-    sign_multiple_files(
+    sign_multiple_files_with_key(
         message_files,
+        seckey,
         &options,
         password.map(|p| p.as_bytes()),
         #[cfg(feature = "parallel")]
