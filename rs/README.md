@@ -14,7 +14,7 @@ This repo is managed with Jujutsu rather than Git. Try it out! https://docs.jj-v
 
 ## Project Status
 
-**Version 2.0.0 Release** - Production-ready Rust implementation with complete C minisign compatibility.
+**Version 2.0.1 Release** - Production-ready Rust implementation with complete C minisign compatibility.
 
 ### Implemented Features
 
