@@ -246,7 +246,7 @@ pub fn read_bounded_string_from_reader<R: Read>(
         )));
     }
     String::from_utf8(buf).map_err(|e| Error::InvalidUtf8 {
-        context: path.display().to_string(),
+        context: sanitised_path_display(path),
         source: e.utf8_error(),
     })
 }
@@ -301,7 +301,7 @@ pub fn read_secret_file_bounded(path: &Path, max_bytes: u64) -> Result<Zeroizing
 /// Returns `Error::InvalidUtf8` naming `path`. The error holds no file content.
 pub fn utf8_text<'a>(bytes: &'a [u8], path: &Path) -> Result<&'a str> {
     std::str::from_utf8(bytes).map_err(|source| Error::InvalidUtf8 {
-        context: path.display().to_string(),
+        context: sanitised_path_display(path),
         source,
     })
 }

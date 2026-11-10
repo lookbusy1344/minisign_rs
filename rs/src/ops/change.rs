@@ -128,6 +128,23 @@ pub fn change(
     change_with_log_n(options, old_password, new_password, SCRYPT_LOG_N)
 }
 
+/// Change or remove the password on an already-loaded secret key.
+///
+/// Re-encrypts `seckey` and writes it to `options`' key path. The key file is not
+/// read, so the key written is the key the caller decrypted.
+///
+/// # Errors
+///
+/// As [`change`], except that the key file is never loaded.
+pub fn change_with_key(
+    options: &ChangeOptions<'_>,
+    seckey: &SeckeyStruct,
+    old_password: Option<&[u8]>,
+    new_password: Option<&[u8]>,
+) -> Result<ChangeResult> {
+    change_with_key_and_log_n(options, seckey, old_password, new_password, SCRYPT_LOG_N)
+}
+
 /// Internal implementation of change with custom scrypt `log_n` parameter
 ///
 /// This allows both the production function and tests to share the same logic
@@ -149,9 +166,22 @@ pub fn change_with_log_n(
     new_password: Option<&[u8]>,
     log_n: u8,
 ) -> Result<ChangeResult> {
-    // Load the secret key
     let seckey = load_secret_key(options.secret_key_file)?;
+    change_with_key_and_log_n(options, &seckey, old_password, new_password, log_n)
+}
 
+/// As [`change_with_log_n`], but re-encrypts `seckey` instead of reading the key file.
+///
+/// # Errors
+///
+/// As [`change_with_log_n`].
+pub fn change_with_key_and_log_n(
+    options: &ChangeOptions<'_>,
+    seckey: &SeckeyStruct,
+    old_password: Option<&[u8]>,
+    new_password: Option<&[u8]>,
+    log_n: u8,
+) -> Result<ChangeResult> {
     // Decrypt the secret key
     let (secret_key, keynum) = seckey.extract_key(old_password)?;
 

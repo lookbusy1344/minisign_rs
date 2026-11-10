@@ -245,3 +245,45 @@ mod permissions {
         );
     }
 }
+
+/// A crafted file name must not reach the terminal raw through a UTF-8 error.
+#[cfg(unix)]
+mod utf8_error_path_escaping {
+    use minisign::ops::file_utils::{MAX_SIGNATURE_FILE_BYTES, load_secret_key, read_file_bounded};
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    /// ESC ] 0 ; T BEL sets the terminal title; C1 CSI (U+009B) starts a control sequence.
+    const HOSTILE_NAME: &str = "a\x1b]0;T\x07b\u{9b}2J";
+    const ESCAPED_NAME: &str = "a\\x1B]0;T\\x07b\\x9B2J";
+    const INVALID_UTF8: &[u8] = b"\xff\xfe";
+
+    fn hostile_file(dir: &TempDir, suffix: &str) -> PathBuf {
+        let path = dir.path().join(format!("{HOSTILE_NAME}{suffix}"));
+        std::fs::write(&path, INVALID_UTF8).unwrap();
+        path
+    }
+
+    fn expected(dir: &TempDir, suffix: &str) -> String {
+        format!(
+            "invalid UTF-8 in {}/{ESCAPED_NAME}{suffix}: invalid utf-8 sequence of 1 bytes from index 0",
+            dir.path().display()
+        )
+    }
+
+    #[test]
+    fn read_file_bounded_escapes_path() {
+        let dir = TempDir::new().unwrap();
+        let path = hostile_file(&dir, ".minisig");
+        let err = read_file_bounded(&path, MAX_SIGNATURE_FILE_BYTES).unwrap_err();
+        assert_eq!(err.to_string(), expected(&dir, ".minisig"));
+    }
+
+    #[test]
+    fn load_secret_key_escapes_path() {
+        let dir = TempDir::new().unwrap();
+        let path = hostile_file(&dir, ".key");
+        let err = load_secret_key(&path).unwrap_err();
+        assert_eq!(err.to_string(), expected(&dir, ".key"));
+    }
+}

@@ -12,7 +12,7 @@ pub mod sign;
 pub mod verify;
 
 pub use crate::credential_store::CredentialStatus;
-pub use change::{ChangeOptions, ChangeResult, change};
+pub use change::{ChangeOptions, ChangeResult, change, change_with_key};
 pub use generate::{GenerateOptions, GenerateResult, generate};
 pub use inspect::{
     InspectOptions, InspectResult, KeyType, SecurityLevel, SignatureInspectResult, inspect,

@@ -293,3 +293,43 @@ fn test_change_password_then_sign_verify_roundtrip() {
         "signature produced after password change must verify against the original public key"
     );
 }
+
+/// `-K` loads the key once: the change must re-encrypt the held key, never a
+/// second read of the file, which may have been replaced in between.
+#[test]
+fn test_change_with_key_uses_held_key_not_file() {
+    use minisign::ops::change::change_with_key_and_log_n;
+
+    let temp_dir = TempDir::new().unwrap();
+    let old_password = b"oldpassword";
+    let new_password = b"newpassword";
+
+    let (held_secret, _held_public, held_keynum) = generate_keypair().unwrap();
+    let held = make_fast_encrypted_seckey(held_keynum, &held_secret, old_password);
+
+    // The file holds a different key under the same password.
+    let (other_secret, _, other_keynum) = generate_keypair().unwrap();
+    let sk_path = temp_dir.path().join("swapped.key");
+    fs::write(
+        &sk_path,
+        make_fast_encrypted_seckey(other_keynum, &other_secret, old_password)
+            .to_file_contents("test")
+            .unwrap(),
+    )
+    .unwrap();
+
+    let options = ChangeOptions::builder(sk_path.as_path()).build();
+    change_with_key_and_log_n(
+        &options,
+        &held,
+        Some(old_password),
+        Some(new_password),
+        TEST_LOG_N,
+    )
+    .expect("password change should succeed");
+
+    let written = SeckeyStruct::from_file_contents(&fs::read_to_string(&sk_path).unwrap()).unwrap();
+    let (secret, keynum) = written.decrypt(new_password).unwrap();
+    assert_eq!(keynum, held_keynum);
+    assert_eq!(secret.as_bytes(), held_secret.as_bytes());
+}

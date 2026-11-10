@@ -126,7 +126,7 @@ An encrypted key stores a 104-byte blob: keynum, secret key and BLAKE2b-256 chec
 ## Passwords
 
 - **Interactive input.** Passwords are read from the terminal without echo. New passwords are asked for twice, compared in constant time, and trigger a warning if shorter than 8 characters.
-- **`--password-file`** is meant for automation. It prints a warning on every use. With `-K` it holds the current password only; `--new-password-file` holds the new one. See [docs/USAGE.md](docs/USAGE.md#using---password-file-securely).
+- **`--password-file`** is meant for automation. It prints a warning on every use. With `-K` it holds the current password only; `--new-password-file` holds the new one. The file holds the password and at most one line ending (`\n` or `\r\n`), which is stripped. Other whitespace is part of the password, as at the prompt. See [docs/USAGE.md](docs/USAGE.md#using---password-file-securely).
 - **Credential store.** `--save-password` stores the password in the OS credential store: macOS Keychain, Windows Credential Manager or Linux Secret Service.
   - Entries use the service name `minisign`, keyed by the hex of the encrypted keynum. The ID changes when the password or salt changes.
   - A saved password is read back and compared before the tool reports success.
@@ -140,6 +140,8 @@ These are kept for compatibility with C minisign, or are platform gaps.
 - **Unencrypted secret keys have no integrity check.** Their checksum field is all zeros and is not verified (C does the same). Prefer encrypted keys.
 - **Legacy signatures are accepted by default.** Pass `-H` to `-V` to require prehashed signatures.
 - **The default public key comes from the current directory.** Without `-p` or `-P`, `-V` reads `./minisign.pub` and prints a warning to stderr unless `-q` is given. Always pass the key explicitly when verifying downloaded files.
+- **Special files can stall verification.** Signature, public key and message files are opened without a regular-file check (C does the same). A FIFO named `file.minisig` blocks the process. A message that is a symlink to `/dev/zero` makes prehashed verification run without end. In an untrusted directory, check the file types first or run `-V` under a timeout.
+- **Trusted comments may hold any printable Unicode** (C does the same). Bidirectional overrides such as U+202E and zero-width characters pass validation and are printed as they are, so a comment can read differently from its bytes. The default trusted comment contains the base name of the signed file. A tab in that name adds a second `file:` field. When a pipeline signs files named by others, treat the trusted comment as data and parse it by its first field only.
 - **Memory use of parallel batch verification.** Each legacy signature buffers its whole message, up to 1 GiB per worker. Use `-H` or `--sequential` to bound memory.
 - **Windows:**
   - Secret keys get the directory's default ACLs, not owner-only permissions.
@@ -168,5 +170,6 @@ These are kept for compatibility with C minisign, or are platform gaps.
 | 2026-02-20 | [Rust security audit](docs/2026-02-20-rust-security-audit.md) and [C/Zig security audit](docs/2026-02-20-c-zig-security-audit.md) |
 | 2026-10-01 | [Security audit remediation plan](docs/plans/2026-10-01-security-audit-remediation.md) |
 | 2026-10-14 | [Security review](docs/2026-10-14-security-review.md) |
+| 2026-11-10 | [Security review](docs/2026-11-10-security-review.md) |
 
 [KDF fallback security analysis](docs/kdf-fallback-security-analysis.md) covers weak-parameter keys. The Rust tool no longer creates them, but it still decrypts keys that C created on memory-constrained hosts.

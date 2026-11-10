@@ -8,9 +8,9 @@ use minisign::{
     credential_store::CredentialStatus,
     ops::{
         ChangeOptions, GenerateOptions, InspectOptions, InspectResult, KeyType, PublicKeySource,
-        RecreateOptions, SecurityLevel, SignOptions, SignatureInspectResult, VerifyOptions, change,
-        generate, inspect, inspect_base64, inspect_private_with_key, inspect_signature,
-        recreate_with_key, sign_with_key, verify,
+        RecreateOptions, SecurityLevel, SignOptions, SignatureInspectResult, VerifyOptions,
+        change_with_key, generate, inspect, inspect_base64, inspect_private_with_key,
+        inspect_signature, recreate_with_key, sign_with_key, verify,
     },
 };
 use std::fs::File;
@@ -674,8 +674,9 @@ fn handle_change(cli: &Cli) -> Result<i32> {
         .force_weak_kdf(resolve_force_weak_kdf(cli))
         .build();
 
-    let result = change(
+    let result = change_with_key(
         &options,
+        &seckey,
         current_password.as_ref().map(|p| p.as_bytes()),
         new_password.as_ref().map(|p| p.as_bytes()),
     )?;
@@ -1029,8 +1030,12 @@ fn prompt_password(
         }
         let text = std::str::from_utf8(&buf)
             .map_err(|_| Error::Io("Password file contains invalid UTF-8".into()))?;
-        let password = Zeroizing::new(text.trim_end().to_owned());
-        return Ok(password);
+        // Strip one line ending (`\n` or `\r\n`). Other whitespace belongs to the
+        // password, as it does at the interactive prompt.
+        let password = text
+            .strip_suffix('\n')
+            .map_or(text, |line| line.strip_suffix('\r').unwrap_or(line));
+        return Ok(Zeroizing::new(password.to_owned()));
     }
 
     // Check if we're in an interactive environment

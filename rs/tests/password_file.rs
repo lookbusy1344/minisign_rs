@@ -21,13 +21,17 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
+        Self::with_password(PASSWORD)
+    }
+
+    fn with_password(password: &str) -> Self {
         let dir = TempDir::new().unwrap();
         let (secret_key, _pk, keynum) = generate_keypair().unwrap();
         let n_r = (1u64 << CHEAP_LOG_N) * SCRYPT_R;
         let seckey = SeckeyStruct::new_encrypted(
             keynum,
             &secret_key,
-            PASSWORD.as_bytes(),
+            password.as_bytes(),
             [3u8; 32],
             4 * n_r,
             128 * n_r,
@@ -168,4 +172,30 @@ fn maximum_length_file_is_read() {
     let (success, stderr) = fx.sign(&over_limit);
     assert!(!success);
     assert!(stderr.contains("too large"), "over limit: {stderr}");
+}
+
+/// The file holds the password plus at most one line ending. Other whitespace is
+/// part of the password, as it is at the interactive prompt.
+#[test]
+fn only_one_line_ending_is_stripped() {
+    const SPACED: &str = "synthetic password ";
+    let fx = Fixture::with_password(SPACED);
+    let cases: [(&str, &[u8], bool); 7] = [
+        ("bare", b"synthetic password ", true),
+        ("lf", b"synthetic password \n", true),
+        ("crlf", b"synthetic password \r\n", true),
+        ("trailing space trimmed", b"synthetic password", false),
+        ("trailing space trimmed, lf", b"synthetic password\n", false),
+        ("extra space", b"synthetic password  ", false),
+        ("two line endings", b"synthetic password \n\n", false),
+    ];
+    for (name, contents, should_decrypt) in cases {
+        let file = fx.path(&format!("{name}.pass"));
+        fs::write(&file, contents).unwrap();
+        let (success, stderr) = fx.sign(&file);
+        assert_eq!(success, should_decrypt, "{name}: stderr: {stderr}");
+        if !should_decrypt {
+            assert!(stderr.contains("checksum"), "{name}: stderr: {stderr}");
+        }
+    }
 }

@@ -357,6 +357,8 @@ See [scripts/README.md](scripts/README.md) for complete documentation.
 
 > **Warning:** A password file is only as secure as the filesystem it lives on. An interactive password is never written to disk; a password file is.
 
+The file holds the password and at most one line ending (`\n` or `\r\n`). The tool strips that line ending and nothing else, so leading or trailing spaces are part of the password. `echo 'secret' > sign.pass` and `printf 'secret' > sign.pass` give the same password.
+
 ### Changing a password from files
 
 With `-K`, `--password-file` holds the current password and `--new-password-file` holds the new one. `-K --password-file` alone fails; pass `-W` instead to remove the password.
